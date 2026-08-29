@@ -5280,23 +5280,27 @@ wl-overlay-skill:
 
             ## Overlay Types
 
-            Each example is a `wl: overlay-show` step authored with `context: [deploy]`. The former
-            CLI flags are the step's sibling fields (see "Overlay-show fields" below).
+            Each example is a `wl: overlay-show` step authored with `context: [deploy]`. Steps are
+            ORDERED LIST ITEMS under `plan:` (`plan?: [...#Step]`), never a name-keyed map, and the
+            former CLI flags live INSIDE the `wl:` map alongside `method:` — `#Op` is CLOSED, so an
+            overlay field written as a step sibling is rejected as an unknown key. Only the shared
+            matchers (`stdout:`/`stderr:`/`exit_status:`) and `context:`/`id:`/`timeout:` stay
+            siblings. This matches `/charly-check:wl` exactly (see "Overlay-show fields" below).
 
             ### Text (Title Card)
 
             Full-screen semi-transparent overlay with centered text. Use for intro/outro title cards.
 
             ```yaml
-            overlay-title:
-                run: show a title card
-                wl: overlay-show
-                context: [deploy]
+            - run: show a title card
+              wl:
+                method: overlay-show
                 type: text
                 text: Building a REST API
                 bg: rgba(0,0,0,0.7)
                 font_size: 64
                 name: title
+              context: [deploy]
             ```
 
             ### Lower-Third
@@ -5304,14 +5308,14 @@ wl-overlay-skill:
             Bottom-anchored bar with name and optional subtitle. Use for speaker identification.
 
             ```yaml
-            overlay-speaker:
-                run: show a lower-third speaker ID
-                wl: overlay-show
-                context: [deploy]
+            - run: show a lower-third speaker ID
+              wl:
+                method: overlay-show
                 type: lower-third
                 text: Andreas Trawoeger
                 subtitle: Developer
                 name: speaker
+              context: [deploy]
             ```
 
             ### Watermark
@@ -5319,16 +5323,16 @@ wl-overlay-skill:
             Corner-anchored persistent text at low opacity. Use for draft/preview markers.
 
             ```yaml
-            overlay-watermark:
-                run: show a draft watermark
-                wl: overlay-show
-                context: [deploy]
+            - run: show a draft watermark
+              wl:
+                method: overlay-show
                 type: watermark
                 text: DRAFT
                 position: bottom-right
                 color: red
                 opacity: 0.5
                 name: wm
+              context: [deploy]
             ```
 
             Default opacity is 0.3. Positions: `top-left`, `top-right`, `bottom-left`, `bottom-right`, `top`, `bottom`.
@@ -5338,13 +5342,13 @@ wl-overlay-skill:
             Full-screen animated countdown that auto-hides on completion. Use before recording starts.
 
             ```yaml
-            overlay-countdown:
-                run: show a 5-second countdown
-                wl: overlay-show
-                context: [deploy]
+            - run: show a 5-second countdown
+              wl:
+                method: overlay-show
                 type: countdown
                 seconds: 5
                 name: cd
+              context: [deploy]
             ```
 
             ### Highlight
@@ -5352,14 +5356,14 @@ wl-overlay-skill:
             Transparent overlay with a colored rectangle at specified coordinates. Use to draw attention to a screen region.
 
             ```yaml
-            overlay-highlight:
-                run: highlight a screen region
-                wl: overlay-show
-                context: [deploy]
+            - run: highlight a screen region
+              wl:
+                method: overlay-show
                 type: highlight
                 region: "430,290,510,50"
                 color: rgba(255,0,0,0.4)
                 name: hl
+              context: [deploy]
             ```
 
             Region format: `X,Y,Width,Height` in pixels.
@@ -5369,13 +5373,13 @@ wl-overlay-skill:
             Full-screen solid color overlay. Use for transitions (fade to black, fade to white).
 
             ```yaml
-            overlay-fade:
-                run: fade to black
-                wl: overlay-show
-                context: [deploy]
+            - run: fade to black
+              wl:
+                method: overlay-show
                 type: fade
                 color: black
                 name: outro
+              context: [deploy]
             ```
 
             ## Duration Auto-Hide
@@ -5383,14 +5387,14 @@ wl-overlay-skill:
             Any overlay (except countdown, which has built-in auto-hide) can auto-remove after a duration via the `duration:` field:
 
             ```yaml
-            overlay-intro:
-                run: show an intro card that auto-hides after 5s
-                wl: overlay-show
-                context: [deploy]
+            - run: show an intro card that auto-hides after 5s
+              wl:
+                method: overlay-show
                 type: text
                 text: INTRO
                 duration: 5s
                 name: intro
+              context: [deploy]
             ```
 
             Supported formats: `5s`, `1.5m`, `500ms`, or bare seconds (`5`).
@@ -5405,50 +5409,50 @@ wl-overlay-skill:
 
             ```yaml
             # candy/<name>/charly.yml — the recorded timeline as ordered record:/wl: steps
-            title-card:
-                run: show the title card
-                wl: overlay-show
-                context: [deploy]
+            - run: show the title card
+              wl:
+                method: overlay-show
                 type: text
                 text: Building a REST API
                 bg: rgba(0,0,0,0.9)
                 font_size: 64
                 name: title
+              context: [deploy]
             record-begin:
                 run: start the desktop recording
                 record: start
                 context: [deploy]
                 record_mode: desktop
-            title-hide:
-                run: fade out the title card
-                wl: overlay-hide
-                context: [deploy]
+            - run: fade out the title card
+              wl:
+                method: overlay-hide
                 name: title
-            lower-third:
-                run: show the speaker lower-third
-                wl: overlay-show
-                context: [deploy]
+              context: [deploy]
+            - run: show the speaker lower-third
+              wl:
+                method: overlay-show
                 type: lower-third
                 text: Andreas Trawoeger
                 subtitle: Developer
                 name: speaker
-            outro-fade:
-                run: fade to black for the ending
-                wl: overlay-show
-                context: [deploy]
+              context: [deploy]
+            - run: fade to black for the ending
+              wl:
+                method: overlay-show
                 type: fade
                 color: black
                 name: outro
+              context: [deploy]
             record-end:
                 run: stop and copy out the recording
                 record: stop
                 context: [deploy]
                 artifact: /tmp/demo.mp4
-            overlay-clear:
-                run: remove all overlays
-                wl: overlay-hide
-                context: [deploy]
+            - run: remove all overlays
+              wl:
+                method: overlay-hide
                 all: true
+              context: [deploy]
             ```
 
             ## Compositor Compatibility
@@ -5487,7 +5491,8 @@ wl-overlay-skill:
 
             ## Overlay-show fields
 
-            The `wl: overlay-show` step carries these fields (the former CLI flags):
+            The `wl: overlay-show` step carries these fields (the former CLI flags). They are keys
+            of the `wl:` map, beside `method: overlay-show` — NOT siblings of the step:
 
             | Field | Default | Description |
             |------|---------|-------------|

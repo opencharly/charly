@@ -1375,7 +1375,7 @@ generate-skill:
             | Generate all | `charly box generate` | Generate Containerfiles for all enabled images |
             | With tag | `charly box generate --tag TAG` | Override the image tag |
 
-            `charly box generate` takes **no positional image argument** — it always writes the full `.build/` tree for every enabled image in `charly.yml`. To inspect a single image's output, run `charly box generate` (fast — it reuses scratch-stage caches) and then `cat .build/<image>/Containerfile`. Filtering to one image happens implicitly via `charly box build <image>`, which invokes generate internally and then builds only the requested image + its dependencies.
+            `charly box generate` takes an OPTIONAL positional box list (`generate [<boxes> ...]`; the sentinel `all`, or no argument, means every enabled image in `charly.yml`). To inspect a single image's output, run `charly box generate <image>` — or the full `charly box generate` (fast — it reuses scratch-stage caches) — and then `cat .build/<image>/Containerfile`. Filtering to one image happens implicitly via `charly box build <image>`, which invokes generate internally and then builds only the requested image + its dependencies.
 
             ```bash
             # Generate all Containerfiles
@@ -3257,9 +3257,9 @@ settings-skill:
 
             | Key | Default | Env Var | Description |
             |-----|---------|---------|-------------|
-            | `engine.build` | `docker` | `CHARLY_ENGINE_BUILD` | Build engine (docker/podman) |
-            | `engine.run` | `docker` | `CHARLY_ENGINE_RUN` | Run engine (docker/podman) |
-            | `run_mode` | `quadlet` | `CHARLY_RUN_MODE` | Deployment mode (quadlet/direct) |
+            | `engine.build` | `auto` | `CHARLY_BUILD_ENGINE` | Build engine (docker/podman) |
+            | `engine.run` | `auto` | `CHARLY_RUN_ENGINE` | Run engine (docker/podman) |
+            | `run_mode` | `auto` | `CHARLY_RUN_MODE` | Deployment mode (quadlet/direct) |
             | `bind_address` | `127.0.0.1` | `CHARLY_BIND_ADDRESS` | Default bind address for ports |
             | `encrypted_storage_path` | `~/.local/share/charly/encrypted` | `CHARLY_ENCRYPTED_STORAGE_PATH` | Base path for gocryptfs volumes |
             | `volumes_path` | `~/.local/share/charly/volumes` | `CHARLY_VOLUMES_PATH` | Base path for bind-mounted volumes |
