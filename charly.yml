@@ -1199,9 +1199,9 @@ check-local-vm:
             Guest-as-host proof of the kind:local layer-application path via ShellExecutor +
             HostDeployTarget, run INSIDE the disposable eval-host-vm guest (off the operator's
             workstation). Boots eval-host-vm, welds charly-dev (add_candy:[charly-dev] → copy: bin/charly),
-            rsyncs the pruned check-local closure (check/eval-host-project/charly.yml +
-            candy/{check-local-layer,examplestep-deploy-consumer,plugin-example-step,plugin-deploy-local};
-            the sdk + spec contract modules resolve from the module proxy in the guest)
+            rsyncs the pruned check-local project (check/eval-host-project/charly.yml alone —
+            its candy closure is pinned by @github ref and resolved by the guest, as the sdk +
+            spec contract modules already were)
             into the guest, then runs `charly --host charly-check-local-vm check run check-local`: the
             guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies
             check-local-layer to its OWN host: local (guest ShellExecutor + HostDeployTarget),
@@ -1221,7 +1221,7 @@ check-local-vm:
             allow_repo_changes: true
             allow_root_tasks: true
         plan:
-            - check: deliver the pruned check-local closure into the eval-host-vm guest project dir (host-side rsync over the managed charly-check-local-vm ssh alias — the domain is named after this DEPLOY, not the eval-host-vm entity; cwd = this project per main.go:734; the sdk + spec contract modules are NOT delivered — the guest resolves them from the module proxy at the pinned require versions)
+            - check: deliver the pruned check-local project into the eval-host-vm guest project dir (host-side rsync over the managed charly-check-local-vm ssh alias — the domain is named after this DEPLOY, not the eval-host-vm entity; cwd = this project per main.go:734; neither the candy closure nor the sdk + spec contract modules are delivered — the guest resolves both from their pinned refs)
               id: guest-project-delivered
               context:
                 - runtime
@@ -1230,9 +1230,8 @@ check-local-vm:
                 in_container: false
                 command: |
                     set -euo pipefail
-                    ssh charly-check-local-vm 'mkdir -p /home/arch/eval-project/candy'
+                    ssh charly-check-local-vm 'mkdir -p /home/arch/eval-project'
                     rsync -a ./check/eval-host-project/charly.yml charly-check-local-vm:/home/arch/eval-project/charly.yml
-                    rsync -a ./candy/check-local-layer ./candy/examplestep-deploy-consumer ./candy/plugin-example-step ./candy/plugin-deploy-local charly-check-local-vm:/home/arch/eval-project/candy/
             - check: run check-local host:local INSIDE the guest via `charly --host` — the guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies check-local-layer to its OWN host:local (guest ShellExecutor + HostDeployTarget), building the 2 out-of-tree plugins in-guest; exit 0 proves the kind:local path end-to-end off the operator's workstation
               id: guest-as-host-check-local
               context:
@@ -2642,7 +2641,7 @@ check-local-app:
             Fast check bed for kind:local layer-application smoke
             Minimal kind:local template applying check-local-layer to the operator's host.
         candy:
-            - check-local-layer
+            - '@github.com/opencharly/layer-check-local-layer:v2026.241.1216'
         plan:
             - check: command=test -f /etc/check-local-marker
               id: check-local-marker
