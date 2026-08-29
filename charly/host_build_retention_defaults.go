@@ -28,7 +28,7 @@ const retentionDefaultsBuilderKind = "retention-defaults"
 // defaults.keep_images / defaults.keep_check_runs fields. Everything else is ignored.
 type retentionDefaultsYAML struct {
 	Defaults struct {
-		KeepImages     *int `yaml:"keep_images"`
+		KeepImages    *int `yaml:"keep_images"`
 		KeepCheckRuns *int `yaml:"keep_check_runs"`
 	} `yaml:"defaults"`
 }
