@@ -3513,6 +3513,7 @@ agentteams:
             and reach the controller — and every in-container service — by the
             controller container's DNS name.
         candy:
+            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - '@github.com/opencharly/layer-agentteams:v2026.237.804'
 agentteams-manager:
     candy:
@@ -3536,11 +3537,12 @@ agentteams-manager:
         # inherited default command is cleared at emission (CMD []), so the
         # entrypoint runs bare. /etc/supervisord.conf is assembled at build time.
         entrypoint:
-            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
+            - supervisord
             - -n
             - -c
             - /etc/supervisord.conf
         candy:
+            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - '@github.com/opencharly/pod-agentteams-manager:v2026.239.1603'
 agentteams-worker:
     candy:
@@ -3564,11 +3566,12 @@ agentteams-worker:
         # emission (CMD []), so the entrypoint runs bare. /etc/supervisord.conf is
         # assembled at build time.
         entrypoint:
-            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
+            - supervisord
             - -n
             - -c
             - /etc/supervisord.conf
         candy:
+            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - '@github.com/opencharly/pod-agentteams-worker:v2026.239.1600'
 check-agentteams-pod:
     pod:
@@ -4068,6 +4071,7 @@ check-boxload-app:
             - fedora:43
             - fedora
         candy:
+            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
             - '@github.com/opencharly/pod-nested-podman-socket:v2026.237.940'
 check-boxload-pod:
     pod:
