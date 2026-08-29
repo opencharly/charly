@@ -10,7 +10,10 @@ charly-marketplace:
             transitively. The family dirs at this repo's root are the GENERATED corpus,
             not the source — regeneration is a no-op on a clean tree (the drift gate).
         candy:
-            - '@github.com/opencharly/charly:v2026.240.2345'
+            # charly's OWN candies are LOCAL to this repo and need no ref: the
+            # generator reads them from --root. The repo-root entry that used to sit
+            # here ('@github.com/opencharly/charly:vTAG') was not a candy node at all
+            # and resolved to unknown candy "github.com/opencharly/charly".
             - '@github.com/opencharly/pod-charly-hooks:v2026.240.2141'
             - '@github.com/opencharly/layer-ripgrep:v2026.235.1653'
             - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
