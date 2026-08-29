@@ -38,7 +38,6 @@ import sys
 
 # Blocks that must match a committed source file, byte for byte (modulo elisions).
 EXCERPT_SOURCES = {
-    "ripgrep": "candy/ripgrep/charly.yml",
     "tutorial-shell": "box/fedora/box/tutorial-shell/charly.yml",
     "check-tutorial-shell": "box/fedora/charly.yml",
     # check-group: the real nested local:-inside-a-disposable-VM bed the quickstart and
@@ -47,7 +46,6 @@ EXCERPT_SOURCES = {
     # fabrication this checker exists to catch. Its entry is removed with it; a source map
     # naming a bed that is not in charly.yml is the same lie one level down.
     "check-group": "charly.yml",
-    "plugin-example": "candy/plugin-example/charly.yml",
 }
 
 # Blocks the prose explicitly presents as templates for the reader's OWN project.

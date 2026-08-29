@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/opencharly/plugin-generate-packages/candy/generate-packages v0.2026230.708
-	github.com/opencharly/sdk v0.2026234.347
+	github.com/opencharly/sdk v0.2026241.1032
 )
 
 require (
@@ -51,7 +51,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/spec v0.2026232.520 // indirect
+	github.com/opencharly/spec v0.2026241.931 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pjbgf/sha1cd v0.6.0 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
