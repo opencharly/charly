@@ -1218,4 +1218,5 @@ func explainUnresolvedPluginWord(class ProviderClass, word string) string {
 		" the provider binary beside a <binary>.providers manifest listing %s", key, key)
 	return b.String()
 }
+
 // worktree plugin loading: see plugin_loader.go
