@@ -35,7 +35,7 @@ func hostBuildRemoteImageResolve(_ context.Context, req spec.RemoteImageResolveR
 	version := parsed.Version
 	if version == "" {
 		repoURL := refs.RepoGitURL(parsed.RepoPath)
-		tag, err := refs.GitLatestTag(repoURL)
+		tag, err := gitClient().LatestTag(repoURL)
 		if err != nil {
 			return spec.RemoteImageResolveReply{Error: fmt.Errorf("resolving latest version for %s: %w", parsed.RepoPath, err).Error()}, nil
 		}

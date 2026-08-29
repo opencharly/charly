@@ -461,8 +461,34 @@ var remotePrescanRefRe = regexp.MustCompile(`@github\.com/opencharly/([a-zA-Z0-9
 // manifests, registering their declared words at parse time — restoring the pre-cutover
 // parse-time recognition that the in-repo discover walk provided. Best-effort: an unfetchable
 // ref or a non-plugin manifest is skipped, never fatal.
+
+// builtinOnlyInvocation reports whether the current invocation is a builtin command
+// that cannot need an external command/deploy word (version, help, settings, ssh).
+// The prescan's remote fetch (fetching every pinned plugin repo to register its words
+// in the Kong grammar) is skipped for these — the 13s `charly version` hang (issue
+// #423) was the prescan fetching 30+ repos for a command that never needs them.
+func builtinOnlyInvocation() bool {
+	args := os.Args
+	if len(args) < 2 {
+		return true // bare `charly` → help
+	}
+	switch args[1] {
+	case "version", "help", "--help", "-h", "settings", "ssh":
+		return true
+	}
+	return false
+}
+
 func prescanRemotePluginManifests(rootData []byte, baseDir string) {
 	if !bytes.Contains(rootData, []byte("@github.com/opencharly/")) {
+		return
+	}
+	// LAZY: the remote fetch exists only to register EXTERNAL command/deploy words in
+	// the Kong grammar before parse. A builtin command (version, help, settings, ssh)
+	// never needs an external word, so fetching 30+ pinned repos for it is pure
+	// overhead — the 13s `charly version` hang (issue #423). Skip the fetch for
+	// builtin-only invocations.
+	if builtinOnlyInvocation() {
 		return
 	}
 	seen := map[string]bool{}

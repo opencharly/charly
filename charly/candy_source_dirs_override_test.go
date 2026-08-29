@@ -40,7 +40,7 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 	// the repo ROOT (Phase-4 shape — a bare ref, no candy/ subpath), and the
 	// committed APK fixture ships at tests/data/ under that root.
 	podRoot := t.TempDir()
-	podManifest := "version: 2026.232.0520\n" +
+	podManifest := "version: 2026.240.1943\n" +
 		"android-emulator-layer:\n" +
 		"    candy:\n" +
 		"        version: 2026.174.0700\n"
@@ -57,7 +57,7 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 	// Synthetic box bed composing the standalone pod candy by its BARE ref — the
 	// post-cutover shape of the distro box/android-emulator candy list.
 	boxDir := t.TempDir()
-	boxManifest := "version: 2026.232.0520\n" +
+	boxManifest := "version: 2026.240.1943\n" +
 		"synthetic-box:\n" +
 		"    candy:\n" +
 		"        candy:\n" +

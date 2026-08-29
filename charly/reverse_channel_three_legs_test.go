@@ -72,6 +72,7 @@ var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
 	{"step-emit", "step_emit_hostbuild.go", "M — STAY+CONSOLIDATE (KERNEL_MANIFEST.md W4: thin forwarder to the compiled-in \"oci-dispatch\" class:step provider, the host-side half candy/plugin-deploy-pod still needs)"},
 	{"buildengine-connect-plugins", "host_build_buildengine.go", "M — plugin-loading mechanism (KERNEL_MANIFEST.md W2: hostBuildConnectPlugins calls loadProjectPlugins, registers into providerRegistry)"},
 	{"buildengine-context-ignore-baseline", "host_build_buildengine.go", "B — same-module embed boundary (KERNEL_MANIFEST.md W2: hostBuildContextIgnoreBaseline returns baselineContextIgnore, charly's own //go:embed)"},
+	{"retention-defaults", "host_build_retention_defaults.go", "B — reads the project's defaults.keep_images/keep_check_runs directly from charly.yml with NO project walk and NO @github ref resolution (KERNEL_MANIFEST.md: the #423 clean-hang fix — the clean command needs only the two retention tunables, not the candies or the refs)"},
 
 	// --- Rows NOT yet in KERNEL_MANIFEST.md — undocumented, tracked by gate 3 ---
 	{"overlay", "build_overlay.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
