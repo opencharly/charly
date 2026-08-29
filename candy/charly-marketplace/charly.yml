@@ -144,7 +144,7 @@ charly-marketplace:
             - '@github.com/opencharly/pod-kde-selkies:v2026.239.1559'
             - '@github.com/opencharly/layer-language-runtimes:v2026.238.2140'
             - '@github.com/opencharly/layer-python-ml:v2026.238.2102'
-            - '@github.com/opencharly/pod-selkies-core:v2026.239.1558'
+            - '@github.com/opencharly/pod-selkies-core:v2026.240.2344'
             - '@github.com/opencharly/layer-tailscale-up:v2026.238.2102'
             - '@github.com/opencharly/pod-unsloth-studio:v2026.239.1618'
             - '@github.com/opencharly/pod-waybar-labwc:v2026.240.0122'
