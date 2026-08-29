@@ -5,9 +5,10 @@
 # workflow builds charly from the pin and regenerates the corpus under a drift gate. charly
 # itself carries only the harness surface (.claude/ hooks + settings, the R0 dispatcher),
 # generated here by the same `charly marketplace generate` from the candies' `skill:` / `hook:` /
-# `marketplace:` kind entities — served by candy/plugin-marketplace, a RUNTIME plugin,
-# deliberately absent from charly/charly.yml's compiled_plugins (a dev-time generator, the
-# plugin-docs placement). `--out` is the marketplace checkout the corpus is written to (or
+# `marketplace:` kind entities — served by the plugin-marketplace candy, which the Phase-4
+# de-submodule cutover moved OUT of this repo into standalone opencharly/plugin-marketplace and
+# which charly.yml consumes at a pinned ref. It is a RUNTIME plugin, deliberately absent from
+# charly/charly.yml's compiled_plugins (a dev-time generator, the plugin-docs placement). `--out` is the marketplace checkout the corpus is written to (or
 # compared against); `charly marketplace drift` is the fail-closed no-op gate for both trees.
 version: '3'
 
