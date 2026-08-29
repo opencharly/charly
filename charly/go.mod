@@ -102,7 +102,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026241.1032 // indirect
+	github.com/opencharly/sdk v0.2026241.2111 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
@@ -129,7 +129,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/spec v0.2026241.931
+	github.com/opencharly/spec v0.2026241.1322
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
