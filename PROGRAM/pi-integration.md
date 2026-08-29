@@ -531,6 +531,7 @@ pi.registerTool({
 3. **Layer 6** (pre-push PR body validation) — extend existing gate script.
 4. **Layer 7** (worktree tool) — extension change, no charly repo code.
 5. **Layer 4** (machine-readable dispatcher) — requires changes to the `charly
-   marketplace generate` pipeline (Go code in `candy/plugin-marketplace/`). This is the only
-   item that touches charly source code. All others are pi config + extension
+   marketplace generate` pipeline (Go code in the standalone `opencharly/plugin-marketplace`
+   repo since the Phase-4 de-submodule cutover, consumed here at a pinned ref). This is the only
+   item that touches generator source code. All others are pi config + extension
    changes only.

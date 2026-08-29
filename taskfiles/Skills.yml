@@ -5,9 +5,10 @@
 # workflow builds charly from the pin and regenerates the corpus under a drift gate. charly
 # itself carries only the harness surface (.claude/ hooks + settings, the R0 dispatcher),
 # generated here by the same `charly marketplace generate` from the candies' `skill:` / `hook:` /
-# `marketplace:` kind entities — served by candy/plugin-marketplace, a RUNTIME plugin,
-# deliberately absent from charly/charly.yml's compiled_plugins (a dev-time generator, the
-# plugin-docs placement). `--out` is the marketplace checkout the corpus is written to (or
+# `marketplace:` kind entities — served by the plugin-marketplace candy, which the Phase-4
+# de-submodule cutover moved OUT of this repo into standalone opencharly/plugin-marketplace and
+# which charly.yml consumes at a pinned ref. It is a RUNTIME plugin, deliberately absent from
+# charly/charly.yml's compiled_plugins (a dev-time generator, the plugin-docs placement). `--out` is the marketplace checkout the corpus is written to (or
 # compared against); `charly marketplace drift` is the fail-closed no-op gate for both trees.
 version: '3'
 
@@ -92,35 +93,45 @@ tasks:
         silent: true
 
   pin:
-    desc: Fail if candy/plugin-marketplace's MARKETPLACE_REF has drifted from the marketplace repo's current main HEAD
+    desc: Fail if the plugin-marketplace candy ref pinned in charly.yml has drifted from that repo's latest published tag
     cmds:
+      # The plugin-marketplace candy LEFT this repo in the Phase-4 de-submodule cutover: it is a
+      # standalone repo now, consumed at a pinned tag, and MARKETPLACE_REF -- the marketplace commit
+      # the check-marketplace bed clones -- lives THERE, in that repo's own candy. charly therefore
+      # cannot assert that sha any more; the lever it still owns is the candy REF it pins below, and
+      # a stale ref transitively pins a stale MARKETPLACE_REF. That transitive coupling is what this
+      # gate asserts. (Until this fix the task still read candy/plugin-marketplace/charly.yml, a path
+      # deleted by the same cutover, so it reported an EMPTY MARKETPLACE_REF as "drift" and told the
+      # reader to bump a file that no longer exists -- a gate that could not pass truthfully.)
       - cmd: |
-          file=candy/plugin-marketplace/charly.yml
-          declared=$(grep -E '^\s+MARKETPLACE_REF:' "$file" | awk '{print $2}')
-          # The sha appears TWICE in the candy on purpose: once as MARKETPLACE_REF (the clone's
-          # cache key) and once as a literal in the pinned-commit check's stdout matcher, because
-          # a check step's substitution does not resolve a candy var: and would SKIP the step
-          # instead. Both must track the marketplace main commit, so both are asserted here.
-          occurrences=$(grep -c "$declared" "$file" || true)
-          live=$(git ls-remote https://github.com/opencharly/marketplace.git refs/heads/main | awk '{print $1}')
+          file=charly.yml
+          declared=$(grep -oE "@github\.com/opencharly/plugin-marketplace/candy/plugin-marketplace:v[0-9.]+" "$file" \
+                     | sed 's/.*://' | sort -u)
+          if [ -z "$declared" ]; then
+            echo "marketplace: no plugin-marketplace candy ref found in $file" >&2
+            echo "The check-marketplace bed composes that candy; without the ref the bed cannot pin it." >&2
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "$declared" | wc -l)" -ne 1 ]; then
+            echo "marketplace: $file pins plugin-marketplace at MORE THAN ONE ref:" >&2
+            printf '  %s\n' $declared >&2
+            echo "One pin per candy: two refs mean two different MARKETPLACE_REFs reachable from one tree." >&2
+            exit 1
+          fi
+          live=$(git ls-remote --tags --sort=-v:refname https://github.com/opencharly/plugin-marketplace.git 2>/dev/null \
+                 | sed -n 's#.*refs/tags/\(v[0-9.]*\)$#\1#p' | head -1)
           if [ -z "$live" ]; then
-            echo "marketplace: could not fetch opencharly/marketplace main HEAD (network?) — skipping" >&2
+            echo "marketplace: could not fetch opencharly/plugin-marketplace tags (network?) — skipping" >&2
             exit 0
           fi
           if [ "$declared" != "$live" ]; then
-            echo "marketplace: MARKETPLACE_REF drift" >&2
-            echo "  MARKETPLACE_REF: $declared" >&2
-            echo "  marketplace main: $live" >&2
-            echo "The check-marketplace bed would build the WRONG commit — and, because the clone" >&2
-            echo "layer's cache key is that string, would keep passing while doing it." >&2
-            echo "Bump both occurrences in candy/plugin-marketplace/charly.yml in a charly PR." >&2
+            echo "marketplace: plugin-marketplace ref drift" >&2
+            echo "  pinned in charly.yml: $declared" >&2
+            echo "  latest published tag: $live" >&2
+            echo "The check-marketplace bed builds the candy AT THE PINNED REF, and that candy carries the" >&2
+            echo "MARKETPLACE_REF it clones — so a stale pin gates a stale published corpus while still" >&2
+            echo "reporting green. Bump the ref in charly.yml in a charly PR." >&2
             exit 1
           fi
-          if [ "$occurrences" -lt 2 ]; then
-            echo "marketplace: the pinned sha appears $occurrences time(s) in candy/plugin-marketplace/charly.yml; expected 2" >&2
-            echo "(MARKETPLACE_REF plus the marketplace-pinned-commit check's stdout matcher)" >&2
-            echo "A stale literal means the anti-staleness check asserts the WRONG public commit." >&2
-            exit 1
-          fi
-          echo "marketplace: MARKETPLACE_REF ($declared) matches the marketplace repo's current main head; both occurrences present."
+          echo "marketplace: plugin-marketplace ref ($declared) matches the repo's latest published tag."
         silent: true
