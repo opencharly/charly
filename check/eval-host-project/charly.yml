@@ -1,9 +1,10 @@
 # Pruned GUEST PROJECT for the check-local guest-as-host bed (eval-host-vm).
 #
 # The superproject `check-local` bed (a top-level `vm: {from: eval-host-vm}` deploy)
-# rsyncs THIS file + the four closure candies (check-local-layer,
-# examplestep-deploy-consumer, plugin-example-step, plugin-deploy-local) into the guest
-# at /home/arch/eval-project, then runs `charly --host charly-check-local-vm check run
+# rsyncs THIS file into the guest at /home/arch/eval-project — and THIS FILE ALONE. The
+# four closure candies (check-local-layer, examplestep-deploy-consumer,
+# plugin-example-step, plugin-deploy-local) are pinned below by @github ref and resolved
+# by the guest itself, the way the sdk + spec contract modules already were. Then runs `charly --host charly-check-local-vm check run
 # check-local` (the guest's domain/alias is named after the DEPLOY check-local-vm, not the
 # eval-host-vm entity — P33). The guest's welded charly (add_candy:[charly] → copy: bin/charly) resolves
 # THIS project via CHARLY_PROJECT_DIR (set in the guest's /etc/environment) and runs the
@@ -17,19 +18,16 @@
 # guest). No `import:` of the distro submodules — check-local-app is a kind:local template
 # with no base image, so no distro closure is needed.
 #
-# Kept in lockstep with the superproject check-local closure (candy/check-local-layer,
-# candy/examplestep-deploy-consumer, candy/plugin-example-step, candy/plugin-deploy-local).
-# NOT discovered by the superproject — `check/` is not on its `discover:` path.
-version: 2026.232.0520
-discover:
-    - path: candy
-      recursive: true
+# NOT discovered by the superproject — `check/` is not on its `discover:` path. The candy
+# closure is pinned in this file, so there is no lockstep with a superproject directory
+# list to keep any more — that coupling is what the pins remove.
+version: 2026.240.1943
 check-local-app:
     local:
         description: |-
             Minimal kind:local template applying check-local-layer to the guest host.
         candy:
-            - check-local-layer
+            - '@github.com/opencharly/layer-check-local-layer:v2026.241.1216'
 check-local:
     local:
         from: check-local-app
@@ -52,8 +50,9 @@ check-local:
             reverse op the host records; teardown (charly fleet del) replays it so the markers
             are gone. Every side effect is confined to the disposable guest.
         add_candy:
-            - plugin-example-step
-            - examplestep-deploy-consumer
+            - '@github.com/opencharly/plugin-example-step/candy/plugin-example-step:v2026.239.1643'
+            - '@github.com/opencharly/layer-examplestep-deploy-consumer:v2026.241.1216'
+            - '@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local:v2026.241.1003'
         plan:
             - check: command=charly status --json
               id: status-shows-local
