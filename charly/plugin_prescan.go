@@ -462,7 +462,6 @@ var remotePrescanRefRe = regexp.MustCompile(`@github\.com/opencharly/([a-zA-Z0-9
 // parse-time recognition that the in-repo discover walk provided. Best-effort: an unfetchable
 // ref or a non-plugin manifest is skipped, never fatal.
 
-
 // builtinOnlyInvocation reports whether the current invocation is a builtin command
 // that cannot need an external command/deploy word (version, help, settings, ssh).
 // The prescan's remote fetch (fetching every pinned plugin repo to register its words
