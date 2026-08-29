@@ -22,11 +22,11 @@ import:
     # self-contained (import: []) and cachyos imports the `arch` namespace; none
     # imports main back (they reach main's shared candies via @github refs), so the
     # former main↔cachyos / main↔fedora mutual cycles are dissolved.
-    - arch: '@github.com/opencharly/distro-arch:v2026.241.0311'
-    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.241.0323'
-    - debian: '@github.com/opencharly/distro-debian:v2026.241.0514'
-    - fedora: '@github.com/opencharly/distro-fedora:v2026.241.0424'
-    - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.241.0514'
+    - arch: '@github.com/opencharly/distro-arch:v2026.241.1429'
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.241.1528'
+    - debian: '@github.com/opencharly/distro-debian:v2026.241.1436'
+    - fedora: '@github.com/opencharly/distro-fedora:v2026.241.1429'
+    - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.241.1436'
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
