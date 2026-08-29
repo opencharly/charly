@@ -12,7 +12,7 @@ tasks:
     desc: Build the charly binary to bin/charly (CalVer-stamped; NO host install)
     dir: "{{.ROOT_DIR}}"
     cmds:
-      - mkdir -p bin candy/charly-dev/bin
+      - mkdir -p bin
       # Regenerate the compiled-in plugin wiring from charly.yml `compiled_plugins:`
       # BEFORE the go build that needs it: pluginsgen emits charly/plugins_generated.go
       # (registerCompiledPlugin per selected plugin candy) + the repo-root go.work (the
@@ -25,15 +25,15 @@ tasks:
       # UTC date (deterministic: same commit → same version, whether the tree is
       # clean or dirty; the build clock is never consulted). Without this stamp
       # `charly version` would read the wall clock at invocation — useless as a build
-      # identity / freshness signal. The copy into candy/charly-dev/bin/charly carries the
-      # same stamp, so the `charly-dev` layer (and every check bed baking it) ships a
-      # self-identifying binary, and the distro repos' packaging workflows stamp
+      # identity / freshness signal. The `charly-dev` candy copies THIS binary, so it
+      # (and every check bed baking it) ships a self-identifying binary, and the distro
+      # repos' packaging workflows stamp
       # the release version from this same binary's `charly version` so the
       # package can never disagree.
-      # Build to a temp path FIRST so a guard failure below can never leave
-      # bin/charly newer than the image-baked candy/charly-dev/bin/charly copy
-      # (split-brain freshness): promotion happens only after every check
-      # passes, and the promote + copy are adjacent with no exit between them.
+      # Build to a temp path FIRST so a guard failure below can never leave a
+      # half-written bin/charly in place: promotion happens only after every check
+      # passes. (This also guarded a split-brain against the separate
+      # candy/charly-dev/bin/charly copy; that copy is gone — there is one path now.)
       # charly#178: every charly binary build — production, test, and Taskfile —
       # passes -buildvcs=false; the VCS stamp has zero consumers, and workspace-mode
       # Go's VCS-status walk breaks in a linked worktree outside the main repo path
@@ -56,10 +56,10 @@ tasks:
           exit 1
         fi
       - mv bin/.charly.next bin/charly
-      # The `charly` candy installs from the published per-distro package repos and
-      # never reads this path; the local-source install lives in the charly-dev candy
-      # (used by charly check beds only), so the sync target is candy/charly-dev/bin.
-      - cp bin/charly candy/charly-dev/bin/charly
+      # No sync step: charly-dev is declared in charly.yml, so its `copy: bin/charly`
+      # resolves against the repo root and reads THIS binary directly. The former
+      # `cp bin/charly candy/charly-dev/bin/charly` maintained a second copy whose only
+      # purpose was to sit where a candy-dir-relative path could find it.
 
   # Solo/bootstrap use only — never run this on a host with in-flight multi-teammate
   # work: it WRITES to $HOME, and if $HOME/.local/bin precedes a native-package
