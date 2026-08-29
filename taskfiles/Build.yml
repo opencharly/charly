@@ -25,15 +25,15 @@ tasks:
       # UTC date (deterministic: same commit → same version, whether the tree is
       # clean or dirty; the build clock is never consulted). Without this stamp
       # `charly version` would read the wall clock at invocation — useless as a build
-      # identity / freshness signal. The copy into candy/charly-dev/bin/charly carries the
-      # same stamp, so the `charly-dev` layer (and every check bed baking it) ships a
-      # self-identifying binary, and the distro repos' packaging workflows stamp
+      # identity / freshness signal. The `charly-dev` candy copies THIS binary, so it
+      # (and every check bed baking it) ships a self-identifying binary, and the distro
+      # repos' packaging workflows stamp
       # the release version from this same binary's `charly version` so the
       # package can never disagree.
-      # Build to a temp path FIRST so a guard failure below can never leave
-      # bin/charly newer than the image-baked candy/charly-dev/bin/charly copy
-      # (split-brain freshness): promotion happens only after every check
-      # passes, and the promote + copy are adjacent with no exit between them.
+      # Build to a temp path FIRST so a guard failure below can never leave a
+      # half-written bin/charly in place: promotion happens only after every check
+      # passes. (This also guarded a split-brain against the separate
+      # candy/charly-dev/bin/charly copy; that copy is gone — there is one path now.)
       # charly#178: every charly binary build — production, test, and Taskfile —
       # passes -buildvcs=false; the VCS stamp has zero consumers, and workspace-mode
       # Go's VCS-status walk breaks in a linked worktree outside the main repo path

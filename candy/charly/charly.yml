@@ -370,33 +370,22 @@ charly-skill:
             bed always exercises the code under development while a real box ships the
             published release.
             
-            ## Updating the Binary — the charly-dev sync path
-
-            **The commands in this section are maintenance the charly repository performs on itself.** They are not steps an charly user runs: the charly-dev candy's binary source is a working tree (see "Binary source" above), so keeping its two paths in sync is something a contributor does inside a charly checkout. It is recorded here because it is this candy's own build contract — named as maintenance, not as instructions for the reader.
-
-            The `charly-dev` candy's `copy: bin/charly` run step is resolved **relative to the candy directory**, so the box build reads `candy/charly-dev/bin/charly` — NOT the repo-root `bin/charly`. Two independent paths need to stay in sync:
+            ## Updating the Binary
             
-            | Path | Who reads it |
-            |------|-------------|
-            | `bin/charly` (repo root) | Host-side `charly` invocations; users running `/tmp/charly` style tests |
-            | `candy/charly-dev/bin/charly` | The `charly-dev` candy's COPY into check-bed boxes during `charly box build` |
+            **The commands in this section are maintenance the charly repository performs on itself.** They are not steps an charly user runs: the charly-dev candy's binary source is a working tree (see "Binary source" above), so this is something a contributor does inside a charly checkout. It is recorded here because it is this candy's own build contract — named as maintenance, not as instructions for the reader.
             
-            **Canonical workflow** — `task build:binary` compiles to repo-root AND syncs to the charly-dev layer:
+            There is **one** path. The `charly-dev` candy is declared in the repo-root `charly.yml`, and a candy's `copy:` resolves against its declaring file's directory, so `copy: bin/charly` reads the repo-root `bin/charly` that `task build:binary` writes:
             
             ```bash
-            task build:binary                              # Builds + syncs both paths; rebuild images after.
+            task build:binary                            # Builds repo-root bin/charly.
             ./bin/charly box build <image>               # Rebuild affected images.
             ```
             
-            **Manual workflow** — if you skip `task build:binary` and build with `go build` directly, you MUST sync the candy path, or boxes will bake the previous binary:
+            Building with `go build -o ../bin/charly .` directly is equivalent for this purpose — the candy reads whatever is at repo-root `bin/charly`. There is no second copy to keep in step.
             
-            ```bash
-            cd charly && go build -o ../bin/charly .           # Only updates repo-root bin/charly.
-            cp bin/charly candy/charly-dev/bin/charly           # REQUIRED — sync to layer path.
-            ./bin/charly box build <image>               # Rebuild affected images.
-            ```
+            This used to be a two-path contract: charly-dev lived in `candy/charly-dev/`, so its `copy:` resolved against the candy directory and needed its own `bin/charly`, synced there by `task build:binary`. Forgetting that sync baked the PREVIOUS binary into every check bed — silently, because nothing failed. Declaring the candy where the path already resolves removed the second path, and the class of mistake with it.
             
-            **Why this bites**: `charly box build` uses auto-generated intermediate images (e.g., `ghcr.io/opencharly/charly-fedora-2-dbus-nodejs`) that cache the `charly-dev` candy. If you update `bin/charly` in repo-root but forget the candy copy, the intermediate's cache hit serves stale content. After cleaning up a stale dual-path situation, `charly clean --invalidate 'charly-fedora-2*'` forces a clean intermediate rebuild.
+            **Still worth knowing**: `charly box build` uses auto-generated intermediate images (e.g., `ghcr.io/opencharly/charly-fedora-2-dbus-nodejs`) that cache the `charly-dev` candy. If an intermediate serves stale content, `charly clean --invalidate 'charly-fedora-2*'` forces a clean rebuild.
             
             ## `charly status` Probe
             

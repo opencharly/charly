@@ -426,18 +426,20 @@ charly-dev:
         version: 2026.238.1243
         description: |
             The in-development charly toolchain installed from LOCAL SOURCE — the on-PATH
-            charly CLI baked from `candy/charly-dev/bin/charly` (the binary synced by
-            `task build:binary`), plus the composed VM / encrypted-storage / console-relay
-            stack. This is the CHECK-BED variant of the `charly` candy: it exists so a
-            disposable R10 bed always tests the code under development, and it is the ONLY
-            place the legacy local-binary `copy: bin/charly` install path survives.
+            charly CLI baked from the repo-root `bin/charly` that `task build:binary`
+            produces, plus the composed VM / encrypted-storage / console-relay stack. This
+            is the CHECK-BED variant of the `charly` candy: it exists so a disposable R10
+            bed always tests the code under development, and it is the ONLY place the
+            legacy local-binary `copy: bin/charly` install path survives.
             General-use boxes compose `charly` (which installs the binary from the published
             per-distro package repos — charly-{alpine,arch,fedora,ubuntu,debian}); this
             charly-dev candy is for charly check beds ONLY.
-            Consumed by bare name from the charly checkout (check-charly-vm, check-local-vm):
-            the `copy: bin/charly` step reads the LOCAL synced binary, so a remote
-            `@github.com/opencharly/charly/candy/charly-dev` fetch would have no binary to
-            copy and is not a valid use.
+            Consumed by bare name from the charly checkout (check-charly-vm, check-local-vm).
+            It is declared in THIS file rather than a candy/ directory so that `copy:
+            bin/charly` resolves against the repo root — a candy takes its declaring file's
+            directory as SourceDir. There is no separate synced copy of the binary and no
+            sync step: the candy reads the build output directly. The binary is gitignored,
+            so this candy is inherently checkout-bound and has no meaningful remote form.
         candy:
             - '@github.com/opencharly/pod-virtualization:v2026.237.458'
             - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
@@ -487,10 +489,10 @@ charly-dev:
                       suite: noble
                       components: main
         plan:
-            # The legacy local-binary install: bake the in-development binary (synced into
-            # candy/charly-dev/bin/charly by `task build:binary`) at /usr/bin/charly. The
-            # binary is the same self-identifying build `task build:binary` produces at
-            # repo-root bin/charly (CalVer-stamped at build time).
+            # The legacy local-binary install: bake the in-development binary at
+            # /usr/bin/charly. `copy:` resolves against this manifest's own directory —
+            # the repo root — so it reads the CalVer-stamped bin/charly that
+            # `task build:binary` writes, with no intermediate copy.
             - run: copy=bin/charly
               copy: bin/charly
               to: /usr/bin/charly
@@ -1623,8 +1625,9 @@ check-exampledeploy:
                 command: "cat /tmp/charly-exampledeploy-steps/pushed"
                 in_container: false
 # charly-dev candy binary-install witness against the LOCAL charly-dev candy (no @github):
-# deploys candy/charly-dev to a disposable Arch Cloud VM, where the layer's `copy:
-# bin/charly` run step places the in-development binary at /usr/bin/charly. The
+# deploys the charly-dev candy declared in THIS file to a disposable Arch Cloud VM, where
+# the layer's `copy: bin/charly` run step places the in-development binary at
+# /usr/bin/charly. The
 # OS-tracked package install (the former localpkg: map) is GONE — the sdk's
 # localpkg machinery now builds via the `charly generate-packages` plugin
 # (sdk/packagekit) from the `charly` candy's `packaging:` section. The copy step
