@@ -32,6 +32,12 @@ import:
 discover:
     - path: candy
       recursive: true
+    # The generate-packages shim lives under tools/, not candy/: it is not a deployable
+    # candy, it is the dev-path re-export that makes `charly generate-packages` resolvable
+    # from a CHECKOUT. It still has to be discovered, because the project fall-through
+    # (ScanAllCandy -> findCommandPluginCandy) is the only resolution path it serves.
+    - path: tools
+      recursive: true
 defaults:
     platform:
         - linux/amd64
