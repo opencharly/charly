@@ -145,7 +145,16 @@ func readWeldedPlugins(t *testing.T) map[string]bool {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		out[line] = true
+		// Entries are `<name>@<tag>`: the release workflow clones each welded plugin's
+		// own repo at that pin. A bare name is a malformed entry, not a legacy form —
+		// the workflow rejects it too, so accepting it here would let the test pass on
+		// a list the release cannot build.
+		name, ref, ok := strings.Cut(line, "@")
+		if !ok || name == "" || ref == "" {
+			t.Errorf("%s: %q is not `<name>@<tag>`", hostPlugins, line)
+			continue
+		}
+		out[name] = true
 	}
 	return out
 }
