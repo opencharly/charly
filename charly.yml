@@ -3646,7 +3646,7 @@ agentteams:
             controller container's DNS name.
         candy:
             - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
-            - '@github.com/opencharly/layer-agentteams:v2026.237.804'
+            - '@github.com/opencharly/layer-agentteams:v2026.240.0118'
 agentteams-manager:
     candy:
         version: 2026.224.0600
@@ -4204,7 +4204,7 @@ check-boxload-app:
             - fedora
         candy:
             - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
-            - '@github.com/opencharly/pod-nested-podman-socket:v2026.237.940'
+            - '@github.com/opencharly/pod-nested-podman-socket:v2026.239.1601'
 check-boxload-pod:
     pod:
         image: check-boxload-app
