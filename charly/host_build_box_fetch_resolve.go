@@ -29,7 +29,7 @@ func hostBuildBoxFetchResolve(_ context.Context, req spec.BoxFetchResolveRequest
 	if req.Refresh {
 		repoPath, version := spec.NormalizeRepoSpec(req.Spec)
 		if version == "" {
-			branch, err := refs.GitDefaultBranch(refs.RepoGitURL(repoPath))
+			branch, err := gitClient().DefaultBranch(refs.RepoGitURL(repoPath))
 			if err != nil {
 				return spec.BoxFetchResolveReply{}, fmt.Errorf("resolving default branch for %s: %w", repoPath, err)
 			}
