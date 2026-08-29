@@ -635,8 +635,11 @@ kubernetes-skill:
                 storage:
                   - {name: data, size: 20Gi, class_hint: fast, access: single-writer}
                 probes:
-                  liveness:  {http: {path: /healthz, port: 8080}}
-                  readiness: {http: {path: /ready,   port: 8080}}
+                  # Each probe is a bare #Op (spec/schema/deploy.cue #DeployProbes), and #Op is
+                  # CLOSED — there is no `http:` sugar inside probes:, because the plugin-verb
+                  # desugar runs on plan STEPS only. Author them as ops.
+                  liveness:  {command: curl -fsS http://localhost:8080/healthz}
+                  readiness: {command: curl -fsS http://localhost:8080/ready}
                 deploy:
                   namespace: apps               # optional override of the cluster template default
                   patches: []                   # escape hatch: strategic / JSON6902 patches
