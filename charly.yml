@@ -3912,7 +3912,7 @@ check-agentteams-snapshot:
         # bloating the box for a check. Without this the step fails with
         # `sh: charly: command not found`, which is what the first run did.
         add_candy:
-            - agentteams-snapshot
+            - '@github.com/opencharly/layer-agentteams-snapshot:v2026.239.1618'
         volume:
             - name: podman-socket
               type: bind
