@@ -6,8 +6,9 @@ version: '3'
 # That set is larger than it looks, and the difference is what makes this a sweep rather
 # than a one-liner. Every plugin candy is its OWN module (the deliberate dependency-shed
 # design: a heavy plugin's deps never merge into the ~60 light plugins' graphs), but the
-# same coupling reaches `candy/generate-packages` — a candy module that is NOT named
-# `plugin-*` — and the `tools/golden-*` fixture modules. A glob that assumes `candy/plugin-*`
+# same coupling reaches `tools/generate-packages` — the command-plugin re-export shim,
+# which is a candy module that is NOT named `plugin-*` and no longer lives under candy/ at
+# all — and the `tools/golden-*` fixture modules. A glob that assumes `candy/plugin-*`
 # silently skips all three.
 #
 # WHY they must move together. A module here requires `github.com/opencharly/sdk` at the
