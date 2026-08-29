@@ -20,6 +20,7 @@ tasks:
   sync:
     desc: Regenerate the charly harness surface + the marketplace corpus from candy config
     cmds:
+      - task: refs
       - task: :build:binary
       - '{{.ROOT_DIR}}/bin/charly marketplace generate --root {{.ROOT_DIR}} --out {{.MARKETPLACE_DIR}}'
       - cmd: |
@@ -43,6 +44,7 @@ tasks:
       # around: a stale (or absent) binary would emit a stale (or no) verdict, and a gate
       # that cannot fail truthfully is worse than no gate. `sync` builds for the same
       # reason; drift is the read-only half of the same pair.
+      - task: refs
       - task: :build:binary
       - cmd: |
           raw=$({{.ROOT_DIR}}/bin/charly marketplace drift --root {{.ROOT_DIR}} --out {{.MARKETPLACE_DIR}} 2>&1) && rc=0 || rc=$?
@@ -56,6 +58,37 @@ tasks:
             exit 1
           fi
           echo "skills: no drift."
+        silent: true
+
+  refs:
+    desc: Fail if this repo's candy/charly-marketplace/charly.yml has drifted from the marketplace's AUTHORITATIVE copy
+    cmds:
+      # The marketplace deploy workflow copies ITS candy/charly-marketplace/charly.yml OVER the
+      # cloned charly's before generating, so that file -- not this repo's -- decides which candy
+      # versions the corpus is built from. This repo's copy is only what `sync`/`drift` below feed
+      # the generator. Nothing kept the two in sync, so a ref bumped only here moved the LOCAL gate
+      # green while CI kept resolving the old version: that is how a removed MCP server was
+      # regenerated back into the corpus with `skills:drift` reporting "no drift" the whole time.
+      # Equality is what makes the local gate faithful, so it is asserted before every generation.
+      - cmd: |
+          ours="{{.ROOT_DIR}}/candy/charly-marketplace/charly.yml"
+          theirs="{{.MARKETPLACE_DIR}}/candy/charly-marketplace/charly.yml"
+          if [ ! -f "$theirs" ]; then
+            echo "refs: no marketplace checkout at {{.MARKETPLACE_DIR}}" >&2
+            echo "Clone opencharly/marketplace next to this repo; without it the refs list this" >&2
+            echo "gate compares against does not exist and the local run cannot match CI." >&2
+            exit 1
+          fi
+          if ! diff -q "$ours" "$theirs" >/dev/null; then
+            echo "refs: DRIFT — candy/charly-marketplace/charly.yml differs from the marketplace's copy." >&2
+            diff -u "$theirs" "$ours" | sed -n '1,40p' >&2
+            echo >&2
+            echo "The marketplace's copy is AUTHORITATIVE: its deploy workflow copies it over this" >&2
+            echo "repo's before generating. A bump that lands only here changes nothing CI resolves," >&2
+            echo "and the drift gate below would still pass. Land the same change in a marketplace PR." >&2
+            exit 1
+          fi
+          echo "refs: OK — refs list matches the marketplace's authoritative copy."
         silent: true
 
   pin:

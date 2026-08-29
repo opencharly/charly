@@ -26,12 +26,14 @@ import (
 // defining one — R-items by the defines-vs-calls test. Per-leg rationale: CHANGELOG/.
 
 // hostBuildConnectPlugins connects the project's build-time (out-of-tree) plugin candies into the host
-// registry so the plugin's subsequent InvokeProvider/render dispatch reaches them (registry M). Best-
-// effort: a plugin the build actually USES fails loudly later at ops.OpEmit/ops.OpResolve. opts is
-// built via spec.BoxResolveOpts (R3, the shared box-selection rule) so req.RequestedBoxes
-// reaches this scan's own CollectRemoteRefsOpts call too (task #17 fix) — an on-demand
-// namespace-qualified build/generate target otherwise never gets its own build-time plugin candies
-// discovered/connected here either, the sibling of the "unknown candy" gap this task closes.
+// registry so the plugin's subsequent InvokeProvider/render dispatch reaches them (registry M). A
+// plugin candy that fails to COMPILE is a FATAL error here, naming the plugin and the go build
+// error — the build must not continue to a downstream 'no provider registered' failure that names
+// the wrong cause (charly#326). opts is built via spec.BoxResolveOpts (R3, the shared box-selection
+// rule) so req.RequestedBoxes reaches this scan's own CollectRemoteRefsOpts call too (task #17 fix)
+// — an on-demand namespace-qualified build/generate target otherwise never gets its own build-time
+// plugin candies discovered/connected here either, the sibling of the "unknown candy" gap this task
+// closes.
 func hostBuildConnectPlugins(_ context.Context, req spec.ResolvedProjectRequest, _ buildEngineContext) (map[string]string, error) {
 	dir := reqDirOrCwd(req.Dir)
 	cfg, err := LoadConfig(dir)
@@ -49,7 +51,11 @@ func hostBuildConnectPlugins(_ context.Context, req spec.ResolvedProjectRequest,
 	}
 	buildRefs := collectReferencedPluginWords(layers, cfg.Box, req.ExtraCandyRefs)
 	if perr := loadProjectPlugins(context.Background(), layers, buildRefs); perr != nil {
-		fmt.Fprintf(os.Stderr, "warning: build-time plugin load: %v\n", perr)
+		// A plugin candy that fails to compile must stop the build with the actionable
+		// error (the plugin name + the go build error are in perr via loadPluginUnit's
+		// `plugin %q (source %s): %w` wrap) — NOT continue to a later 'no provider
+		// registered' failure that names the wrong cause (charly#326).
+		return nil, fmt.Errorf("build-time plugin load failed: %w", perr)
 	}
 	return map[string]string{}, nil
 }
@@ -98,3 +104,5 @@ var _ = func() bool {
 	registerHostBuilder("buildengine-context-ignore-baseline", typedHostBuilder("buildengine-context-ignore-baseline", hostBuildContextIgnoreBaseline))
 	return true
 }()
+
+// B12 regression gate: see host_build_buildengine_test.go
