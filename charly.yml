@@ -3294,9 +3294,9 @@ check-docs:
 # the per-harness catalogs parse and their entries resolve (Claude/Codex/kimi/pi), the
 # per-family manifests carry no version field (commit-SHA versioning) and the marketplace
 # repository URL, the baked skill headers carry the generator marker + the two-key frontmatter,
-# and the setup launcher ships executable — the same gates the marketplace repo's own deploy
-# workflow runs. The generator's fail-closed drift gate + the ADE checks are covered by the
-# plugin's Go tests + `task skills:drift`; this bed covers the published ARTIFACT at the pin.
+# — the same gates the marketplace repo's own deploy workflow runs. The generator's fail-closed
+# drift gate + the ADE checks are covered by the plugin's Go tests and by that workflow; this bed
+# covers the published ARTIFACT at the pin.
 # =============================================================================
 marketplace-app:
     candy:
@@ -3324,10 +3324,10 @@ check-marketplace:
             R10 bed for the published marketplace corpus. Building the marketplace-app box ran
             the plugin-marketplace candy's plan: — the clone at the pinned MARKETPLACE_REF plus
             the shape gates (catalogs, no-version manifests, baked skill headers, executable
-            setup, pinned-commit check); deploying the pod to steady state proves the box
-            builds, starts, and stays up. The generator's fail-closed drift gate + the Go
-            coverage are covered by the plugin's Go tests and `task skills:drift`; this bed
-            covers the published artifact those produce.
+            pinned-commit check); deploying the pod to steady state proves the box builds,
+            starts, and stays up. The generator's fail-closed drift gate + the Go coverage are
+            covered by the plugin's Go tests and the marketplace repo's own deploy workflow;
+            this bed covers the published artifact those produce.
         plan:
             - check: the marketplace-app pod reached steady state (the corpus-gating box runs)
               id: marketplace-pod-running
