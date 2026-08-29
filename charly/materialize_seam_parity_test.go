@@ -37,6 +37,14 @@ func TestMaterializeSeam_RealFixtureDeterministic(t *testing.T) {
 	repoRoot = filepath.Dir(repoRoot) // charly/ -> repo root
 	dir := filepath.Join(repoRoot, "box", "fedora")
 
+	// The fixture is the box/fedora SUBMODULE — absent in a shallow clone or a fresh
+	// checkout before `git submodule update --init`. A fixture-dependent differential
+	// test must SKIP when its fixture is not present, not hard-fail on an uninitialized
+	// submodule (which reads as a spurious regression and misleads a fresh CI run).
+	if _, err := os.Stat(filepath.Join(dir, "charly.yml")); os.IsNotExist(err) {
+		t.Skipf("box/fedora submodule not initialized (missing %s/charly.yml); run `git submodule update --init box/fedora`", dir)
+	}
+
 	uf1, ok1, err1 := LoadUnified(dir)
 	if err1 != nil || !ok1 {
 		t.Fatalf("first LoadUnified(%s): ok=%v err=%v", dir, ok1, err1)
