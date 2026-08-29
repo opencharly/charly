@@ -38,7 +38,11 @@ func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam //
 	}
 	dir := prev
 	for range 6 {
-		if info, err := os.Stat(filepath.Join(dir, "candy")); err == nil && info.IsDir() {
+		// go.work marks the repo root. It replaced `candy/`, which was the marker until
+		// the candy de-submodule cutover emptied and removed that directory — at which
+		// point this walk would have found nothing and the test would have SKIPPED
+		// vacuously, which is the exact failure the marker exists to prevent.
+		if info, err := os.Stat(filepath.Join(dir, "go.work")); err == nil && !info.IsDir() {
 			if err := os.Chdir(dir); err != nil {
 				t.Fatalf("chdir %s: %v", dir, err)
 			}
@@ -46,7 +50,7 @@ func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam //
 		}
 		dir = filepath.Dir(dir)
 	}
-	t.Skipf("project root (candy/) not found walking up from %s; skipping", prev)
+	t.Skipf("project root (go.work) not found walking up from %s; skipping", prev)
 	return "", func() {}
 }
 

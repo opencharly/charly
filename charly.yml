@@ -30,11 +30,11 @@ import:
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
-    - path: candy
-      recursive: true
-    # The generate-packages shim lives under tools/, not candy/: it is not a deployable
-    # candy, it is the dev-path re-export that makes `charly generate-packages` resolvable
-    # from a CHECKOUT. It still has to be discovered, because the project fall-through
+    # candy/ is GONE: every candy this repo used to vendor now lives in its own
+    # kind-prefixed repo and is referenced by @github pin. What remains discoverable is
+    # tools/ — the generate-packages shim, which is not a deployable candy but the
+    # dev-path re-export that makes `charly generate-packages` resolvable from a
+    # CHECKOUT. It has to be discovered because the project fall-through
     # (ScanAllCandy -> findCommandPluginCandy) is the only resolution path it serves.
     - path: tools
       recursive: true
