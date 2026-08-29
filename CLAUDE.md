@@ -12,7 +12,9 @@ Before reading source, running a repository command, delegating, planning, or ed
 
 Consult this table before the first tool call of every task; when several rows match, load all their skills in one message.
 
-<!-- BEGIN GENERATED SKILL DISPATCHER -->
+<!-- The R0 skill dispatcher. This table was formerly spliced in by
+     `charly marketplace generate`; it is now hand-maintained prose. When a skill is
+     added, renamed or removed, update this table in the same PR. -->
 | Trigger (what the user said or you're about to do) | Skill to load |
 |---|---|
 | Agent Driven Evaluation (ADE) / `charly box feature run` / `charly check feature run` / `charly feature list/pending/validate` / authoring a candy's `plan:` + `description:` string / the agent grader for `agent-check:` steps | `/charly-check:check` |
@@ -92,7 +94,6 @@ Consult this table before the first tool call of every task; when several rows m
 | the `appium:` check verb / Android UI automation (out-of-process plugin) / W3C WebDriver sessions, element introspection, the gesture/app/key/device sugar groups, the generic `execute`/`raw` escape hatch | `/charly-check:check` |
 | the `kube:` check verb / Kubernetes cluster probing from a candy/box plan (out-of-process plugin; nodes, pods, ingress, wait-ready, storageclass, addons, apply/delete, raw resource GETs) | `/charly-kubernetes:check-k8s` |
 | the agentteams box / the AgentTeams multi-agent stack (Manager–Workers, Rooms, the controller + matrix + element + higress + minio candies) on the pod or vm substrate / the `check-agentteams-pod` and `check-agentteams-vm` beds | `/charly-agentteams:agentteams` |
-<!-- END GENERATED SKILL DISPATCHER -->
 
 Full index: the opencharly/marketplace repo's README. Anything not listed: read the index first, load the matching skill second, touch code third.
 
