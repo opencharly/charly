@@ -11,6 +11,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -23,7 +24,11 @@ import (
 
 const (
 	candyCharlyYML = "../candy/charly/charly.yml"
-	hostPlugins    = "../scripts/host-command-plugins.txt"
+	// charly-dev is declared in the PROJECT manifest, not a candy dir: its
+	// `copy: bin/charly` must resolve against the repo root, and a candy takes its
+	// declaring file's directory as SourceDir.
+	rootCharlyYML = "../charly.yml"
+	hostPlugins   = "../scripts/host-command-plugins.txt"
 )
 
 var plainName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9+._-]*$`)
@@ -203,14 +208,15 @@ func TestDistroRepoInstallDeclared(t *testing.T) {
 // TestCharlyDevCandyDeclared — the candy split contract: `charly` installs from the
 // published per-distro package repos (no copy step), and `charly-dev` is the
 // local-source install for charly check beds ONLY (the sole surviving `copy:
-// bin/charly` step, resolved relative to candy/charly-dev). A regress here (e.g.
+// bin/charly` step, resolved relative to the REPO ROOT — charly-dev is declared in
+// charly.yml, and a candy's SourceDir is its declaring file's dir). A regress here (e.g.
 // the copy step leaking back into `charly`, or charly-dev losing its copy step)
 // would silently reintroduce the stale-binary install that broke every
 // remote-fetched `charly` candy (bin/charly is gitignored).
 func TestCharlyDevCandyDeclared(t *testing.T) {
-	dev, err := os.ReadFile("../candy/charly-dev/charly.yml")
+	dev, err := os.ReadFile(rootCharlyYML)
 	if err != nil {
-		t.Fatalf("read ../candy/charly-dev/charly.yml: %v", err)
+		t.Fatalf("read %s: %v", rootCharlyYML, err)
 	}
 	devDoc := struct {
 		CharlyDev struct {
@@ -225,7 +231,7 @@ func TestCharlyDevCandyDeclared(t *testing.T) {
 		} `yaml:"charly-dev"`
 	}{}
 	if err := yaml.Unmarshal(dev, &devDoc); err != nil {
-		t.Fatalf("parse ../candy/charly-dev/charly.yml: %v", err)
+		t.Fatalf("parse %s: %v", rootCharlyYML, err)
 	}
 	devC := devDoc.CharlyDev.Candy
 	foundCopy := false
@@ -262,4 +268,64 @@ func TestCharlyDevCandyDeclared(t *testing.T) {
 			t.Errorf("charly: plan must not carry a copy step (the package install is the binary source); found copy=%q", step.Copy)
 		}
 	}
+}
+
+// TestInlineCandySourceDirIsProjectRoot pins the rule that lets charly-dev live in
+// charly.yml instead of a candy/ directory: a candy declared INLINE in the project
+// manifest takes the manifest's own directory as its SourceDir
+// (loader_threaded.go:395), so a relative `copy:` path resolves against the repo root.
+//
+// This is not a style detail. charly-dev's `copy: bin/charly` is the sole surviving
+// local-source install, and repo-root bin/charly is where `task build:binary` writes
+// the binary. If inline candies ever anchored somewhere else, that copy would silently
+// read the wrong path — or nothing — and every check bed welding charly-dev would
+// install a stale or absent binary while still validating. The former
+// candy/charly-dev/bin/charly copy existed ONLY to satisfy a candy-dir-relative
+// resolution; this test is what makes deleting it safe.
+func TestInlineCandySourceDirIsProjectRoot(t *testing.T) {
+	root := t.TempDir()
+	manifest := "version: 2026.240.1943\n" +
+		"inline-copy-candy:\n" +
+		"    candy:\n" +
+		"        version: 2026.240.1943\n" +
+		"        description: |-\n" +
+		"            Inline candy carrying a relative copy: path, the charly-dev shape.\n" +
+		"        plan:\n" +
+		"            - run: copy=bin/charly\n" +
+		"              copy: bin/charly\n" +
+		"              to: /usr/bin/charly\n" +
+		"              mode: \"0755\"\n"
+	if err := os.WriteFile(filepath.Join(root, spec.UnifiedFileName), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	uf, ok, err := LoadUnified(root)
+	if err != nil || !ok || uf == nil {
+		t.Fatalf("LoadUnified(%s): ok=%v err=%v", root, ok, err)
+	}
+	scanned, scanErr := ScanAllCandyWithConfig(root, uf.ProjectConfig())
+	if scanErr != nil {
+		t.Fatalf("scan failed: %v", scanErr)
+	}
+	dirs := candyDirsFromScan(scanned)
+
+	src, found := dirs["inline-copy-candy"]
+	if !found {
+		t.Fatalf("inline candy absent from the scanned set (keys: %v)", candyDirKeys(dirs))
+	}
+	if src != root {
+		t.Fatalf("inline candy SourceDir = %q, want the project root %q — a relative\n"+
+			"`copy:` would resolve against the wrong directory, which is exactly the\n"+
+			"breakage that deleting candy/charly-dev/bin/charly would then hide", src, root)
+	}
+}
+
+// candyDirKeys returns a map's keys, for failure messages only.
+func candyDirKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

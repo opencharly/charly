@@ -12,7 +12,7 @@ tasks:
     desc: Build the charly binary to bin/charly (CalVer-stamped; NO host install)
     dir: "{{.ROOT_DIR}}"
     cmds:
-      - mkdir -p bin candy/charly-dev/bin
+      - mkdir -p bin
       # Regenerate the compiled-in plugin wiring from charly.yml `compiled_plugins:`
       # BEFORE the go build that needs it: pluginsgen emits charly/plugins_generated.go
       # (registerCompiledPlugin per selected plugin candy) + the repo-root go.work (the
@@ -56,10 +56,10 @@ tasks:
           exit 1
         fi
       - mv bin/.charly.next bin/charly
-      # The `charly` candy installs from the published per-distro package repos and
-      # never reads this path; the local-source install lives in the charly-dev candy
-      # (used by charly check beds only), so the sync target is candy/charly-dev/bin.
-      - cp bin/charly candy/charly-dev/bin/charly
+      # No sync step: charly-dev is declared in charly.yml, so its `copy: bin/charly`
+      # resolves against the repo root and reads THIS binary directly. The former
+      # `cp bin/charly candy/charly-dev/bin/charly` maintained a second copy whose only
+      # purpose was to sit where a candy-dir-relative path could find it.
 
   # Solo/bootstrap use only — never run this on a host with in-flight multi-teammate
   # work: it WRITES to $HOME, and if $HOME/.local/bin precedes a native-package
