@@ -3541,7 +3541,7 @@ agentteams-manager:
             - -c
             - /etc/supervisord.conf
         candy:
-            - '@github.com/opencharly/pod-agentteams-manager:v2026.237.804'
+            - '@github.com/opencharly/pod-agentteams-manager:v2026.239.1603'
 agentteams-worker:
     candy:
         version: 2026.224.0600
@@ -3569,7 +3569,7 @@ agentteams-worker:
             - -c
             - /etc/supervisord.conf
         candy:
-            - '@github.com/opencharly/pod-agentteams-worker:v2026.237.804'
+            - '@github.com/opencharly/pod-agentteams-worker:v2026.239.1600'
 check-agentteams-pod:
     pod:
         image: agentteams
