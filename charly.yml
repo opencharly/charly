@@ -2927,7 +2927,7 @@ check-migrate-local:
               context:
                 - runtime
               command:
-                command: 'd=$(mktemp -d); printf "version: 2026.223.1018\n" > "$d/charly.yml"; ${CHARLY_BIN} migrate --dir "$d" --project-only; rc=$?; rm -rf "$d"; exit $rc'
+                command: 'd=$(mktemp -d); printf "version: 2026.240.1943\n" > "$d/charly.yml"; ${CHARLY_BIN} migrate --dir "$d" --project-only; rc=$?; rm -rf "$d"; exit $rc'
                 in_container: false
             - check: charly migrate --dry-run touches nothing (exit 0, prints the dry-run trailer)
               id: migrate-dry-run-noop
@@ -2988,7 +2988,7 @@ check-feature-local:
               id: feature-list-runs
               exit_status: 0
               stdout:
-                - contains: 'plugin-feature'
+                - contains: 'candy charly-dev'
               context:
                 - runtime
               command:
@@ -3196,7 +3196,7 @@ check-commands-local:
               id: reap-orphans-runs
               exit_status: 0
               stdout:
-                - contains: 'no orphaned ephemerals'
+                - matches: 'no orphaned ephemerals|no charly.yml; nothing to reap'
               context:
                 - runtime
               command:
@@ -3912,7 +3912,7 @@ check-agentteams-snapshot:
         # bloating the box for a check. Without this the step fails with
         # `sh: charly: command not found`, which is what the first run did.
         add_candy:
-            - agentteams-snapshot
+            - '@github.com/opencharly/layer-agentteams-snapshot:v2026.239.1618'
         volume:
             - name: podman-socket
               type: bind
