@@ -58,11 +58,17 @@ jobs:
           cd charly && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-amd64 .
       - name: Build the 9 welded plugins for amd64 + .providers
         run: |
-          mkdir -p bin/plugins
-          while read -r p; do case "$p" in ''|\#*) continue;; esac
-            t="."; [ -d "candy/$p/cmd/serve" ] && t="./cmd/serve"
-            ( cd "candy/$p" && GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -o "../../bin/plugins/$p" "$t" )
-            ./bin/charly-linux-amd64 __plugin-providers "candy/$p" > "bin/plugins/$p.providers"
+          mkdir -p bin/plugins .plugin-src
+          while read -r spec; do case "$spec" in ''|\#*) continue;; esac
+            p="${spec%@*}"; ref="${spec#*@}"
+            [ "$p" != "$ref" ] || { echo "host-command-plugins.txt: '$spec' is not <name>@<tag>" >&2; exit 1; }
+            # Each welded plugin lives in its OWN repo since the candy de-submodule
+            # cutover; clone it at its pinned tag and build the candy from there.
+            git clone --quiet --depth 1 --branch "$ref" "https://github.com/opencharly/$p.git" ".plugin-src/$p"
+            d=".plugin-src/$p/candy/$p"
+            t="."; [ -d "$d/cmd/serve" ] && t="./cmd/serve"
+            ( cd "$d" && GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -o "$GITHUB_WORKSPACE/bin/plugins/$p" "$t" )
+            ./bin/charly-linux-amd64 __plugin-providers "$d" > "bin/plugins/$p.providers"
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-amd64.tar.gz -C bin/plugins .
       - name: Build arm64 charly (cross-compile)
@@ -71,9 +77,13 @@ jobs:
       - name: Build the 9 welded plugins for arm64 (copy amd64 .providers)
         run: |
           mkdir -p bin/plugins-arm64
-          while read -r p; do case "$p" in ''|\#*) continue;; esac
-            t="."; [ -d "candy/$p/cmd/serve" ] && t="./cmd/serve"
-            ( cd "candy/$p" && GOWORK=off GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -o "../../bin/plugins-arm64/$p" "$t" )
+          while read -r spec; do case "$spec" in ''|\#*) continue;; esac
+            p="${spec%@*}"
+            # The amd64 step already cloned each repo at its pin into .plugin-src; reuse
+            # that checkout so both arches build the SAME commit, not two resolutions.
+            d=".plugin-src/$p/candy/$p"
+            t="."; [ -d "$d/cmd/serve" ] && t="./cmd/serve"
+            ( cd "$d" && GOWORK=off GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -o "$GITHUB_WORKSPACE/bin/plugins-arm64/$p" "$t" )
             cp "bin/plugins/$p.providers" "bin/plugins-arm64/$p.providers"
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-arm64.tar.gz -C bin/plugins-arm64 .
