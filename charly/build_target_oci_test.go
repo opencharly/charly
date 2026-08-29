@@ -256,7 +256,10 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 	if !strings.Contains(got, "USER 1000") {
 		t.Errorf("inline builder must switch USER to the image user via the plugin chain: %s", got)
 	}
-	if !strings.Contains(got, "cargo install --path /ctx") {
+	// The cargo builder (sdk PR #180) copies the crate out of the read-only
+	// /ctx mount to /tmp/charly-cargo-src first (so library crates can be built
+	// without writing into the mount), then installs from there.
+	if !strings.Contains(got, "cargo install --path /tmp/charly-cargo-src") {
 		t.Errorf("inline builder not rendered via the step:builder plugin chain + kit.BuilderResolve: %s", got)
 	}
 }
