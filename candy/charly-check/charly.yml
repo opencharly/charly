@@ -3853,8 +3853,9 @@ libvirt-skill:
             | `snapshot/delete` | `target:` | delete a snapshot |
 
             The `libvirt: <method>` value validates against this method set — the
-            `#LibvirtMethod` enum, now the `method:` field of the plugin's own `#LibvirtInput`
-            schema (`candy/plugin-vm/schema/vm.cue`), served over the Describe channel and
+            `#LibvirtMethod` enum, now the `method:` field of the plugin's own `#LibvirtVerbInput`
+            schema (`schema/vm.cue` in the standalone opencharly/plugin-vm repo; `#LibvirtInput`
+            is a DIFFERENT type — the VM domain schema in spec, not this verb's input), served over the Describe channel and
             spliced onto the base — at `charly box validate` time.
 
             ### Nested-runtime operator commands (beyond the declarative set)
@@ -3863,11 +3864,13 @@ libvirt-skill:
             read`/`guest file write` and `guest fsfreeze status`/`freeze`/`thaw`, plus the
             ad-hoc flags `--screen N` (screenshot), `--hold` (send-key), `--type
             spice|vnc` / `--persistent` (passwd), `--config` (domain-xml), and `--duration`
-            (events/console). Because the verb is also surfaced under `charly check` at
-            runtime (dispatched through the provider registry, like `kube`/`adb`/`appium`), reach those
-            through the nested out-of-process command `charly check libvirt guest file …` /
-            `charly check libvirt guest fsfreeze …` for interactive operator use. They are
-            NOT part of the declarative `libvirt:` step vocabulary.
+            (events/console). These are reachable ONLY through the verb's own dispatch inside a
+            plan step — there is no host subcommand for them: `charly check libvirt …` does not
+            exist (`charly: error: unexpected argument libvirt`), because the `charly check`
+            tree is box/live/feature/run plus the check-run management verbs and nothing else.
+            The Kong tree that carries `guest file` / `guest fsfreeze` is instantiated only
+            inside the plugin's own verb dispatch, so it is not typeable at the host CLI. They
+            are NOT part of the declarative `libvirt:` step vocabulary either.
 
             ## What it does
 
