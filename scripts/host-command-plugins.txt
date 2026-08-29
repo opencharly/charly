@@ -14,7 +14,7 @@
 # `charly __plugin-providers <candy-dir>`, then publishes the tarball the distro
 # repos' packaging workflows bake into /usr/lib/charly/plugins. The `charly
 # generate-packages` plugin (sdk/packagekit) reads the `packaging:` section of
-# the charly candy (`candy/charly/charly.yml`) to select each variant's plugin
+# charly's packaging metadata (`packaging/charly.yml`) to select each variant's plugin
 # set, and `charly/packaging_test.go` asserts the variant sets cover exactly
 # these 9 plugins.
 #

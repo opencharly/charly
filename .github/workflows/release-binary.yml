@@ -6,7 +6,7 @@
 # downloads `charly-linux-<arch>` + `charly-plugins-linux-<arch>.tar.gz` +
 # `charly-candy-charly.yml` for the version it is asked to package, then runs the
 # `charly generate-packages` plugin (nFPM) to build the native packages. The
-# `charly-candy-charly.yml` asset is the charly candy's charly.yml — the
+# `charly-candy-charly.yml` asset is packaging/charly.yml — the
 # `packaging:` section is the SINGLE source of truth for package metadata + the
 # per-variant plugin sets.
 #
@@ -88,7 +88,7 @@ jobs:
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-arm64.tar.gz -C bin/plugins-arm64 .
       - name: Stage the charly candy's charly.yml (the packaging source)
-        run: cp candy/charly/charly.yml charly-candy-charly.yml
+        run: cp packaging/charly.yml charly-candy-charly.yml
       - name: Verify the built binaries report the CalVer
         run: |
           test "$(./bin/charly-linux-amd64 version)" = "$CALVER"

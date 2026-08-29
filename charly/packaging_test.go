@@ -1,7 +1,7 @@
 package main
 
 // packaging_test.go — the charly candy's `packaging:` section
-// (candy/charly/charly.yml) is the single source of truth for native-package
+// (packaging/charly.yml) is the single source of truth for native-package
 // metadata: `charly generate-packages` (sdk/packagekit) reads ONLY it, and the
 // per-distro package repos pass it to the plugin as --candy. The three legacy
 // pkg/* files (arch PKGBUILD, fedora spec, debian control) were removed with the
@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	candyCharlyYML = "../candy/charly/charly.yml"
+	candyCharlyYML = "../packaging/charly.yml"
 	// charly-dev is declared in the PROJECT manifest, not a candy dir: its
 	// `copy: bin/charly` must resolve against the repo root, and a candy takes its
 	// declaring file's directory as SourceDir.

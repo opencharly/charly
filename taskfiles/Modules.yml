@@ -34,7 +34,7 @@ tasks:
       - |
         set -e
         n=0; fail=0
-        for d in candy/*/ tools/*/; do
+        for d in tools/*/; do
           [ -f "$d/go.mod" ] || continue
           # Only modules that require either contract module are part of the lockstep
           # set; a module with no sdk/spec require has nothing to keep in step.

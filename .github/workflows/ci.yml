@@ -49,7 +49,7 @@ jobs:
 
       - name: gofmt
         run: |
-          out=$(gofmt -l charly candy tools)
+          out=$(gofmt -l charly tools)
           if [ -n "$out" ]; then
             echo "gofmt would rewrite these files:" >&2
             echo "$out" >&2
