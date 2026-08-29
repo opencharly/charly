@@ -34,7 +34,7 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026237.1421
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026237.1422
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026240.756
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026241.1037
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422
 	github.com/opencharly/plugin-group/candy/plugin-group v0.2026237.1423
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026237.1423
@@ -62,7 +62,7 @@ require (
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026237.1428
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026237.1428
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026237.1429
-	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026237.1429
+	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026241.1038
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026237.1429
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026237.1429
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026237.1430
@@ -102,7 +102,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026241.933 // indirect
+	github.com/opencharly/sdk v0.2026241.1032 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

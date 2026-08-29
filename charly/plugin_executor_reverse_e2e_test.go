@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/opencharly/spec/spec"
+	"gopkg.in/yaml.v3"
 )
 
 // testLedgerPaths / testComputeDeployID / testReadDeployRecord / testReadCandyRecord are thin
@@ -21,9 +21,7 @@ import (
 // the real reverse-channel deploy plugin wrote to a temp ledger dir; the ledger record TYPES
 // (spec.DeployRecord/spec.CandyRecord) are already spec-native.
 type testLedgerPaths struct {
-	Root    string
-	Deploys string
-	Candies string
+	ConfigFile string
 }
 
 func testComputeDeployID(box string, layers, addCandies []string) string {
@@ -43,31 +41,53 @@ func testComputeDeployID(box string, layers, addCandies []string) string {
 }
 
 func testReadDeployRecord(paths *testLedgerPaths, id string) (*spec.DeployRecord, error) {
-	data, err := os.ReadFile(filepath.Join(paths.Deploys, id+".json"))
+	data, err := os.ReadFile(paths.ConfigFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	var rec spec.DeployRecord
-	if err := json.Unmarshal(data, &rec); err != nil {
+	var doc struct {
+		Ledger *struct {
+			Deploys map[string]spec.DeployRecord `yaml:"deploys"`
+		} `yaml:"ledger"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, err
+	}
+	if doc.Ledger == nil {
+		return nil, nil
+	}
+	rec, ok := doc.Ledger.Deploys[id]
+	if !ok {
+		return nil, nil
 	}
 	return &rec, nil
 }
 
 func testReadCandyRecord(paths *testLedgerPaths, layer string) (*spec.CandyRecord, error) {
-	data, err := os.ReadFile(filepath.Join(paths.Candies, layer+".json"))
+	data, err := os.ReadFile(paths.ConfigFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	var rec spec.CandyRecord
-	if err := json.Unmarshal(data, &rec); err != nil {
+	var doc struct {
+		Ledger *struct {
+			Candies map[string]spec.CandyRecord `yaml:"candies"`
+		} `yaml:"ledger"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, err
+	}
+	if doc.Ledger == nil {
+		return nil, nil
+	}
+	rec, ok := doc.Ledger.Candies[layer]
+	if !ok {
+		return nil, nil
 	}
 	return &rec, nil
 }
@@ -152,11 +172,16 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	name := fmt.Sprintf("e3deploy-%d", time.Now().UnixNano())
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	root := filepath.Join(home, ".config", "opencharly", "installed")
+	// The ledger lives in the `ledger:` section of the per-host charly.yml
+	// (sdk#183). The per-run XDG_CONFIG_HOME override (test_main_test.go)
+	// redirects os.UserConfigDir(), so the plugin's default resolution writes
+	// the test's charly.yml under that dir.
+	xdg := os.Getenv("XDG_CONFIG_HOME")
+	if xdg == "" {
+		xdg = filepath.Join(home, ".config")
+	}
 	paths := &testLedgerPaths{
-		Root:    root,
-		Deploys: filepath.Join(root, "deploys"),
-		Candies: filepath.Join(root, "layers"),
+		ConfigFile: filepath.Join(xdg, "charly", "charly.yml"),
 	}
 	tgt.name = name
 
