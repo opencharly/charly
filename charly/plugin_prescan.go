@@ -486,6 +486,18 @@ func builtinOnlyInvocation() bool {
 	return false
 }
 
+// resolveRemotePluginRepo resolves a pinned plugin repo to its on-disk path, fetching it
+// through the same clone-and-cache machinery the runtime scan uses (CanonicalRef).
+//
+// A package var, not a direct call, so the prescan's ROUTING is testable without a
+// network fetch: the decision under test is "does the remote leg run at all", and that is
+// exactly what regressed when the leg sat behind the discover: early return. A test
+// substitutes a local directory here and asserts the declared words get registered.
+var resolveRemotePluginRepo = func(repoPath, baseDir string) (string, error) {
+	_, cachePath, err := requireProjectLoader().CanonicalRef(hostInProcCtx(), "@"+repoPath, baseDir)
+	return cachePath, err
+}
+
 func prescanRemotePluginManifests(rootData []byte, baseDir string) {
 	if !bytes.Contains(rootData, []byte("@github.com/opencharly/")) {
 		return
@@ -525,9 +537,7 @@ func prescanRemotePluginManifests(rootData []byte, baseDir string) {
 			continue
 		}
 		seen[repoPath] = true
-		// CanonicalRef resolves the ref (fetching a remote repo through the same
-		// clone-and-cache machinery the runtime scan uses) into its on-disk path.
-		_, cachePath, err := requireProjectLoader().CanonicalRef(hostInProcCtx(), "@"+repoPath, baseDir)
+		cachePath, err := resolveRemotePluginRepo(repoPath, baseDir)
 		if err != nil {
 			continue
 		}
