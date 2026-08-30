@@ -957,10 +957,26 @@ omarchy:
         # the seeded authorized_keys). It is not reconstructed from the 3.x documentation,
         # which differs.
         installer:
-            # cidata is the NoCloud label. `xorriso -as mkisofs -volid` preserves case
-            # exactly (verified both ways), so no vfat fallback is needed for the label to
-            # survive — the fs field can stay at its iso9660 default permanently.
-            volume_id: cidata
+            # CIDATA is the NoCloud label, UPPERCASE because ISO 9660 / ECMA 119
+            # d-characters are A-Z 0-9 _ only. A lowercase volume id is accepted by
+            # xorriso but non-compliant, and it warns on EVERY seed write:
+            #
+            #   xorriso : WARNING : -volid text does not comply to ISO 9660 / ECMA 119 rules
+            #
+            # That warning appeared three times in every check-omarchy-iso-vm run (build,
+            # create, and the rebuild inside update) and was the only non-allowlisted
+            # finding in the whole bed.
+            #
+            # Uppercase is SAFE here, read off the shipping ISO's own loader rather than
+            # assumed — /usr/local/bin/omarchy-cidata-load searches both cases:
+            #
+            #   for label in cidata CIDATA; do
+            #     [[ -e $by_label/$label ]] && { device=$by_label/$label; break; }
+            #   done
+            #
+            # `xorriso -as mkisofs -volid` preserves case exactly, so the label reaches the
+            # guest as written and the fs field can stay at its iso9660 default permanently.
+            volume_id: CIDATA
             file:
                 # archinstall's own config, plus Omarchy's `omarchy_install` extension.
                 #
