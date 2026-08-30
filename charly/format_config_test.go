@@ -410,3 +410,67 @@ func TestDistroConfigFindFormat(t *testing.T) {
 		t.Error("FindFormat(nonexistent) should be nil")
 	}
 }
+
+// TestPacInstallDeclaresToolDrivenTransaction pins the OMARCHY_ALLOW_DIRECT_PACMAN
+// declaration on the pac install body, and the properties it must not have broken.
+//
+// Omarchy ships 00-omarchy-update-guard.hook — `Operation = Upgrade / Target = * /
+// AbortOnFail` — which aborts every upgrade transaction that did not come through
+// `omarchy update`. charly's pac body is `pacman -Syu`, and the `-u` is mandatory (a
+// `-Sy <pkg>` on a guest whose DB predates the repo partial-upgrades and leaves a binary
+// linked against a library the image does not ship). So without the declaration charly
+// cannot install ANY package on an Omarchy guest — measured at deploy-add:
+//
+//	Woah partner... This looks like a direct pacman system upgrade.
+//	error: failed to commit transaction (failed to run transaction hooks)
+//
+// The variable is the guard's own documented escape hatch and is inert on every other pac
+// distro, which is why it lives on the shared body once instead of as a per-distro
+// override duplicating the whole template.
+func TestPacInstallDeclaresToolDrivenTransaction(t *testing.T) {
+	dc, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
+	if err != nil {
+		t.Fatalf("LoadBuildConfigForBox: %v", err)
+	}
+	fd := dc.FindFormat("pac")
+	if fd == nil {
+		t.Fatal("FindFormat(pac) = nil")
+	}
+	tmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative)
+
+	// The declaration must be an env PREFIX on the pacman command itself. charly runs this
+	// body through `sudo bash -lc`, which does not carry the caller's environment, so a
+	// variable exported anywhere else would not reach the hook pacman spawns.
+	if !strings.Contains(tmpl, "OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu") {
+		t.Errorf("pac install body does not declare the transaction tool-driven; charly cannot "+
+			"install any package on an Omarchy guest without it. got:\n%s", tmpl)
+	}
+
+	// `-u` must survive. Dropping it would ALSO silence the guard (an install-only
+	// transaction is not an Upgrade), which makes it the tempting wrong fix: it trades a
+	// loud abort for a silent partial upgrade.
+	if !strings.Contains(tmpl, "pacman -Syu --noconfirm --needed") {
+		t.Errorf("pac install body no longer runs `pacman -Syu --noconfirm --needed`; dropping "+
+			"-u silences Omarchy's guard by partial-upgrading instead, which is worse than the "+
+			"abort it replaces. got:\n%s", tmpl)
+	}
+
+	// The declaration must not have been smuggled in as a shell comment: the body is
+	// `&& \`-continued, and a comment line is legal there but carries nothing to pacman.
+	for _, line := range strings.Split(tmpl, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") && strings.Contains(trimmed, "OMARCHY_ALLOW_DIRECT_PACMAN") {
+			t.Errorf("the declaration is commented out, so it reaches nothing: %q", trimmed)
+		}
+	}
+
+	// The local-package path takes the same guard: `pacman -U` over an already-installed
+	// charly is an Upgrade operation, so a RE-deploy trips it even when the first succeeded.
+	if fd.LocalPkg == nil || fd.LocalPkg.InstallTemplate == "" {
+		t.Fatal("pac format has no local_pkg.install_template")
+	}
+	if !strings.Contains(fd.LocalPkg.InstallTemplate, "OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -U") {
+		t.Errorf("pac local_pkg install does not declare the transaction tool-driven; a re-deploy "+
+			"upgrades the installed package and trips the guard. got:\n%s", fd.LocalPkg.InstallTemplate)
+	}
+}

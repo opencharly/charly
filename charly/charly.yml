@@ -517,6 +517,27 @@ arch:
                         # (charly.gpg etc.): fetched via curl + pacman-key --add, the
                         # deterministic keyserver-free mechanism every other format uses.
                         # A bare fingerprint (hex) falls back to pacman-key --recv-keys.
+                        #
+                        # OMARCHY_ALLOW_DIRECT_PACMAN on the final line declares what is
+                        # already true: this is a TOOL-DRIVEN transaction, not a human running
+                        # pacman by hand. Omarchy ships an alpm hook —
+                        # 00-omarchy-update-guard.hook, `Operation = Upgrade / Target = * /
+                        # AbortOnFail`, read out of the shipping ISO — that aborts EVERY
+                        # upgrade transaction unless the caller says so, and the mandatory `-u`
+                        # above makes every charly package install an upgrade transaction.
+                        # Without it charly cannot install ANY package on an Omarchy guest;
+                        # measured on check-charly-omarchy-vm:
+                        #
+                        #   Woah partner... This looks like a direct pacman system upgrade.
+                        #   error: failed to commit transaction (failed to run transaction hooks)
+                        #
+                        # The variable name and this exact usage are the guard's OWN documented
+                        # escape hatch, printed by the guard itself. It is inert on every other
+                        # pac distro — nothing else reads it — so it lives here once rather than
+                        # as a per-distro override duplicating this whole template, which would
+                        # drift (R3). NOTE: it must stay on the command line itself; the body is
+                        # `&& \`-continued, so a `#` comment between the lines would comment out
+                        # everything after it.
                         install: |
                             pacman-key --init && \
                             {{- range .Keys}}
@@ -543,7 +564,7 @@ arch:
                             # (`|| true`) so air-gapped / restricted-network builds
                             # succeed when the keyring was already current.
                             (pacman-key --populate 2>/dev/null || true) && \
-                            pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                            OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
                 uninstall_template: |
                     pacman -Rs --noconfirm{{range .Packages}} {{.}}{{end}}
                 local_pkg:
@@ -556,7 +577,7 @@ arch:
                     # sub-second, non-fatal for air-gapped builds. Kept a SINGLE shell
                     # command (&&-chained) so the localpkg renderer wraps it in one RUN.
                     install_template: |
-                        (pacman-key --populate 2>/dev/null || true) && pacman -Sy --noconfirm && pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
+                        (pacman-key --populate 2>/dev/null || true) && pacman -Sy --noconfirm && OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
                     download_template: https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst
                     probe: command -v pacman
         pacstrap:
