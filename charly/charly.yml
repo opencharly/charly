@@ -421,7 +421,20 @@ arch:
             # `--init` is idempotent and creates exactly the key the hook wants. Fixing
             # the hook rather than allowlisting its error mirrors the cachyos block below,
             # which masks the nvidia-ctk hook instead of tolerating its failure line.
-            install_cmd: pacman-key --init && pacman -Syu --noconfirm
+            #
+            # `--needed`, and it is not cosmetic. Without it pacman REINSTALLS curl and
+            # ca-certificates on every single build of every Arch-family image, because
+            # the base image already ships both at the target version:
+            #
+            #   warning: curl-8.21.0-1 is up to date -- reinstalling
+            #   warning: ca-certificates-20240618-1 is up to date -- reinstalling
+            #
+            # That is wasted work in the first layer of every build AND two warnings in
+            # every build log. `--needed` is the flag that makes a repeated install
+            # idempotent instead of a reinstall (R4) — it is what every other install
+            # path in charly already passes, and what the cachyos bootstrap three blocks
+            # down already has. arch was the outlier.
+            install_cmd: pacman-key --init && pacman -Syu --noconfirm --needed
             package:
                 - curl
                 - ca-certificates
