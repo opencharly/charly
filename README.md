@@ -359,7 +359,7 @@ code the way a hand-maintained copy in this file would.
 | the vocabulary | [The words](https://opencharly.ai/concepts/00-vocabulary/) |
 | the ideas, in order, with runnable examples | [The concepts tour](https://opencharly.ai/concepts/01-the-box-is-the-boundary/) — twelve short pages |
 | every command and flag | [CLI reference](https://opencharly.ai/reference/cli/fleet/) + [The charly CLI](https://opencharly.ai/guides/the-cli/) |
-| every candy and box | [Candy reference](https://opencharly.ai/reference/candy/sshd/) · [Box reference](https://opencharly.ai/reference/box/fedora/tutorial-shell/) |
+| every candy and box | [Candy reference](https://opencharly.ai/reference/candy/github.com/opencharly/pod-sshd:v2026.239.1637/sshd/) · [Box reference](https://opencharly.ai/reference/box/fedora/tutorial-shell/) |
 | "what implements `cdp:`?" | [Provider index](https://opencharly.ai/reference/providers/) |
 | something is broken | [Troubleshooting](https://opencharly.ai/guides/troubleshooting/) |
 | why the project looks like this | [The vision](https://opencharly.ai/vision/) · [What it is reacting to](https://opencharly.ai/grievances/) |
