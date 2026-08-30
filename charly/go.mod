@@ -17,7 +17,7 @@ require (
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026237.1416
-	github.com/opencharly/plugin-check/candy/plugin-check v0.2026241.920
+	github.com/opencharly/plugin-check/candy/plugin-check v0.2026242.1018
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026237.1417
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026237.1417
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026237.1417
