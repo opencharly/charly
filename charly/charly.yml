@@ -150,7 +150,6 @@ pacstrap:
             install:
                 container: |
                     set -euo pipefail
-                    {{.Distro.Pacstrap.KeyringInitCmd}}
                     mkdir -p /target /out
                     {{- if .ExtraPacmanConf}}
                     cat > /etc/pacman.conf.extra <<'CACHYOS_REPOS'
