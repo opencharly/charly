@@ -391,7 +391,14 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 	var doc struct {
 		Discover spec.DiscoverConfig `yaml:"discover"`
 	}
-	if err := yaml.Unmarshal(rootData, &doc); err != nil || len(doc.Discover) == 0 {
+	// A missing/!unparseable discover: block skips the LOCAL walk only. The remote leg
+	// below is about @github refs, which have nothing to do with local discovery: gating
+	// it on discover: meant a project that pins a plugin remotely and discovers nothing
+	// locally never prescanned that plugin at all, so its `plugin: primary:` never
+	// reached the parse and the scalar shorthand was rejected with "declares no primary
+	// field" — for a candy that declares one.
+	if err := yaml.Unmarshal(rootData, &doc); err != nil {
+		prescanRemotePluginManifests(rootData, baseDir)
 		return
 	}
 	for _, disc := range doc.Discover {
