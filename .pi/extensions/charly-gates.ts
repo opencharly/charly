@@ -64,11 +64,24 @@ AGENTS.md. Load ALL matching skills before acting.
 
 ### R1 — RCA Every Anomaly
 Every failure, warning, or doc-vs-reality divergence triggers the
-root-cause-analyzer process before any remediation.
+root-cause-analyzer process before any remediation. Skills are living
+documents: any code change that affects a skill, doc, comment, or memory
+claim updates that document in the SAME change, and sweeps every sibling
+carrying the same false claim.
 
 ### R2 — Finish the Cutover
-Every issue surfaced during an active cutover is fixed. No "pre-existing",
-"out of scope", or "follow-up PR" classifications.
+Every issue surfaced during a task is fixed — pre-existing or not. No
+"pre-existing", "unrelated", "out of scope", or "follow-up PR"
+classifications. A blocking issue is fixed in the same commit; a genuinely
+separable non-blocking issue joins its next thematic batch cutover
+immediately — never parked.
+
+### R2a — Use Subagents and Fabric Whenever Possible
+Delegate heavy exploration, log archaeology, repo-wide greps, and
+long-running verification to a subagent that returns only a concise verdict
++ evidence paths. Use fabric_exec to batch independent tool calls into one
+program. The main agent plans, decides, and lands; the subagent digs. Never
+burn the main context on raw logs or repeated diagnostics.
 
 ### R3 — No Duplication
 One canonical implementation owns each behavior. Extract shared mechanisms on
