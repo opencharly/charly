@@ -547,9 +547,6 @@ arch:
                 - grub
                 - efibootmgr
                 - mkinitcpio
-            keyring_init_cmd: |
-                pacman-key --init && pacman-key --populate archlinux
-            mirrorlist_url: https://archlinux.org/mirrorlist/all/
         bootloader:
             install_template: |
                 # Seed common /etc files that mkinitcpio hooks expect
@@ -708,11 +705,6 @@ cachyos:
                 - grub
                 - efibootmgr
                 - mkinitcpio
-            keyring_init_cmd: |
-                pacman-key --init && pacman-key --populate archlinux && \
-                pacman-key --recv-keys F3B607488DB35A47 && \
-                pacman-key --lsign-key F3B607488DB35A47
-            mirrorlist_url: https://mirror.cachyos.org/mirrorlist.txt
             extra_repo:
                 - name: cachyos-v3
                   server: https://mirror.cachyos.org/repo/x86_64_v3/$repo
@@ -767,9 +759,7 @@ omarchy:
                 - btrfs-progs
                 # Omarchy's packaging key, so the [omarchy] repo verifies without a
                 # separate keyring step. pacstrap -K initialises the target keyring
-                # itself; keyring_init_cmd is NOT used because it is a DEAD FIELD
-                # (verified: zero Go consumers of KeyringInitCmd anywhere in the
-                # umbrella outside generated types, tests and the docs mirror).
+                # itself, which is all that was ever needed here.
                 - omarchy-keyring
             # EVERY package — including the ~125 that come from core/extra/multilib —
             # is served by OMARCHY'S OWN Arch mirror snapshot, never a generic Arch
@@ -781,10 +771,7 @@ omarchy:
             # either way.
             #
             # The mirror is expressed through runtime_pacman_conf with explicit
-            # `Server =` lines rather than through mirrorlist_url, because
-            # mirrorlist_url is ALSO a dead field (verified the same way as
-            # keyring_init_cmd above). Using it would look like configuration and do
-            # nothing.
+            # `Server =` lines, which is what actually reaches pacman.
             extra_repo:
                 - name: omarchy
                   server: https://pkgs.omarchy.org/stable/$arch
