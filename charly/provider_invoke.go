@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 )
 
 // provider_invoke.go — the ONE host→plugin call codec (R3). Before this file, ~20
@@ -23,8 +24,24 @@ import (
 // credential await-unlock, an in-proc reverse-channel executor for the arbiter). A
 // nil/empty reply body yields the zero Out — the guard every former hand skeleton
 // carried.
+// defaultPluginInvokeTimeout bounds a host→plugin call when the caller did not
+// provide a deadline. A hung out-of-process plugin must fail fast with a clear
+// error (context deadline exceeded), never deadlock the host forever — the
+// fleet-del VM-member hang (the fleet del + its plugins sat in futex_wait for
+// hours, 0% CPU).
+// defaultPluginInvokeTimeout is a package var (not a const) so a test can
+// override it to a short value.
+var defaultPluginInvokeTimeout = 10 * time.Minute
+
 func invokeTyped[In, Out any](ctx context.Context, prov Provider, word, op string, in In) (Out, error) {
 	var out Out
+	// Fail fast: apply a default timeout to the plugin call if the caller did
+	// not provide one — a hung plugin must not deadlock the host forever.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultPluginInvokeTimeout)
+		defer cancel()
+	}
 	params, err := marshalJSON(in)
 	if err != nil {
 		return out, err
