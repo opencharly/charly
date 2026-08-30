@@ -27,6 +27,9 @@ import:
     - debian: '@github.com/opencharly/distro-debian:v2026.241.1436'
     - fedora: '@github.com/opencharly/distro-fedora:v2026.241.1429'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.241.1436'
+    # omarchy imports the `arch` namespace the same way cachyos does — its distro
+    # entity `inherits: arch`, and its boxes base on arch.arch / arch.arch-builder.
+    - omarchy: '@github.com/opencharly/distro-omarchy:v2026.242.0551'
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
