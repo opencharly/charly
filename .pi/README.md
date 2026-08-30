@@ -25,7 +25,6 @@ startup after the project is trusted):
 | `pi-mcp-adapter` | 2.26.1 | MCP (Model Context Protocol) adapter extension for Pi. |
 | `pi-subagents` | 0.51.0 | Single-agent delegation and scripted multi-agent workflows. |
 | `@narumitw/pi-plan-mode` | 0.49.3 | Codex-like read-only `/plan` collaboration mode. |
-| `pi-lens` | 4.0.1 | Real-time code feedback — LSP, linters, formatters, type-checking, structural analysis. |
 | `@juicesharp/rpiv-todo` | 2.6.2 | A todo list for the model, rendered as a live overlay that survives `/reload` and compaction. |
 | `pi-memory` | 0.4.2 | Memory with qmd-powered semantic search across daily logs, long-term memory, and scratchpad. |
 | `pi-ollama-cloud` | 0.9.0 | Ollama Cloud provider plugin (also installed at the user level). |
