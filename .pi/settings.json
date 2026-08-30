@@ -1,6 +1,7 @@
 {
   "extensions": [
-    "./extensions/charly-gates.ts"
+    "./extensions/charly-gates.ts",
+    "./extensions/loop-protection.ts"
   ],
   "subagents": {
     "agentOverrides": {
