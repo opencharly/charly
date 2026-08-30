@@ -295,6 +295,30 @@ cargo:
                     set -e
                     if [ ! -f /work/Cargo.toml ]; then echo 'no Cargo.toml in /work' >&2; exit 1; fi
                     cargo install --path /work --root "$CARGO_HOME"
+# mise: the externalized builder (opencharly/plugin-mise) — selected by detect_file
+# (mise.toml/.tool-versions) exactly like pixi.toml selects the pixi builder.
+mise:
+    builder:
+        detect_file:
+            - mise.toml
+            - .tool-versions
+        cache_mount:
+            - dst: /mise
+        path_contribution:
+            - /usr/local/share/mise/shims
+        runtime_env:
+            MISE_DATA_DIR: /usr/local/share/mise
+        phase:
+            install:
+                host: |
+                    set -e
+                    cd "$HOME"
+                    if [ -f /work/mise.toml ]; then manifest=mise.toml
+                    elif [ -f /work/.tool-versions ]; then manifest=.tool-versions
+                    else echo 'no mise manifest found in /work' >&2; exit 1; fi
+                    cp /work/$manifest $manifest
+                    mise install
+                    mise reshim
 npm:
     builder:
         detect_file:

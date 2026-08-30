@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -286,5 +287,33 @@ func TestNoHardcodedYAMLFilenames(t *testing.T) {
 					f, i+1, m, strings.TrimSpace(line))
 			}
 		}
+	}
+}
+
+// TestEmbeddedMiseBuilderVocabulary proves the embedded builder vocabulary ships
+// the mise entry (detect_file: mise.toml/.tool-versions) — the P3 detection
+// integration that makes a candy shipping either file auto-trigger the mise
+// builder. FAILS without the mise: builder block in the embedded charly.yml.
+func TestEmbeddedMiseBuilderVocabulary(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "charly.yml", `version: `+LatestSchemaVersion().String()+`
+pixi:
+  builder:
+    detect_config: marker99
+`)
+	uf, _, err := LoadUnified(dir)
+	if err != nil {
+		t.Fatalf("LoadUnified: %v", err)
+	}
+	builders := Builders(uf)
+	b := builders["mise"]
+	if b == nil {
+		t.Fatal("embedded builder mise missing — add the mise: builder block to the embedded charly.yml")
+	}
+	if !slices.Contains(b.DetectFiles, "mise.toml") || !slices.Contains(b.DetectFiles, ".tool-versions") {
+		t.Fatalf("builder mise detect_file must include mise.toml + .tool-versions; got %v", b.DetectFiles)
+	}
+	if b.PathContributions == nil || !slices.Contains(b.PathContributions, "/usr/local/share/mise/shims") {
+		t.Fatalf("builder mise path_contribution must include the shims dir; got %v", b.PathContributions)
 	}
 }
