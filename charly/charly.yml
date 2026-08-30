@@ -155,7 +155,29 @@ pacstrap:
                     cat > /etc/pacman.conf.extra <<'CACHYOS_REPOS'
                     {{.ExtraPacmanConf}}
                     CACHYOS_REPOS
-                    cat /etc/pacman.conf.extra >> /etc/pacman.conf
+                    # Append only the repositories this image does not ALREADY register.
+                    #
+                    # A builder based on the distro's own image already carries the distro's
+                    # repos, and that is not an accident: omarchy-pacstrap-builder is built on
+                    # the omarchy image precisely so pacstrap resolves core/extra from
+                    # Omarchy's frozen mirror rather than upstream Arch. Appending blindly then
+                    # double-registers them and pacman errors on every build:
+                    #
+                    #   error: could not register 'omarchy' database (database already registered)
+                    #   error: could not register 'multilib' database (database already registered)
+                    #
+                    # pacstrap still completes, so `charly vm build` succeeds and only a bed's
+                    # errors-fatal log gate catches it — which is how it stayed invisible.
+                    #
+                    # [options] is exempt and always appended: it is present in every
+                    # pacman.conf, its directives merge rather than conflict, and it is where
+                    # the microarch `Architecture =` line for cachyos-family repos lives.
+                    # Dropping it as a duplicate would silently break those.
+                    awk -v conf=/etc/pacman.conf '
+                      BEGIN { while ((getline l < conf) > 0) if (l ~ /^\[/ && l != "[options]") have[l]=1 }
+                      /^\[/ { keep = ($0 == "[options]") || !have[$0] }
+                      keep
+                    ' /etc/pacman.conf.extra >> /etc/pacman.conf
                     {{- end}}
                     pacstrap -K -G /target {{range .Packages}}{{.}} {{end}}
                     {{- if .RuntimePacmanConf}}
