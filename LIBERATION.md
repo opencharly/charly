@@ -183,4 +183,4 @@ the past it borrows from; they are the future it is fighting for.*
 costs everyone who works at it, human and model alike: [the grievances](GRIEVANCES.md). Where
 the tools are handed out: [the front door](README.md). One piece of work with its written
 judgment, kept where anyone can check it:
-[a published example](https://opencharly.ai/reference/candy/sshd/).*
+[a published example](https://opencharly.ai/reference/candy/github.com/opencharly/pod-sshd:v2026.239.1637/sshd/).*
