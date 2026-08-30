@@ -94,6 +94,17 @@ func substrateFallbackRef(class ProviderClass, word, extraRef string) string {
 }
 
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
+	// Fail fast on a hung PLUGIN→PLUGIN call, mirroring the host→plugin guard in
+	// invokeTyped (#468): the broker context a plugin passes back to the host carries
+	// no deadline of its own, so a peer that never answers (the fleet-del teardown
+	// deadlock — a plugin waiting on a peer that is itself waiting) would block this
+	// goroutine in futex_wait forever. Bound it with the same default invoke timeout
+	// when the caller supplied none.
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultPluginInvokeTimeout)
+		defer cancel()
+	}
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
 	prov, ok := providerRegistry.resolve(class, word)
