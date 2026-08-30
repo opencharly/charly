@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -473,4 +477,50 @@ func TestPacInstallDeclaresToolDrivenTransaction(t *testing.T) {
 		t.Errorf("pac local_pkg install does not declare the transaction tool-driven; a re-deploy "+
 			"upgrades the installed package and trips the guard. got:\n%s", fd.LocalPkg.InstallTemplate)
 	}
+}
+
+// TestPacstrapBuilderTemplateFieldsExist proves every `.Distro.Pacstrap.X` interpolated
+// anywhere in this repo's manifest is a real field on spec.Pacstrap.
+//
+// This guards a CLASS, not a string. Go templates resolve struct fields at RENDER time, so a
+// reference to a field that no longer exists compiles, validates, passes every unit test —
+// and then fails at `charly vm build <bootstrap-vm>`, a path no CI gate exercises:
+//
+//	template: bootstrap-script:2:9: executing "bootstrap-script"
+//	at <.Distro.Pacstrap.KeyringInitCmd>: can't evaluate field KeyringInitCmd
+//	in type *spec.Pacstrap
+//
+// That is exactly what happened. charly#484 dropped the dead `keyring_init_cmd` field and its
+// authored values, correctly verifying it had zero *Go* consumers — and missed this TEMPLATE
+// consumer. Every pacstrap VM build in the repo was broken from that merge until the fix,
+// arch and cachyos included, because the builder template is shared by all of them.
+//
+// Reflecting over the struct rather than listing allowed names is deliberate: a hand-kept list
+// would have to be updated by the same person who forgot the template, which is no guard.
+func TestPacstrapBuilderTemplateFieldsExist(t *testing.T) {
+	manifest := filepath.Join(repoRootDir(t), "charly.yml")
+	body, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatalf("reading %s: %v", manifest, err)
+	}
+
+	real := map[string]bool{}
+	pt := reflect.TypeOf(spec.Pacstrap{})
+	names := make([]string, 0, pt.NumField())
+	for i := 0; i < pt.NumField(); i++ {
+		real[pt.Field(i).Name] = true
+		names = append(names, pt.Field(i).Name)
+	}
+
+	re := regexp.MustCompile(`\.Distro\.Pacstrap\.([A-Za-z0-9_]+)`)
+	matches := re.FindAllSubmatch(body, -1)
+	for _, m := range matches {
+		field := string(m[1])
+		if !real[field] {
+			t.Errorf("charly.yml interpolates .Distro.Pacstrap.%s, which is NOT a field of "+
+				"spec.Pacstrap. Every `charly vm build` of a bootstrap VM will fail at template "+
+				"render, on a path no unit test reaches. spec.Pacstrap has: %v", field, names)
+		}
+	}
+	t.Logf("checked %d .Distro.Pacstrap.* references against spec.Pacstrap %v", len(matches), names)
 }
