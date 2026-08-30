@@ -405,7 +405,23 @@ alpine:
 arch:
     distro:
         bootstrap:
-            install_cmd: pacman -Syu --noconfirm
+            # `pacman-key --init` FIRST, before the bootstrap upgrade. The pristine
+            # archlinux base image ships a populated keyring but NO local secret key
+            # (verified: `gpg --homedir /etc/pacman.d/gnupg --list-secret-keys` is empty
+            # on base-20260719.0.558306). Once the pinned base ages far enough that the
+            # repos carry a newer `archlinux-keyring`, the bootstrap `-Syu` upgrades it,
+            # and that package's post-transaction hook signs with the local key — which
+            # does not exist yet:
+            #     ==> ERROR: There is no secret key available to sign with.
+            #     ==> Use 'pacman-key --init' to generate a default secret key.
+            #     error: command failed to execute correctly
+            # pacman treats the refused hook as non-fatal so the image still builds, but
+            # the two error lines fail charly's own build-diagnostic gate — so a COLD
+            # arch build (no cached layers, e.g. fresh CI) fails while a warm one passes.
+            # `--init` is idempotent and creates exactly the key the hook wants. Fixing
+            # the hook rather than allowlisting its error mirrors the cachyos block below,
+            # which masks the nvidia-ctk hook instead of tolerating its failure line.
+            install_cmd: pacman-key --init && pacman -Syu --noconfirm
             package:
                 - curl
                 - ca-certificates
@@ -659,7 +675,7 @@ cachyos:
             #    mask written there arrives one transaction too late. The file is inert on an
             #    image that never installs nvidia-container-toolkit.
             install_cmd: >-
-                (grep -q '^DisableSandboxNetwork' /etc/pacman.conf || sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf) && mkdir -p /etc/pacman.d/hooks && : > /etc/pacman.d/hooks/nvidia-ctk-cdi.hook && pacman -Syu --noconfirm --needed
+                pacman-key --init && (grep -q '^DisableSandboxNetwork' /etc/pacman.conf || sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf) && mkdir -p /etc/pacman.d/hooks && : > /etc/pacman.d/hooks/nvidia-ctk-cdi.hook && pacman -Syu --noconfirm --needed
             package:
                 - curl
                 - ca-certificates
