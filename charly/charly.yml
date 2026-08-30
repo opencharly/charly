@@ -150,13 +150,34 @@ pacstrap:
             install:
                 container: |
                     set -euo pipefail
-                    {{.Distro.Pacstrap.KeyringInitCmd}}
                     mkdir -p /target /out
                     {{- if .ExtraPacmanConf}}
                     cat > /etc/pacman.conf.extra <<'CACHYOS_REPOS'
                     {{.ExtraPacmanConf}}
                     CACHYOS_REPOS
-                    cat /etc/pacman.conf.extra >> /etc/pacman.conf
+                    # Append only the repositories this image does not ALREADY register.
+                    #
+                    # A builder based on the distro's own image already carries the distro's
+                    # repos, and that is not an accident: omarchy-pacstrap-builder is built on
+                    # the omarchy image precisely so pacstrap resolves core/extra from
+                    # Omarchy's frozen mirror rather than upstream Arch. Appending blindly then
+                    # double-registers them and pacman errors on every build:
+                    #
+                    #   error: could not register 'omarchy' database (database already registered)
+                    #   error: could not register 'multilib' database (database already registered)
+                    #
+                    # pacstrap still completes, so `charly vm build` succeeds and only a bed's
+                    # errors-fatal log gate catches it — which is how it stayed invisible.
+                    #
+                    # [options] is exempt and always appended: it is present in every
+                    # pacman.conf, its directives merge rather than conflict, and it is where
+                    # the microarch `Architecture =` line for cachyos-family repos lives.
+                    # Dropping it as a duplicate would silently break those.
+                    awk -v conf=/etc/pacman.conf '
+                      BEGIN { while ((getline l < conf) > 0) if (l ~ /^\[/ && l != "[options]") have[l]=1 }
+                      /^\[/ { keep = ($0 == "[options]") || !have[$0] }
+                      keep
+                    ' /etc/pacman.conf.extra >> /etc/pacman.conf
                     {{- end}}
                     pacstrap -K -G /target {{range .Packages}}{{.}} {{end}}
                     {{- if .RuntimePacmanConf}}
@@ -524,6 +545,27 @@ arch:
                         # (charly.gpg etc.): fetched via curl + pacman-key --add, the
                         # deterministic keyserver-free mechanism every other format uses.
                         # A bare fingerprint (hex) falls back to pacman-key --recv-keys.
+                        #
+                        # OMARCHY_ALLOW_DIRECT_PACMAN on the final line declares what is
+                        # already true: this is a TOOL-DRIVEN transaction, not a human running
+                        # pacman by hand. Omarchy ships an alpm hook —
+                        # 00-omarchy-update-guard.hook, `Operation = Upgrade / Target = * /
+                        # AbortOnFail`, read out of the shipping ISO — that aborts EVERY
+                        # upgrade transaction unless the caller says so, and the mandatory `-u`
+                        # above makes every charly package install an upgrade transaction.
+                        # Without it charly cannot install ANY package on an Omarchy guest;
+                        # measured on check-charly-omarchy-vm:
+                        #
+                        #   Woah partner... This looks like a direct pacman system upgrade.
+                        #   error: failed to commit transaction (failed to run transaction hooks)
+                        #
+                        # The variable name and this exact usage are the guard's OWN documented
+                        # escape hatch, printed by the guard itself. It is inert on every other
+                        # pac distro — nothing else reads it — so it lives here once rather than
+                        # as a per-distro override duplicating this whole template, which would
+                        # drift (R3). NOTE: it must stay on the command line itself; the body is
+                        # `&& \`-continued, so a `#` comment between the lines would comment out
+                        # everything after it.
                         install: |
                             pacman-key --init && \
                             {{- range .Keys}}
@@ -550,7 +592,7 @@ arch:
                             # (`|| true`) so air-gapped / restricted-network builds
                             # succeed when the keyring was already current.
                             (pacman-key --populate 2>/dev/null || true) && \
-                            pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                            OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
                 uninstall_template: |
                     pacman -Rs --noconfirm{{range .Packages}} {{.}}{{end}}
                 local_pkg:
@@ -563,7 +605,7 @@ arch:
                     # sub-second, non-fatal for air-gapped builds. Kept a SINGLE shell
                     # command (&&-chained) so the localpkg renderer wraps it in one RUN.
                     install_template: |
-                        (pacman-key --populate 2>/dev/null || true) && pacman -Sy --noconfirm && pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
+                        (pacman-key --populate 2>/dev/null || true) && pacman -Sy --noconfirm && OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -U --noconfirm {{.StageDir}}/{{.Glob}}
                     download_template: https://opencharly.github.io/charly-arch/${ARCH}/charly-${ARCH}.pkg.tar.zst
                     probe: command -v pacman
         pacstrap:
@@ -964,10 +1006,26 @@ omarchy:
         # the seeded authorized_keys). It is not reconstructed from the 3.x documentation,
         # which differs.
         installer:
-            # cidata is the NoCloud label. `xorriso -as mkisofs -volid` preserves case
-            # exactly (verified both ways), so no vfat fallback is needed for the label to
-            # survive — the fs field can stay at its iso9660 default permanently.
-            volume_id: cidata
+            # CIDATA is the NoCloud label, UPPERCASE because ISO 9660 / ECMA 119
+            # d-characters are A-Z 0-9 _ only. A lowercase volume id is accepted by
+            # xorriso but non-compliant, and it warns on EVERY seed write:
+            #
+            #   xorriso : WARNING : -volid text does not comply to ISO 9660 / ECMA 119 rules
+            #
+            # That warning appeared three times in every check-omarchy-iso-vm run (build,
+            # create, and the rebuild inside update) and was the only non-allowlisted
+            # finding in the whole bed.
+            #
+            # Uppercase is SAFE here, read off the shipping ISO's own loader rather than
+            # assumed — /usr/local/bin/omarchy-cidata-load searches both cases:
+            #
+            #   for label in cidata CIDATA; do
+            #     [[ -e $by_label/$label ]] && { device=$by_label/$label; break; }
+            #   done
+            #
+            # `xorriso -as mkisofs -volid` preserves case exactly, so the label reaches the
+            # guest as written and the fs field can stay at its iso9660 default permanently.
+            volume_id: CIDATA
             file:
                 # archinstall's own config, plus Omarchy's `omarchy_install` extension.
                 #

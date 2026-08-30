@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -409,4 +413,114 @@ func TestDistroConfigFindFormat(t *testing.T) {
 	if dc.FindFormat("nonexistent") != nil {
 		t.Error("FindFormat(nonexistent) should be nil")
 	}
+}
+
+// TestPacInstallDeclaresToolDrivenTransaction pins the OMARCHY_ALLOW_DIRECT_PACMAN
+// declaration on the pac install body, and the properties it must not have broken.
+//
+// Omarchy ships 00-omarchy-update-guard.hook — `Operation = Upgrade / Target = * /
+// AbortOnFail` — which aborts every upgrade transaction that did not come through
+// `omarchy update`. charly's pac body is `pacman -Syu`, and the `-u` is mandatory (a
+// `-Sy <pkg>` on a guest whose DB predates the repo partial-upgrades and leaves a binary
+// linked against a library the image does not ship). So without the declaration charly
+// cannot install ANY package on an Omarchy guest — measured at deploy-add:
+//
+//	Woah partner... This looks like a direct pacman system upgrade.
+//	error: failed to commit transaction (failed to run transaction hooks)
+//
+// The variable is the guard's own documented escape hatch and is inert on every other pac
+// distro, which is why it lives on the shared body once instead of as a per-distro
+// override duplicating the whole template.
+func TestPacInstallDeclaresToolDrivenTransaction(t *testing.T) {
+	dc, _, _, err := LoadBuildConfigForBox(repoRootDir(t))
+	if err != nil {
+		t.Fatalf("LoadBuildConfigForBox: %v", err)
+	}
+	fd := dc.FindFormat("pac")
+	if fd == nil {
+		t.Fatal("FindFormat(pac) = nil")
+	}
+	tmpl := spec.FormatPhaseTemplate(fd, spec.PhaseInstall, spec.VenueHostNative)
+
+	// The declaration must be an env PREFIX on the pacman command itself. charly runs this
+	// body through `sudo bash -lc`, which does not carry the caller's environment, so a
+	// variable exported anywhere else would not reach the hook pacman spawns.
+	if !strings.Contains(tmpl, "OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu") {
+		t.Errorf("pac install body does not declare the transaction tool-driven; charly cannot "+
+			"install any package on an Omarchy guest without it. got:\n%s", tmpl)
+	}
+
+	// `-u` must survive. Dropping it would ALSO silence the guard (an install-only
+	// transaction is not an Upgrade), which makes it the tempting wrong fix: it trades a
+	// loud abort for a silent partial upgrade.
+	if !strings.Contains(tmpl, "pacman -Syu --noconfirm --needed") {
+		t.Errorf("pac install body no longer runs `pacman -Syu --noconfirm --needed`; dropping "+
+			"-u silences Omarchy's guard by partial-upgrading instead, which is worse than the "+
+			"abort it replaces. got:\n%s", tmpl)
+	}
+
+	// The declaration must not have been smuggled in as a shell comment: the body is
+	// `&& \`-continued, and a comment line is legal there but carries nothing to pacman.
+	for _, line := range strings.Split(tmpl, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") && strings.Contains(trimmed, "OMARCHY_ALLOW_DIRECT_PACMAN") {
+			t.Errorf("the declaration is commented out, so it reaches nothing: %q", trimmed)
+		}
+	}
+
+	// The local-package path takes the same guard: `pacman -U` over an already-installed
+	// charly is an Upgrade operation, so a RE-deploy trips it even when the first succeeded.
+	if fd.LocalPkg == nil || fd.LocalPkg.InstallTemplate == "" {
+		t.Fatal("pac format has no local_pkg.install_template")
+	}
+	if !strings.Contains(fd.LocalPkg.InstallTemplate, "OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -U") {
+		t.Errorf("pac local_pkg install does not declare the transaction tool-driven; a re-deploy "+
+			"upgrades the installed package and trips the guard. got:\n%s", fd.LocalPkg.InstallTemplate)
+	}
+}
+
+// TestPacstrapBuilderTemplateFieldsExist proves every `.Distro.Pacstrap.X` interpolated
+// anywhere in this repo's manifest is a real field on spec.Pacstrap.
+//
+// This guards a CLASS, not a string. Go templates resolve struct fields at RENDER time, so a
+// reference to a field that no longer exists compiles, validates, passes every unit test —
+// and then fails at `charly vm build <bootstrap-vm>`, a path no CI gate exercises:
+//
+//	template: bootstrap-script:2:9: executing "bootstrap-script"
+//	at <.Distro.Pacstrap.KeyringInitCmd>: can't evaluate field KeyringInitCmd
+//	in type *spec.Pacstrap
+//
+// That is exactly what happened. charly#484 dropped the dead `keyring_init_cmd` field and its
+// authored values, correctly verifying it had zero *Go* consumers — and missed this TEMPLATE
+// consumer. Every pacstrap VM build in the repo was broken from that merge until the fix,
+// arch and cachyos included, because the builder template is shared by all of them.
+//
+// Reflecting over the struct rather than listing allowed names is deliberate: a hand-kept list
+// would have to be updated by the same person who forgot the template, which is no guard.
+func TestPacstrapBuilderTemplateFieldsExist(t *testing.T) {
+	manifest := filepath.Join(repoRootDir(t), "charly.yml")
+	body, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatalf("reading %s: %v", manifest, err)
+	}
+
+	real := map[string]bool{}
+	pt := reflect.TypeOf(spec.Pacstrap{})
+	names := make([]string, 0, pt.NumField())
+	for i := 0; i < pt.NumField(); i++ {
+		real[pt.Field(i).Name] = true
+		names = append(names, pt.Field(i).Name)
+	}
+
+	re := regexp.MustCompile(`\.Distro\.Pacstrap\.([A-Za-z0-9_]+)`)
+	matches := re.FindAllSubmatch(body, -1)
+	for _, m := range matches {
+		field := string(m[1])
+		if !real[field] {
+			t.Errorf("charly.yml interpolates .Distro.Pacstrap.%s, which is NOT a field of "+
+				"spec.Pacstrap. Every `charly vm build` of a bootstrap VM will fail at template "+
+				"render, on a path no unit test reaches. spec.Pacstrap has: %v", field, names)
+		}
+	}
+	t.Logf("checked %d .Distro.Pacstrap.* references against spec.Pacstrap %v", len(matches), names)
 }
