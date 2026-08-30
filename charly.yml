@@ -469,7 +469,7 @@ charly-dev:
             # The mise builder (builder:mise) — external out-of-process, pinned here for the
             # connect path's pass-1 (the P3 detection integration; the plugin repo is
             # opencharly/plugin-mise).
-            - '@github.com/opencharly/plugin-mise/candy/plugin-mise:v2026.242.0000'
+            - '@github.com/opencharly/plugin-mise/candy/plugin-mise:v2026.242.1251'
             # The example plugins the test fixtures + check beds host-build/connect by word ref —
             # pinned here (post-cutover) so the project closure vendors them and the lazy-connect
             # pass-1 finds them by word without a version-less remote fetch.
