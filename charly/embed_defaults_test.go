@@ -1,10 +1,10 @@
 package main
 
 import (
-	"slices"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
