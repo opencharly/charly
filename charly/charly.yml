@@ -723,6 +723,207 @@ cachyos:
                 Include = /etc/pacman.d/mirrorlist
                 [extra]
                 Include = /etc/pacman.d/mirrorlist
+omarchy:
+    distro:
+        # Omarchy IS Arch: same pacman, same core/extra, same package formats. Everything
+        # about the pac/aur formats, the container bootstrap and local_pkg is inherited
+        # from arch verbatim. This entity adds exactly three things arch cannot express:
+        # Omarchy's own package sources, its LIMINE boot chain, and its btrfs-subvolume
+        # root layout.
+        #
+        # inherits + inherit_packages is what makes the TAG CHAIN work.
+        # ExpandPackageInheritance walks `inherits` only when inherit_packages is set, so
+        # `distro: [omarchy]` expands to [omarchy, arch] and all 99 existing
+        # `distro: arch:` candy sections apply unchanged. Zero candies key an `omarchy:`
+        # section, exactly as zero key a `cachyos:` one.
+        inherits: arch
+        inherit_packages: true
+        pacstrap:
+            base_package:
+                - base
+                - base-devel
+                - linux
+                - linux-firmware
+                - openssh
+                - sudo
+                - cloud-init
+                - mkinitcpio
+                - efibootmgr
+                # The boot chain. limine REPLACES grub here — see bootloader: below.
+                - limine
+                - btrfs-progs
+                # Omarchy's packaging key, so the [omarchy] repo verifies without a
+                # separate keyring step. pacstrap -K initialises the target keyring
+                # itself; keyring_init_cmd is NOT used because it is a DEAD FIELD
+                # (verified: zero Go consumers of KeyringInitCmd anywhere in the
+                # umbrella outside generated types, tests and the docs mirror).
+                - omarchy-keyring
+            # EVERY package — including the ~125 that come from core/extra/multilib —
+            # is served by OMARCHY'S OWN Arch mirror snapshot, never a generic Arch
+            # mirror. This is not cosmetic. Omarchy publishes a deliberately-frozen
+            # snapshot and installs against it; building against upstream Arch would
+            # silently produce a guest with a different kernel, and a different
+            # everything-else, than Omarchy ships. That divergence is exactly what a
+            # distro entity exists to prevent, and it is silent — pacman reports success
+            # either way.
+            #
+            # The mirror is expressed through runtime_pacman_conf with explicit
+            # `Server =` lines rather than through mirrorlist_url, because
+            # mirrorlist_url is ALSO a dead field (verified the same way as
+            # keyring_init_cmd above). Using it would look like configuration and do
+            # nothing.
+            extra_repo:
+                - name: omarchy
+                  server: https://pkgs.omarchy.org/stable/$arch
+                  siglevel: Optional TrustAll
+                # multilib is enabled by upstream's own pacman.conf and is REQUIRED by
+                # lib32-nvidia-utils. #PacstrapRepo has no `include:` field, so the
+                # mirror is named explicitly here — and it is the OMARCHY mirror, not
+                # geo.mirror.pkgbuild.com.
+                - name: multilib
+                  server: https://stable-mirror.omarchy.org/$repo/os/$arch
+            runtime_pacman_conf: |
+                # Mirrors upstream's default/pacman/pacman-stable.conf, with the mirror
+                # INLINED per repository instead of `Include = /etc/pacman.d/mirrorlist`,
+                # so the snapshot is pinned by the one field that is actually consumed.
+                #
+                # DownloadUser = alpm is deliberately ABSENT even though upstream sets
+                # it. It is a real privilege drop on a normal install, but charly mounts
+                # /var/cache/pacman/pkg as a root-owned build cache the alpm user cannot
+                # write to, and the whole transaction dies with "failed to synchronize
+                # all databases". Match upstream's intent, verify each setting against
+                # the build context.
+                [options]
+                HoldPkg = pacman glibc
+                Architecture = auto
+                CheckSpace
+                ParallelDownloads = 5
+                SigLevel = Required DatabaseOptional
+                LocalFileSigLevel = Optional
+                [core]
+                Server = https://stable-mirror.omarchy.org/$repo/os/$arch
+                [extra]
+                Server = https://stable-mirror.omarchy.org/$repo/os/$arch
+                {{- range .ExtraRepos}}
+                [{{.Name}}]
+                Server = {{.Server}}
+                {{- if .SigLevel}}
+                SigLevel = {{.SigLevel}}
+                {{- end}}
+                {{- end}}
+        # The disk itself, which is Omarchy's identity and not a per-VM choice: an
+        # ISO-installed guest always has these four subvolumes and its ESP always at
+        # /boot. Consumed by EmitDiskBuildScript; a distro that omits the block gets
+        # charly's historical bare-filesystem layout with the ESP at /boot/efi.
+        disk_layout:
+            # NOT /boot/efi. limine-entry-tool and ESP_PATH both assume /boot, and a
+            # loader written to the other path leaves an unbootable disk while the
+            # build reports success.
+            esp_mount_point: /boot
+            subvolume:
+                - {name: "@", mount_point: /, mount_options: "compress=zstd,noatime"}
+                - {name: "@home", mount_point: /home, mount_options: "compress=zstd,noatime"}
+                - {name: "@log", mount_point: /var/log, mount_options: "compress=zstd,noatime"}
+                # snapper excludes the package cache from snapshots; keeping it on its
+                # own subvolume is what makes that possible.
+                - {name: "@pkg", mount_point: /var/cache/pacman/pkg, mount_options: "compress=zstd,noatime"}
+        # The whole boot chain is REPLACED, not merged: `bootloader:` overrides the
+        # inherited block wholesale, and arch's is grub-specific from the first line.
+        #
+        # Every value below was read off a REAL Omarchy 4.0.1 guest installed from the
+        # official ISO, not derived from the 3.x docs:
+        #
+        #   - ESP is vfat /dev/vda1 mounted at /boot, NOT /boot/efi. That is the layout
+        #     limine-entry-tool and ESP_PATH assume, and getting it wrong puts the loader
+        #     somewhere the firmware does not look.
+        #   - root is /dev/vda2[/@] btrfs with subvol=/@,compress=zstd.
+        #   - the cmdline uses root=PARTUUID=, not root=UUID=.
+        #   - the ESP carries EFI/Linux/omarchy_linux.efi — a Unified Kernel Image.
+        bootloader:
+            install_template: |
+                # Seed the /etc files mkinitcpio hooks expect, so the initramfs build
+                # does not error on `file not found`.
+                : > {{.Mnt}}/etc/vconsole.conf
+                # Arch's default systemd preset is `disable *`, and Omarchy inherits it.
+                # Without explicit enablement sshd / cloud-init / qemu-guest-agent never
+                # start on first boot and `charly vm ssh` times out during banner
+                # exchange with nothing listening in the guest. Same unit list and same
+                # reasoning as arch's — cloud-init >= 24.x is a main daemon plus four
+                # stage shims, so cloud-init-main must be enabled or the shims fail
+                # silently on a missing socket.
+                for unit in sshd qemu-guest-agent cloud-init-main cloud-init-local cloud-init-network cloud-config cloud-final systemd-networkd systemd-resolved; do
+                  arch-chroot {{.Mnt}} systemctl enable "$unit" 2>&1 | grep -v "^$" || true
+                done
+                # cloud-init.target has no [Install] WantedBy — it is a sync point
+                # activated by cloud-init-generator. Link it statically so it is pulled
+                # into multi-user.target even when ds-identify mis-fires.
+                mkdir -p {{.Mnt}}/etc/systemd/system/multi-user.target.wants
+                arch-chroot {{.Mnt}} ln -sf /usr/lib/systemd/system/cloud-init.target \
+                  /etc/systemd/system/multi-user.target.wants/cloud-init.target 2>/dev/null || true
+                # Default DHCP profile so systemd-networkd configures something at first
+                # boot. printf, not a heredoc, so YAML indentation stays out of the file.
+                mkdir -p {{.Mnt}}/etc/systemd/network
+                printf '[Match]\nName=en* eth*\n[Network]\nDHCP=yes\n' > {{.Mnt}}/etc/systemd/network/20-wired.network
+                #
+                # ---- LIMINE, not grub ----
+                #
+                # ESP_PATH is /boot, matching what an ISO-installed Omarchy guest
+                # actually has. limine-entry-tool reads this file.
+                ROOT_PARTUUID=$(blkid -s PARTUUID -o value "${LOOP}p2")
+                mkdir -p {{.Mnt}}/etc/default
+                cat > {{.Mnt}}/etc/default/limine <<LIMINEDEFAULT
+                ESP_PATH="/boot"
+                KERNEL_CMDLINE[default]="root=PARTUUID=${ROOT_PARTUUID} rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0{{if .KernelArgs}} {{.KernelArgs}}{{end}}"
+                LIMINEDEFAULT
+                # Deploy the loader onto the ESP. `limine bios-install` is for BIOS; the
+                # UEFI path is a plain file copy of BOOTX64.EFI plus a limine.conf, which
+                # is what the package's own hook would do on a real machine.
+                mkdir -p {{.Mnt}}/boot/EFI/BOOT {{.Mnt}}/boot/EFI/limine
+                cp /usr/share/limine/BOOTX64.EFI {{.Mnt}}/boot/EFI/BOOT/BOOTX64.EFI 2>/dev/null \
+                  || cp {{.Mnt}}/usr/share/limine/BOOTX64.EFI {{.Mnt}}/boot/EFI/BOOT/BOOTX64.EFI
+                cat > {{.Mnt}}/boot/limine.conf <<LIMINECONF
+                timeout: 3
+                default_entry: 1
+
+                /Omarchy
+                    protocol: linux
+                    kernel_path: boot():/vmlinuz-linux
+                    cmdline: root=PARTUUID=${ROOT_PARTUUID} rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0{{if .KernelArgs}} {{.KernelArgs}}{{end}}
+                    module_path: boot():/initramfs-linux.img
+                LIMINECONF
+                # Mode 0700 is what an installed guest carries: the file names the root
+                # device and is on a world-readable vfat ESP otherwise.
+                chmod 0700 {{.Mnt}}/boot/limine.conf
+                arch-chroot {{.Mnt}} efibootmgr --create --disk "${LOOP}" --part 1 \
+                  --loader '\EFI\BOOT\BOOTX64.EFI' --label 'Omarchy' 2>&1 | tail -1 || true
+                # Create the SSH login user (NO key baked in). Per-VM keys arrive at boot
+                # via SMBIOS type 11 -> systemd-tmpfiles, keeping the rootfs identity-free.
+                if [ -n "{{.SSHUser}}" ] && [ "{{.SSHUser}}" != "root" ]; then
+                  arch-chroot {{.Mnt}} useradd -m -G wheel -s /bin/bash {{.SSHUser}} 2>&1 | grep -v 'already exists' || true
+                  echo '{{.SSHUser}} ALL=(ALL) NOPASSWD:ALL' > {{.Mnt}}/etc/sudoers.d/99-{{.SSHUser}}
+                  chmod 0440 {{.Mnt}}/etc/sudoers.d/99-{{.SSHUser}}
+                fi
+            initramfs_template: |
+                # mkinitcpio prints WARNING for missing optional inputs but still
+                # produces a working initramfs; let that pass.
+                arch-chroot {{.Mnt}} mkinitcpio -P || true
+            fstab_template: |
+                # genfstab -U does not reliably resolve UUIDs for loop devices in
+                # privileged-container build mode, so the entries are hand-rolled from
+                # blkid — same reason as arch's.
+                #
+                # The ROOT entry carries subvol=@ and the ESP mounts at /boot, NOT
+                # /boot/efi. Both differ from arch and both are Omarchy's actual layout.
+                ROOT_UUID=$(blkid -s UUID -o value "${LOOP}p2")
+                ESP_UUID=$(blkid -s UUID -o value "${LOOP}p1")
+                cat > {{.Mnt}}/etc/fstab <<FSTAB
+                # Generated by charly bootstrap-VM build.
+                UUID=${ROOT_UUID}  /      btrfs  subvol=@,compress=zstd,noatime  0 0
+                UUID=${ROOT_UUID}  /home  btrfs  subvol=@home,compress=zstd,noatime  0 0
+                UUID=${ROOT_UUID}  /var/log  btrfs  subvol=@log,compress=zstd,noatime  0 0
+                UUID=${ROOT_UUID}  /var/cache/pacman/pkg  btrfs  subvol=@pkg,compress=zstd,noatime  0 0
+                UUID=${ESP_UUID}   /boot  vfat   defaults,noatime  0 2
+                FSTAB
 debian:
     distro:
         version: "13"

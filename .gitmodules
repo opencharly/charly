@@ -14,3 +14,6 @@
 [submodule "box/ubuntu"]
 	path = box/ubuntu
 	url = https://github.com/opencharly/distro-ubuntu.git
+[submodule "box/omarchy"]
+	path = box/omarchy
+	url = https://github.com/opencharly/distro-omarchy.git

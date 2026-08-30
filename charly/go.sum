@@ -149,6 +149,8 @@ github.com/opencharly/plugin-command/candy/plugin-command v0.2026237.1417 h1:o75
 github.com/opencharly/plugin-command/candy/plugin-command v0.2026237.1417/go.mod h1:NhU1sjx93aEuAYxJOxHzwrCIJ+BkYZSzZiDw0pwxiPU=
 github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026237.1418 h1:Y2uPVt288hyt+9hrJ+fqMfOCseepbzT32rJcLMdZz+M=
 github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026237.1418/go.mod h1:ixu1g1TxkzMsjwejDPbjmmex5zQ6SJGTV2Sry2liEMI=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026242.804 h1:G7WUpzz55YTu++a4HdUhY2bZUbbRNQGjvp3GBYvvDPo=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026242.804/go.mod h1:ixu1g1TxkzMsjwejDPbjmmex5zQ6SJGTV2Sry2liEMI=
 github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418 h1:kleBg1r5FQmttJzpU+l0nGBynpoRAqKU7qQ5PqVqqO4=
 github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418/go.mod h1:v0cn/k1CRWVxIG4rDc+ba4dSumDyapHQTN2Cdz6CppY=
 github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419 h1:DcdNkUOzYQKw8X/3idFoINSnTNq0LOdcQLOFg/5Osig=
@@ -245,6 +247,8 @@ github.com/opencharly/sdk v0.2026241.2111 h1:nIrXz1yi9fsPzIKVkzpUb6dsYTIyfMaTt5W
 github.com/opencharly/sdk v0.2026241.2111/go.mod h1:1R9tRIkK3aBknFbTrz4ET5kHXntxvckqqxm8CNq27io=
 github.com/opencharly/spec v0.2026241.1322 h1:vZRoM8LjJIWZYTNjlTCvTKbZcu0WehkS1GwyWYQ0Vjo=
 github.com/opencharly/spec v0.2026241.1322/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
+github.com/opencharly/spec v0.2026242.753 h1:zU0IgNsrxzJMUnuXXTvwiugXUxQ1hl4a9OOJSB5m+UA=
+github.com/opencharly/spec v0.2026242.753/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
