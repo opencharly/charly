@@ -313,7 +313,10 @@ pixi:
 	if !slices.Contains(b.DetectFiles, "mise.toml") || !slices.Contains(b.DetectFiles, ".tool-versions") {
 		t.Fatalf("builder mise detect_file must include mise.toml + .tool-versions; got %v", b.DetectFiles)
 	}
-	if b.PathContributions == nil || !slices.Contains(b.PathContributions, "/usr/local/share/mise/shims") {
-		t.Fatalf("builder mise path_contribution must include the shims dir; got %v", b.PathContributions)
+	if b.PathContributions == nil || !slices.Contains(b.PathContributions, "~/.local/share/mise/shims") {
+		t.Fatalf("builder mise path_contribution must include the Home-based shims dir; got %v", b.PathContributions)
+	}
+	if b.InstallCommands == nil || b.InstallCommands["mise.toml"] != "mise install" {
+		t.Fatalf("builder mise install_command must map mise.toml to mise install; got %v", b.InstallCommands)
 	}
 }
