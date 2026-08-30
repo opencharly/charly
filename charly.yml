@@ -231,6 +231,10 @@ eval-host-vm:
                 - sudo
                 - go
                 - git
+                # podman: the check-local bed's `charly status --json` probe resolves
+                # the runtime, which needs a container engine in the guest (RCA:
+                # "engine.build: no container engine found" on a fresh disk).
+                - podman
                 # rsync: the check-local-vm bed's "guest-project-delivered" step
                 # rsyncs the pruned check-local closure into this guest over SSH —
                 # the REMOTE end needs rsync too, not just the host. Latent gap: a
