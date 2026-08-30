@@ -17,7 +17,7 @@ require (
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026237.1416
-	github.com/opencharly/plugin-check/candy/plugin-check v0.2026242.1018
+	github.com/opencharly/plugin-check/candy/plugin-check v0.2026242.2127
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026237.1417
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026237.1417
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026237.1417
@@ -33,7 +33,7 @@ require (
 	github.com/opencharly/plugin-example/candy/plugin-example v0.2026237.1419
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026237.1421
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422
-	github.com/opencharly/plugin-file/candy/plugin-file v0.2026237.1422
+	github.com/opencharly/plugin-file/candy/plugin-file v0.2026242.2145
 	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026241.1037
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422
 	github.com/opencharly/plugin-group/candy/plugin-group v0.2026237.1423
@@ -57,7 +57,7 @@ require (
 	github.com/opencharly/plugin-process/candy/plugin-process v0.2026237.1427
 	github.com/opencharly/plugin-refs/candy/plugin-refs v0.2026237.1427
 	github.com/opencharly/plugin-resource/candy/plugin-resource v0.2026237.1427
-	github.com/opencharly/plugin-service/candy/plugin-service v0.2026237.1428
+	github.com/opencharly/plugin-service/candy/plugin-service v0.2026242.2146
 	github.com/opencharly/plugin-settings/candy/plugin-settings v0.2026237.1428
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026237.1428
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026237.1428
@@ -66,8 +66,8 @@ require (
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026237.1429
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026237.1429
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026237.1430
-	github.com/opencharly/plugin-user/candy/plugin-user v0.2026237.1430
-	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026242.812
+	github.com/opencharly/plugin-user/candy/plugin-user v0.2026242.2148
+	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026242.1912
 	golang.org/x/term v0.43.0
 	google.golang.org/grpc v1.61.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -102,7 +102,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026242.914-0.20260830150119-f476722d55eb // indirect
+	github.com/opencharly/sdk v0.2026242.1217 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
