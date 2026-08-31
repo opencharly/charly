@@ -7,10 +7,8 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	specexec "github.com/opencharly/spec/exec"
@@ -425,31 +423,33 @@ func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPl
 	return golden
 }
 
-// newestFixtureTag resolves a fixture candy repo's newest v-calver tag via git ls-remote.
-func newestFixtureTag(name string) string {
-	out, err := exec.Command("git", "ls-remote", "--tags", "https://github.com/opencharly/layer-"+name+".git").Output()
+// pinnedFixtureTag reads the fixture tag pinned in charly/testdata/fleet_compile_parity_tags.json.
+//
+// Deliberately NOT resolved from the network. Resolving "the newest tag" at test time made this
+// test non-deterministic: the three fixtures are separate, actively released repos, so a release
+// in ANY of them changed what this test compiled and broke the parity check on EVERY branch —
+// including main — with no charly change involved. (Measured: main went red when layer-pre-commit
+// published a tag carrying candy version 2026.243.0100 against a golden baked at 2026.166.1751.)
+//
+// Re-baking the golden fixes that until the next upstream release; pinning the tag fixes it for
+// good, because the tag and the golden then move together in ONE commit — which is exactly what
+// `go run ./tools/golden-compile` writes.
+func pinnedFixtureTag(t *testing.T, repoRoot, name string) string {
+	t.Helper()
+	path := filepath.Join(repoRoot, "charly", "testdata", "fleet_compile_parity_tags.json")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		t.Fatalf("read pinned fixture tags: %v — regenerate with `go run ./tools/golden-compile`", err)
 	}
-	var tags []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		refName := strings.TrimPrefix(fields[1], "refs/tags/")
-		if !strings.HasPrefix(refName, "v") || strings.HasSuffix(refName, "^{}") {
-			continue
-		}
-		tags = append(tags, refName)
+	var tags map[string]string
+	if err := json.Unmarshal(data, &tags); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
 	}
-	if len(tags) == 0 {
-		return ""
+	tag := tags[name]
+	if tag == "" {
+		t.Fatalf("no pinned tag for layer-%s in %s — regenerate with `go run ./tools/golden-compile`", name, path)
 	}
-	return tags[len(tags)-1]
+	return tag
 }
 
 // seedParityProject materializes the minimal synthetic project at <repoRoot>/.parity/: a root
@@ -471,7 +471,7 @@ func seedParityProject(t *testing.T, repoRoot string) string {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"debootstrap-builder", "dev-tools", "pre-commit"} {
-		tag := newestFixtureTag(name)
+		tag := pinnedFixtureTag(t, repoRoot, name)
 		if tag == "" {
 			t.Fatalf("no tag for layer-%s", name)
 		}
