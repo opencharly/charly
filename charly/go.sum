@@ -129,10 +129,10 @@ github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414 h1:qqbo30s
 github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414/go.mod h1:wHCdH3V5NCsDrR2MSApA5BCBj/XLwIA90caT2RNMULE=
 github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026237.1414 h1:afdK2wMwKQ2gr2LQKxDdtp8I/RbQdK04VakA97iqPgU=
 github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026237.1414/go.mod h1:RI6E4PWf/ESn1aADG1XmJKBV6UbokuFGjbqZpiX48MU=
-github.com/opencharly/plugin-box/candy/plugin-box v0.2026243.729 h1:Ui/zdZyCs6iPwog4pvl6UVnnA4ZMIPRVlNeBwRJX+64=
-github.com/opencharly/plugin-box/candy/plugin-box v0.2026243.729/go.mod h1:k2OSvWm0hQUD0hZ5k3Yl6qwh16AbXAVWYKtPnhppN4A=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026243.729 h1:SjTZNIgTkBlZXWxkXxUFQQ7Njoojpl8Kdml0RJW4eg4=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026243.729/go.mod h1:LFmW4Z6Jm/ejfRjqhQc3pFjBTNv7tAztQI5tkJUYEPY=
+github.com/opencharly/plugin-box/candy/plugin-box v0.2026243.1718 h1:XPG8ACodb2rTMiC3r1osUl09WJoLPnq0wtD87x7DemY=
+github.com/opencharly/plugin-box/candy/plugin-box v0.2026243.1718/go.mod h1:k2OSvWm0hQUD0hZ5k3Yl6qwh16AbXAVWYKtPnhppN4A=
+github.com/opencharly/plugin-build/candy/plugin-build v0.2026243.1627 h1:vJX1sSjlHZgErfk9uxPURb6VREamRAYJt0YemuEQlmA=
+github.com/opencharly/plugin-build/candy/plugin-build v0.2026243.1627/go.mod h1:LFmW4Z6Jm/ejfRjqhQc3pFjBTNv7tAztQI5tkJUYEPY=
 github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415 h1:ESjbSX0lZgdp64mucEA8lwzT4nQv25Cj5Rtf9XnaU6k=
 github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415/go.mod h1:C8X1kX6oD+ONgrGGCTpGj9a1albGAqe2YGFkOzH2pK4=
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416 h1:LAwqDaeqnsxzBzGTzEI9CQtnihsm+RYDJl4JqOgPDYc=
