@@ -1,7 +1,8 @@
 {
   "extensions": [
     "./extensions/charly-gates.ts",
-    "./extensions/loop-protection.ts"
+    "./extensions/github-pr-status.ts",
+    "./extensions/charly-status.ts"
   ],
   "subagents": {
     "agentOverrides": {
