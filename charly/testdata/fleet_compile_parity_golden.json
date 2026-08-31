@@ -271,7 +271,7 @@
   },
   "pre-commit": {
     "box": "k4b-parity",
-    "version": "2026.166.1751",
+    "version": "2026.243.0100",
     "distro": "fedora:43",
     "candy": "pre-commit",
     "candies_included": [
