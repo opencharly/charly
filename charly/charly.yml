@@ -954,15 +954,42 @@ omarchy:
                 mkdir -p {{.Mnt}}/boot/EFI/BOOT {{.Mnt}}/boot/EFI/limine
                 cp /usr/share/limine/BOOTX64.EFI {{.Mnt}}/boot/EFI/BOOT/BOOTX64.EFI 2>/dev/null \
                   || cp {{.Mnt}}/usr/share/limine/BOOTX64.EFI {{.Mnt}}/boot/EFI/BOOT/BOOTX64.EFI
+                # The entry MUST be a sub-entry under an expanded branch, and default_entry
+                # MUST be 2. Both are forced by limine-entry-tool, which omarchy pulls in as
+                # a hard dependency of the `omarchy` metapackage (via limine-mkinitcpio-hook)
+                # and which runs as an alpm hook DURING the pacstrap transaction.
+                #
+                # That tool appends its own UKI entry as `//linux` — a DEPTH-2 sub-entry — to
+                # whatever limine.conf it finds. An earlier revision here wrote a depth-1 leaf
+                # (`/Omarchy` + protocol/kernel_path), and the tool's `//linux` then nested
+                # UNDER it, silently converting charly's bootable entry into a BRANCH. limine
+                # renders a branch as `[+] Omarchy … ENTER Expand`, `default_entry: 1` selects
+                # the branch, and there is nothing to boot: the guest sat at the menu forever
+                # and every bed using it hung at deploy-add waiting for SSH.
+                #
+                # This mirrors what an ISO-installed Omarchy actually carries, read off a
+                # working guest's ESP:
+                #
+                #     default_entry: 2
+                #     /+Omarchy
+                #       //linux
+                #         protocol: efi
+                #         path: boot():/EFI/Linux/omarchy_linux.efi#<hash>
+                #
+                # `/+Name` is an EXPANDED branch (the `+` matters — without it the menu opens
+                # collapsed). Counting includes the branch, so the first bootable entry is 2.
+                # Our `//Charly` sits at 2; if limine-entry-tool later appends its `//linux`
+                # it becomes 3, a SIBLING rather than a child, and both stay bootable.
                 cat > {{.Mnt}}/boot/limine.conf <<LIMINECONF
                 timeout: 3
-                default_entry: 1
+                default_entry: 2
 
-                /Omarchy
-                    protocol: linux
-                    kernel_path: boot():/vmlinuz-linux
-                    cmdline: root=PARTUUID=${ROOT_PARTUUID} rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0{{if .KernelArgs}} {{.KernelArgs}}{{end}}
-                    module_path: boot():/initramfs-linux.img
+                /+Omarchy
+                    //Charly
+                        protocol: linux
+                        kernel_path: boot():/vmlinuz-linux
+                        cmdline: root=PARTUUID=${ROOT_PARTUUID} rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0{{if .KernelArgs}} {{.KernelArgs}}{{end}}
+                        module_path: boot():/initramfs-linux.img
                 LIMINECONF
                 # Mode 0700 is what an installed guest carries: the file names the root
                 # device and is on a world-readable vfat ESP otherwise.
