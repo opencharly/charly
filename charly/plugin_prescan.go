@@ -390,6 +390,7 @@ func declaredExternalCommandWords() []string {
 func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 	var doc struct {
 		Discover spec.DiscoverConfig `yaml:"discover"`
+		Import   []map[string]string `yaml:"import"`
 	}
 	// A missing/!unparseable discover: block skips the LOCAL walk only. The remote leg
 	// below is about @github refs, which have nothing to do with local discovery: gating
@@ -448,7 +449,56 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 			}
 		}
 	}
+	// The IMPORT leg. A project's `import:` namespaces resolve to WHOLE PROJECTS (a
+	// distro repo, or the local box/<name> submodule a ref maps to), and their manifests
+	// carry plugin refs of their own — a bed in an imported box that authors a plugin
+	// verb's SCALAR shorthand needs that verb's `plugin: primary:` registered BEFORE parse,
+	// exactly like one in the root file.
+	//
+	// Without this leg the root's own refs and its discovered candies' refs were prescanned
+	// and an imported box's were not, so `cstream: status` in box/cachyos failed to parse
+	// with "declares no primary field for the scalar shorthand" — while the SAME manifest
+	// validated cleanly from its own repo root, where it IS the root file. That asymmetry
+	// (green standing alone, red composed) is the shape this closes.
+	for _, ns := range doc.Import {
+		for name, ref := range ns {
+			ref = strings.TrimSpace(ref)
+			if !strings.HasPrefix(ref, "@") {
+				continue
+			}
+			dir, err := resolveImportedProject(name, strings.TrimPrefix(ref, "@"), baseDir)
+			if err != nil {
+				continue
+			}
+			manifest := filepath.Join(dir, spec.UnifiedFileName)
+			prescanPluginManifest(manifest)
+			if b, err := os.ReadFile(manifest); err == nil {
+				allData = append(allData, b...)
+			}
+		}
+	}
 	prescanRemotePluginManifests(allData, baseDir)
+}
+
+// resolveImportedProject resolves one `import:` ref to the directory holding its manifest —
+// the local submodule checkout when the ref maps to one, else the fetched cache path. Var, not
+// func, so a test can substitute a local directory (mirroring resolveRemotePluginRepo).
+var resolveImportedProject = func(name, ref, baseDir string) (string, error) {
+	// LOCAL FIRST, because the parse reads local first. An import whose repo is checked out as
+	// this project's box/<namespace> submodule is parsed FROM THAT CHECKOUT (the error path a
+	// failing box names is box/<name>/charly.yml, not a cache dir). Prescanning the pinned
+	// cache instead would read a DIFFERENT tree than the one being parsed — the pin and the
+	// submodule drift routinely — and register primaries that do not match the manifest whose
+	// steps are about to be desugared.
+	if local := filepath.Join(baseDir, "box", name); local != "" {
+		if _, err := os.Stat(filepath.Join(local, spec.UnifiedFileName)); err == nil {
+			return local, nil
+		}
+	}
+	// Otherwise the pinned ref, WITH its version: stripping the pin would prescan the import's
+	// default branch instead of the commit the project actually composes.
+	_, cachePath, err := requireProjectLoader().CanonicalRef(hostInProcCtx(), "@"+ref, baseDir)
+	return cachePath, err
 }
 
 // remotePrescanRefRe matches the @github.com/opencharly/... plugin candy refs a project's
