@@ -7,10 +7,8 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	specexec "github.com/opencharly/spec/exec"
@@ -210,7 +208,7 @@ func isolateProviderRegistry(t *testing.T) {
 // side (invokeOpCompile) is UNCHANGED: it was always charly-internal registry/dispatch machinery,
 // never an sdk import.
 //
-// Regenerate the golden with `go run ./tools/golden-compile` (from the repo root) whenever the
+// Regenerate the golden with `cd tools/golden-compile && GOWORK=off go run .` whenever the
 // compiler (sdk/deploykit's BuildDeployPlan or its sub-compilers) or one of the three fixture
 // candies (candy/debootstrap-builder, candy/dev-tools, candy/pre-commit) changes in a way that alters its
 // compiled InstallPlan — a stale golden fails this test loudly (a wire-form diff), never silently.
@@ -281,7 +279,7 @@ func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 		}
 		oldView, ok := golden[name]
 		if !ok {
-			t.Fatalf("golden fixture missing candy %q — regenerate with `go run ./tools/golden-compile`", name)
+			t.Fatalf("golden fixture missing candy %q — regenerate with `cd tools/golden-compile && GOWORK=off go run .`", name)
 		}
 
 		// NEW: the SHARED in-proc compiler (compilePlansForRequest), reached via the KEPT OpCompile
@@ -315,7 +313,7 @@ func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 		ob, _ := json.Marshal(oldView)
 		nb, _ := json.Marshal(newView)
 		if string(ob) != string(nb) {
-			t.Fatalf("PARITY BREAK on %q (WireView wire form differs from the golden — regenerate with `go run ./tools/golden-compile` if this is an intentional compiler change):\n--- GOLDEN ---\n%s\n--- NEW ---\n%s", name, ob, nb)
+			t.Fatalf("PARITY BREAK on %q (WireView wire form differs from the golden — regenerate with `cd tools/golden-compile && GOWORK=off go run .` if this is an intentional compiler change):\n--- GOLDEN ---\n%s\n--- NEW ---\n%s", name, ob, nb)
 		}
 
 		// (2) PlanFromView fidelity — WireView→PlanFromView is the identity on the re-materialized plan.
@@ -412,7 +410,7 @@ func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPl
 	path := filepath.Join(dir, "charly", "testdata", "fleet_compile_parity_golden.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read golden fixture %s: %v (regenerate with `go run ./tools/golden-compile`)", path, err)
+		t.Fatalf("read golden fixture %s: %v (regenerate with `cd tools/golden-compile && GOWORK=off go run .`)", path, err)
 	}
 	// The generator normalizes repo-root-absolute paths (candy_dir/ctx_path) to a ${REPO_ROOT}
 	// token so the golden is worktree-independent; substitute THIS tree's resolved root back in
@@ -425,31 +423,33 @@ func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPl
 	return golden
 }
 
-// newestFixtureTag resolves a fixture candy repo's newest v-calver tag via git ls-remote.
-func newestFixtureTag(name string) string {
-	out, err := exec.Command("git", "ls-remote", "--tags", "https://github.com/opencharly/layer-"+name+".git").Output()
+// pinnedFixtureTag reads the fixture tag pinned in charly/testdata/fleet_compile_parity_tags.json.
+//
+// Deliberately NOT resolved from the network. Resolving "the newest tag" at test time made this
+// test non-deterministic: the three fixtures are separate, actively released repos, so a release
+// in ANY of them changed what this test compiled and broke the parity check on EVERY branch —
+// including main — with no charly change involved. (Measured: main went red when layer-pre-commit
+// published a tag carrying candy version 2026.243.0100 against a golden baked at 2026.166.1751.)
+//
+// Re-baking the golden fixes that until the next upstream release; pinning the tag fixes it for
+// good, because the tag and the golden then move together in ONE commit — which is exactly what
+// `cd tools/golden-compile && GOWORK=off go run .` writes.
+func pinnedFixtureTag(t *testing.T, repoRoot, name string) string {
+	t.Helper()
+	path := filepath.Join(repoRoot, "charly", "testdata", "fleet_compile_parity_tags.json")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		t.Fatalf("read pinned fixture tags: %v — regenerate with `cd tools/golden-compile && GOWORK=off go run .`", err)
 	}
-	var tags []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		refName := strings.TrimPrefix(fields[1], "refs/tags/")
-		if !strings.HasPrefix(refName, "v") || strings.HasSuffix(refName, "^{}") {
-			continue
-		}
-		tags = append(tags, refName)
+	var tags map[string]string
+	if err := json.Unmarshal(data, &tags); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
 	}
-	if len(tags) == 0 {
-		return ""
+	tag := tags[name]
+	if tag == "" {
+		t.Fatalf("no pinned tag for layer-%s in %s — regenerate with `cd tools/golden-compile && GOWORK=off go run .`", name, path)
 	}
-	return tags[len(tags)-1]
+	return tag
 }
 
 // seedParityProject materializes the minimal synthetic project at <repoRoot>/.parity/: a root
@@ -471,7 +471,7 @@ func seedParityProject(t *testing.T, repoRoot string) string {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"debootstrap-builder", "dev-tools", "pre-commit"} {
-		tag := newestFixtureTag(name)
+		tag := pinnedFixtureTag(t, repoRoot, name)
 		if tag == "" {
 			t.Fatalf("no tag for layer-%s", name)
 		}

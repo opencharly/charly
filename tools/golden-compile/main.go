@@ -26,7 +26,13 @@
 //     sdk/kit.BuilderReverse (see candy/plugin-builder-pixi/plugin.go) — PUBLIC, pure functions
 //     this tool calls directly, no plugin connection needed.
 //
-// REGENERATE with: go run ./tools/golden-compile   (run from the repo root, or pass -repo)
+// REGENERATE with: cd tools/golden-compile && GOWORK=off go run .
+//
+// GOWORK=off and the cd are both REQUIRED, and the plain `go run ./tools/golden-compile` this
+// line used to advertise does not work: this tool is its own module and is deliberately absent
+// from the repo-root go.work, so from the root the go command refuses it ("contained in a module
+// that is not one of the workspace modules"). The tool resolves the repo root two directories up
+// on its own; pass -repo to override.
 // whenever the compiler (sdk/deploykit's BuildDeployPlan or its sub-compilers) or one of the three
 // fixture candies (candy/debootstrap-builder, candy/dev-tools, candy/pre-commit) changes in a way that alters
 // its compiled InstallPlan.
@@ -58,6 +64,15 @@ import (
 )
 
 const goldenOutputRelPath = "charly/testdata/fleet_compile_parity_golden.json"
+
+// tagsOutputRelPath records the fixture tags this run resolved. The parity test READS this file
+// rather than resolving "newest" itself, so the golden and the exact fixture content it was baked
+// from move together in one commit. Without it an unrelated repo's release broke the test on every
+// branch, main included.
+const tagsOutputRelPath = "charly/testdata/fleet_compile_parity_tags.json"
+
+// resolvedTags accumulates name -> tag as loadRealCandy fetches each fixture, so main can pin them.
+var resolvedTags = map[string]string{}
 
 // fixtureCandidates mirrors the parity test's own candidate list (K4B RDD spike): a pure-package
 // candy (debootstrap-builder), a package+task candy (dev-tools), and a pixi-builder candy (pre-commit) — the
@@ -105,6 +120,20 @@ func main() {
 		fatal("write %s: %v", outPath, err)
 	}
 	fmt.Printf("wrote %s (%d candies)\n", outPath, len(golden))
+
+	// Pin the tags this run resolved, next to the golden they produced. Writing them in the SAME
+	// run is the whole point: a golden and a floating fixture cannot drift apart if the fixture is
+	// no longer floating.
+	tagsJSON, err := json.MarshalIndent(resolvedTags, "", "  ")
+	if err != nil {
+		fatal("marshal fixture tags: %v", err)
+	}
+	tagsJSON = append(tagsJSON, '\n')
+	tagsPath := filepath.Join(repoRoot, tagsOutputRelPath)
+	if err := os.WriteFile(tagsPath, tagsJSON, 0o644); err != nil {
+		fatal("write %s: %v", tagsPath, err)
+	}
+	fmt.Printf("wrote %s (%d fixture tags)\n", tagsPath, len(resolvedTags))
 }
 
 func fatal(format string, args ...any) {
@@ -334,6 +363,7 @@ func loadRealCandy(repoRoot, name string) (spec.CandyReader, error) {
 		return nil, err
 	}
 	tag := newestCandyTag(name)
+	resolvedTags[name] = tag
 	cacheDir, err := refs.DownloadRepo("github.com/opencharly/layer-"+name, tag)
 	if err != nil {
 		return nil, fmt.Errorf("fetch layer-%s@%s: %w", name, tag, err)

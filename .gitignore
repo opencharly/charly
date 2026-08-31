@@ -137,3 +137,6 @@ pytorch_model*.bin
 *.ckpt
 *.onnx
 *.h5
+
+# scratch project golden-compile and the parity test materialize the fixtures into
+.parity/
