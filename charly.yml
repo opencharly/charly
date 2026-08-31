@@ -3238,6 +3238,113 @@ check-gpu-app:
             the externalized GPU/VFIO host-detection via `charly vm gpu` host-side.
         candy:
             - '@github.com/opencharly/plugin-gpu/candy/plugin-gpu:v2026.237.1422'
+check-bpf-local:
+    local:
+        from: check-bpf-local-app
+        host: local
+        disposable: true
+        description: >-
+            R10 witness for the plugin-bpf COMMAND + VERB dispatch on the reference CachyOS host
+            (bpf LSM active): command:bpf status exits 0 with the deterministic header, command:bpf
+            lsm exits 0 with 'BPF LSM: enabled' (the gate contract), and the declarative bpf: lsm
+            check step (verb:bpf) passes host-side through the provider registry. Host-independent
+            steps keep the bed runnable anywhere; the enabled-gate assertion is the reference-host
+            tier (a host without bpf LSM reports DISABLED + exit 1 - the contract under test).
+        plan:
+            - check: command=bpf status exits 0 and prints the deterministic report header (CLI dispatch, read-only)
+              id: e2e-bpf-status
+              exit_status: 0
+              stdout:
+                - contains: BPF kernel feature report
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} bpf status
+                in_container: false
+            - check: command=bpf lsm exits 0 and reports the gate enabled on the reference host (CLI gate contract)
+              id: e2e-bpf-lsm-gate
+              exit_status: 0
+              stdout:
+                - contains: 'BPF LSM: enabled'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} bpf lsm
+                in_container: false
+            - check: the bpf verb gate passes host-side through the provider registry (verb:bpf dispatch)
+              id: e2e-bpf-verb
+              bpf:
+                lsm: true
+              context:
+                - runtime
+              stdout:
+                - contains: enabled
+check-bpf-local-app:
+    local:
+        description: >-
+            Minimal kind:local template for the check-bpf-local R10 witness bed - composes the
+            OUT-OF-TREE plugin-bpf candy (command:bpf + verb:bpf) so the bed exercises the
+            external plugin dispatch host-side: charly builds the plugin binary and (a) fork/execs
+            it in CLI mode for command:bpf (check e2e-bpf-status / e2e-bpf-lsm-gate) and
+            (b) resolves verb:bpf through the provider registry for the declarative bpf: gate
+            step (check e2e-bpf-verb). Mirrors check-udev-local (plugin-udev's R10 witness).
+        candy:
+            - '@github.com/opencharly/plugin-bpf/candy/plugin-bpf:v2026.243.1059'
+check-cardwire-local:
+    local:
+        from: check-cardwire-local-app
+        host: local
+        disposable: true
+        description: >-
+            R10 witness for the plugin-cardwire COMMAND dispatch on a cardwire-less host: the
+            graceful N/A contracts ARE the assertions — command:cardwire status exits 0 with the
+            deterministic report header (cardwired systemd state + config keys + direct
+            /sys/kernel/security/lsm BPF-LSM facts), command:cardwire list exits 0 with the
+            graceful N/A report, and command:cardwire config get exits 0 with the missing-file
+            N/A report. Run on a host where cardwire is REMOVED (the bed is non-mutating by
+            design; the install path is covered by the check-cardwire-vm in-guest bed).
+        plan:
+            - check: command=cardwire status exits 0 and prints the deterministic report header (CLI dispatch, read-only)
+              id: e2e-cardwire-status
+              exit_status: 0
+              stdout:
+                - contains: 'cardwire status report'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} cardwire status
+                in_container: false
+            - check: command=cardwire list exits 0 with the graceful N/A report on a cardwire-less host (host-independent assertion)
+              id: e2e-cardwire-list-na
+              exit_status: 0
+              stdout:
+                - contains: 'CARDWIRE UNAVAILABLE'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} cardwire list
+                in_container: false
+            - check: command=cardwire config get exits 0 with N/A on a cardwire-less host (missing config file)
+              id: e2e-cardwire-config-na
+              exit_status: 0
+              stdout:
+                - contains: 'N/A (config file'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} cardwire config get experimental_nvidia_block
+                in_container: false
+check-cardwire-local-app:
+    local:
+        description: >-
+            Minimal kind:local template for the check-cardwire-local R10 witness bed - composes the
+            OUT-OF-TREE plugin-cardwire candy (command:cardwire) so the bed exercises the
+            external plugin dispatch host-side: charly fork/execs the plugin binary in CLI mode
+            for command:cardwire (host-built from source, or baked into CHARLY_PLUGIN_DIR).
+            Mirrors check-udev-local (plugin-udev's R10 witness) and check-bpf-local
+            (plugin-bpf's).
+        candy:
+            - '@github.com/opencharly/plugin-cardwire/candy/plugin-cardwire:v2026.243.1202'
 check-gpu-local:
     local:
         from: check-gpu-app
