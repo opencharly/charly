@@ -250,74 +250,12 @@ Markdown table is stable and generated, so parsing is reliable.
 **Why this works:** Pi prompt templates expand on `/name` in the editor. They
 provide structured starting points that enforce the correct format.
 
-**How:**
-
-```
-.pi/prompts/
-  cutover.md         — Start a hard cutover: fetch, branch, worktree, load skills
-  pr-body.md         — Generate a structured PR body with all required sections
-  skill.md           — Load skills matching [triggers] and read the dispatcher
-  rulebook.md        — Quick reference: R0–R10, ADE, RDD, SDD, attribution
-  subagent-review.md — Spawn a fresh-context reviewer sub-agent
-  subagent-verify.md — Spawn a sub-agent to run a bed and report results
-```
-
-**`cutover.md`** (example):
-```markdown
----
-description: Start a hard cutover: fetch, branch, worktree, load skills, plan
-argument-hint: "<slug>"
----
-# Cutover: $1
-
-1. Fetch origin: `git fetch origin --prune --tags`
-2. FF local main: `git merge --ff-only origin main`
-3. Create worktree: `git worktree add .claude/worktrees/$1 -b feat/$1 origin/main`
-4. Initialize submodules: `cd .claude/worktrees/$1 && git submodule update --init`
-5. Build the binary: `cd .claude/worktrees/$1 && task build:binary`
-6. Load skills matching the change using /skill
-7. Plan the cutover: scope, RDD high-risk unknowns, beds
-```
-
-**`pr-body.md`** (example):
-```markdown
----
-description: Generate a structured PR body with How-tested, Rule-compliance, Attribution
----
-## Summary
-
-## How tested
-
-### 1. Fresh binary build (R9)
-
-### 2. Changed path execution
-
-### 3. Git verification
-
-## Project-rulebook rule-compliance
-
-| Rule | Status | Evidence |
-|---|---|---|
-| R0 (skills first) | | |
-| R1 (RCA anomalies) | | |
-| ... | | |
-| R10 (fresh disposable proof) | | |
-
-## Change Classification
-
-- **Change class:**
-- **R10 gate:**
-- **Attribution tier:**
-
-*Assisted-by: Pi <version> model-agnostic (<confidence>)*
-```
-
-**Key design decisions:**
-- Templates are minimal — they provide structure, not content. The agent fills
-  in the details.
-- `subagent-review.md` and `subagent-verify.md` encode the pi-subagents
-  workflow so the agent doesn't need to remember the API.
-- Each template includes the relevant R0 rule (load skills first).
+**How (retired 2026-243):** the in-repo `.pi/prompts/` templates were removed in the
+harness mirror cleanup (matching the umbrella's #61 slim). Structured prompting for
+cutovers, PR bodies, and review/verification is now provided by the corpus agents
+(`charly-internals: pr-validator` / `check-bed-runner` / `root-cause-analyzer`, loaded
+per the R0 dispatcher) and the standing system-prompt + Attribution-tier discipline
+(`AGENTS.md`).
 
 ### Layer 4: Machine-readable skill dispatcher
 

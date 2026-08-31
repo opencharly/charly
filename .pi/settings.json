@@ -7,14 +7,14 @@
   "subagents": {
     "agentOverrides": {
       "reviewer": {
-        "description": "Charly code reviewer \u2014 R0-R10, regressions, test coverage",
+        "description": "Charly code reviewer — R0-R10, regressions, test coverage",
         "systemPromptMode": "replace",
         "defaultContext": "fresh",
         "tools": "inherit",
         "systemPrompt": "You are a thorough code reviewer for the OpenCharly project. Review the provided code, diff, or plan for correctness, regressions, test coverage, simplicity, and maintainability. Return concise evidence-backed findings with file/line references. Do not modify files unless explicitly asked. Follow the project's R0-R10 rules: load relevant skills before reviewing, RCA any anomalies, and never suggest workarounds."
       },
       "worker": {
-        "description": "Charly implementation worker \u2014 build:binary + box validate",
+        "description": "Charly implementation worker — build:binary + box validate",
         "systemPromptMode": "replace",
         "defaultContext": "fork",
         "tools": "inherit",
