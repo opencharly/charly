@@ -208,7 +208,7 @@ func isolateProviderRegistry(t *testing.T) {
 // side (invokeOpCompile) is UNCHANGED: it was always charly-internal registry/dispatch machinery,
 // never an sdk import.
 //
-// Regenerate the golden with `go run ./tools/golden-compile` (from the repo root) whenever the
+// Regenerate the golden with `cd tools/golden-compile && GOWORK=off go run .` whenever the
 // compiler (sdk/deploykit's BuildDeployPlan or its sub-compilers) or one of the three fixture
 // candies (candy/debootstrap-builder, candy/dev-tools, candy/pre-commit) changes in a way that alters its
 // compiled InstallPlan — a stale golden fails this test loudly (a wire-form diff), never silently.
@@ -279,7 +279,7 @@ func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 		}
 		oldView, ok := golden[name]
 		if !ok {
-			t.Fatalf("golden fixture missing candy %q — regenerate with `go run ./tools/golden-compile`", name)
+			t.Fatalf("golden fixture missing candy %q — regenerate with `cd tools/golden-compile && GOWORK=off go run .`", name)
 		}
 
 		// NEW: the SHARED in-proc compiler (compilePlansForRequest), reached via the KEPT OpCompile
@@ -313,7 +313,7 @@ func TestFleetCompileParity_PluginRoundTrip(t *testing.T) {
 		ob, _ := json.Marshal(oldView)
 		nb, _ := json.Marshal(newView)
 		if string(ob) != string(nb) {
-			t.Fatalf("PARITY BREAK on %q (WireView wire form differs from the golden — regenerate with `go run ./tools/golden-compile` if this is an intentional compiler change):\n--- GOLDEN ---\n%s\n--- NEW ---\n%s", name, ob, nb)
+			t.Fatalf("PARITY BREAK on %q (WireView wire form differs from the golden — regenerate with `cd tools/golden-compile && GOWORK=off go run .` if this is an intentional compiler change):\n--- GOLDEN ---\n%s\n--- NEW ---\n%s", name, ob, nb)
 		}
 
 		// (2) PlanFromView fidelity — WireView→PlanFromView is the identity on the re-materialized plan.
@@ -410,7 +410,7 @@ func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPl
 	path := filepath.Join(dir, "charly", "testdata", "fleet_compile_parity_golden.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read golden fixture %s: %v (regenerate with `go run ./tools/golden-compile`)", path, err)
+		t.Fatalf("read golden fixture %s: %v (regenerate with `cd tools/golden-compile && GOWORK=off go run .`)", path, err)
 	}
 	// The generator normalizes repo-root-absolute paths (candy_dir/ctx_path) to a ${REPO_ROOT}
 	// token so the golden is worktree-independent; substitute THIS tree's resolved root back in
@@ -433,13 +433,13 @@ func loadCompileParityGolden(t *testing.T, dir string) map[string]spec.InstallPl
 //
 // Re-baking the golden fixes that until the next upstream release; pinning the tag fixes it for
 // good, because the tag and the golden then move together in ONE commit — which is exactly what
-// `go run ./tools/golden-compile` writes.
+// `cd tools/golden-compile && GOWORK=off go run .` writes.
 func pinnedFixtureTag(t *testing.T, repoRoot, name string) string {
 	t.Helper()
 	path := filepath.Join(repoRoot, "charly", "testdata", "fleet_compile_parity_tags.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read pinned fixture tags: %v — regenerate with `go run ./tools/golden-compile`", err)
+		t.Fatalf("read pinned fixture tags: %v — regenerate with `cd tools/golden-compile && GOWORK=off go run .`", err)
 	}
 	var tags map[string]string
 	if err := json.Unmarshal(data, &tags); err != nil {
@@ -447,7 +447,7 @@ func pinnedFixtureTag(t *testing.T, repoRoot, name string) string {
 	}
 	tag := tags[name]
 	if tag == "" {
-		t.Fatalf("no pinned tag for layer-%s in %s — regenerate with `go run ./tools/golden-compile`", name, path)
+		t.Fatalf("no pinned tag for layer-%s in %s — regenerate with `cd tools/golden-compile && GOWORK=off go run .`", name, path)
 	}
 	return tag
 }

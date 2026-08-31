@@ -26,7 +26,13 @@
 //     sdk/kit.BuilderReverse (see candy/plugin-builder-pixi/plugin.go) — PUBLIC, pure functions
 //     this tool calls directly, no plugin connection needed.
 //
-// REGENERATE with: go run ./tools/golden-compile   (run from the repo root, or pass -repo)
+// REGENERATE with: cd tools/golden-compile && GOWORK=off go run .
+//
+// GOWORK=off and the cd are both REQUIRED, and the plain `go run ./tools/golden-compile` this
+// line used to advertise does not work: this tool is its own module and is deliberately absent
+// from the repo-root go.work, so from the root the go command refuses it ("contained in a module
+// that is not one of the workspace modules"). The tool resolves the repo root two directories up
+// on its own; pass -repo to override.
 // whenever the compiler (sdk/deploykit's BuildDeployPlan or its sub-compilers) or one of the three
 // fixture candies (candy/debootstrap-builder, candy/dev-tools, candy/pre-commit) changes in a way that alters
 // its compiled InstallPlan.
