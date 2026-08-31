@@ -187,6 +187,8 @@ charly:
                         dmidecode: SMBIOS inspection inside guests when debugging VM key-injection
                         openbsd-netcat: remote virt-manager/virt-viewer SPICE console over qemu+ssh (charly eval spice connects directly without it)
                         go-task: provides /usr/bin/task for `task build:binary` and dev workflows from a source checkout
+                        tesseract: OCR engine for the `artifact_contains_text:` check assertion (reads text out of a screenshot); needs a language pack too
+                        tesseract-data-eng: English OCR data for `artifact_contains_text:` — tesseract without a language pack cannot read anything
                 rpm:
                     depends:
                         - glibc
@@ -221,6 +223,8 @@ charly:
                         - gvisor-tap-vsock
                         - xorg-x11-drv-nvidia-cuda
                         - kubernetes-client
+                        - tesseract
+                        - tesseract-langpack-eng
                 deb:
                     depends:
                         - podman
@@ -253,6 +257,8 @@ charly:
                         - gvisor-tap-vsock
                         - nvidia-driver
                         - kubectl
+                        - tesseract-ocr
+                        - tesseract-ocr-eng
                 apk:
                     depends:
                         - podman
@@ -279,6 +285,8 @@ charly:
                         - openssl
                     suggests:
                         - tailscale
+                        - tesseract-ocr
+                        - tesseract-ocr-data-eng
                 ipk:
                     # OpenWrt's repos lack the mandatory charly deps (podman/qemu/
                     # libvirt/…), so the .ipk carries an empty depends list — the
