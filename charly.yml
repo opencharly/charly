@@ -436,7 +436,7 @@ sudo-nopasswd:
 # =============================================================================
 charly-dev:
     candy:
-        version: 2026.238.1243
+        version: 2026.243.0300
         description: |
             The in-development charly toolchain installed from LOCAL SOURCE — the on-PATH
             charly CLI baked from the repo-root `bin/charly` that `task build:binary`
@@ -454,9 +454,9 @@ charly-dev:
             sync step: the candy reads the build output directly. The binary is gitignored,
             so this candy is inherently checkout-bound and has no meaningful remote form.
         candy:
-            - '@github.com/opencharly/pod-virtualization:v2026.237.458'
-            - '@github.com/opencharly/layer-gocryptfs:v2026.237.457'
-            - '@github.com/opencharly/layer-socat:v2026.235.2057'
+            - '@github.com/opencharly/pod-virtualization:v2026.239.1635'
+            - '@github.com/opencharly/layer-gocryptfs:v2026.239.1626'
+            - '@github.com/opencharly/layer-socat:v2026.240.0229'
             # The four DETECTION-builders (pixi/npm/cargo/aur) are EXTERNAL out-of-process
             # plugins; the candy de-submodule cutover (Phase 4) deleted their in-repo dirs, so
             # they must be PINNED here for the connect path's pass-1 (the project's own candy
@@ -3373,7 +3373,7 @@ check-preflight-local:
 # =============================================================================
 docs-site-app:
     candy:
-        version: 2026.215.1207
+        version: 2026.243.0300
         base: quay.io/fedora/fedora:43
         description: |-
             The documentation-site box: a minimal Fedora base composing the docs-site candy,
@@ -3392,7 +3392,7 @@ docs-site-app:
             - fedora:43
             - fedora
         candy:
-            - '@github.com/opencharly/layer-docs-site:v2026.237.456'
+            - '@github.com/opencharly/layer-docs-site:v2026.243.0408'
 check-docs:
     pod:
         image: docs-site-app
@@ -3515,7 +3515,7 @@ check-marketplace:
 # =============================================================================
 dsh-app:
     candy:
-        version: 2026.226.1600
+        version: 2026.243.0300
         base: quay.io/fedora/fedora:43
         description: |-
             The deepseek-harness box: a minimal Fedora base composing the nodejs and
@@ -3540,8 +3540,8 @@ dsh-app:
         builder:
             npm: fedora.fedora-builder
         candy:
-            - '@github.com/opencharly/layer-nodejs:v2026.235.2056'
-            - '@github.com/opencharly/pod-dsh:v2026.237.558'
+            - '@github.com/opencharly/layer-nodejs:v2026.239.1624'
+            - '@github.com/opencharly/pod-dsh:v2026.243.0410'
 check-dsh-pod:
     pod:
         image: dsh-app
@@ -3637,7 +3637,7 @@ check-dsh-pod:
 # =============================================================================
 agentteams:
     candy:
-        version: 2026.223.1500
+        version: 2026.243.0300
         base: cachyos.cachyos
         description: |-
             The AgentTeams top box: a cachyos base composing the agentteams top
@@ -3656,11 +3656,11 @@ agentteams:
             and reach the controller — and every in-container service — by the
             controller container's DNS name.
         candy:
-            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
+            - '@github.com/opencharly/layer-supervisord:v2026.240.0121'
             - '@github.com/opencharly/layer-agentteams:v2026.240.0118'
 agentteams-manager:
     candy:
-        version: 2026.224.0600
+        version: 2026.243.0300
         base: cachyos.cachyos
         tag: manager
         description: |-
@@ -3685,11 +3685,11 @@ agentteams-manager:
             - -c
             - /etc/supervisord.conf
         candy:
-            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
+            - '@github.com/opencharly/layer-supervisord:v2026.240.0121'
             - '@github.com/opencharly/pod-agentteams-manager:v2026.239.1603'
 agentteams-worker:
     candy:
-        version: 2026.224.0600
+        version: 2026.243.0300
         base: cachyos.cachyos
         tag: worker
         description: |-
@@ -3714,7 +3714,7 @@ agentteams-worker:
             - -c
             - /etc/supervisord.conf
         candy:
-            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
+            - '@github.com/opencharly/layer-supervisord:v2026.240.0121'
             - '@github.com/opencharly/pod-agentteams-worker:v2026.239.1600'
 check-agentteams-pod:
     pod:
@@ -4202,7 +4202,7 @@ check-retention-app:
 # =============================================================================
 check-boxload-app:
     candy:
-        version: 2026.229.1100
+        version: 2026.243.0300
         base: quay.io/fedora/fedora:43
         description: |-
             Fixture box for the `charly box load` bed: a minimal Fedora base composing
@@ -4214,8 +4214,8 @@ check-boxload-app:
             - fedora:43
             - fedora
         candy:
-            - '@github.com/opencharly/layer-supervisord:v2026.239.1300'
-            - '@github.com/opencharly/pod-nested-podman-socket:v2026.239.1601'
+            - '@github.com/opencharly/layer-supervisord:v2026.240.0121'
+            - '@github.com/opencharly/pod-nested-podman-socket:v2026.243.0411'
 check-boxload-pod:
     pod:
         image: check-boxload-app
