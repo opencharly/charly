@@ -112,13 +112,19 @@ func fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
-// resolveRepoRoot walks up from dir looking for the marker `candy/` directory (the repo root owns
-// it; this tool's own directory tree does not) — the same disambiguator
-// charly/fleet_compile_parity_test.go's compilerTestProjectDir uses.
+// resolveRepoRoot walks up from dir looking for `go.work`, which marks the repo root — the same
+// disambiguator charly/fleet_compile_parity_test.go's compilerTestProjectDir uses.
+//
+// go.work REPLACED `candy/` as the marker: the candy de-submodule cutover emptied and removed
+// that directory, so a walk looking for it finds nothing. The test was migrated at the time;
+// this tool was not, and its comment went on claiming parity with the test that it no longer
+// had. The consequence was worse than a stale comment — the tool became UNRUNNABLE
+// (`repo root (a directory containing candy/) not found`), so when the golden drifted the
+// remedy the failing test prints could not be carried out.
 func resolveRepoRoot(dir string) (string, error) {
 	d := dir
 	for range 6 {
-		if info, err := os.Stat(filepath.Join(d, "candy")); err == nil && info.IsDir() {
+		if info, err := os.Stat(filepath.Join(d, "go.work")); err == nil && !info.IsDir() {
 			return d, nil
 		}
 		parent := filepath.Dir(d)
@@ -127,7 +133,7 @@ func resolveRepoRoot(dir string) (string, error) {
 		}
 		d = parent
 	}
-	return "", fmt.Errorf("repo root (a directory containing candy/) not found walking up from %s", dir)
+	return "", fmt.Errorf("repo root (a directory containing go.work) not found walking up from %s", dir)
 }
 
 // computeGolden builds the fedora/rpm parity image + resolves the fixture candies, computes each
