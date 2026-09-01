@@ -1,6 +1,15 @@
 # Build the CalVer-stamped `charly` binary + the 9 welded command plugins for
 # amd64 AND arm64 and attach them to the GitHub release on a v<CalVer> tag push.
 #
+# The tag-on-merge workflow creates release tags via the REST API
+# (git.createRef), which does NOT emit a push event — so `push: tags` alone
+# never fires for merged PRs and the release binary silently lags main's schema
+# (the 2026.244 release-lag RCA). The `push: branches: [main]` trigger closes
+# that gap: every main push builds the binaries, and the upload step fires when
+# the pushed HEAD carries a v* tag whose release does not exist yet. The binary
+# is stamped with the TAG's CalVer (not the commit date) so the distro repos'
+# `charly version` == packaged-version assertion holds.
+#
 # This is the BINARY source the per-distro package repos consume: each distro
 # workflow (opencharly/charly-{alpine,arch,fedora,ubuntu,debian,openwrt})
 # downloads `charly-linux-<arch>` + `charly-plugins-linux-<arch>.tar.gz` +
@@ -33,6 +42,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -46,12 +57,20 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Compute the CalVer (release tag on a tag push, else the HEAD commit)
+      - name: Compute the CalVer (release tag on a tag push, the HEAD's v* tag on a main push, else the HEAD commit)
         run: |
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             echo "CALVER=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           else
-            echo "CALVER=$(bash scripts/calver.sh)" >> "$GITHUB_ENV"
+            # A main push whose HEAD carries a v* tag (created by tag-on-merge via the
+            # API) must stamp the TAG's CalVer — the commit date can be tag+1min and
+            # the distro repos assert `charly version` == the packaged version.
+            TAG=$(git tag --points-at HEAD | grep -E '^v' | sort -V | tail -1 || true)
+            if [[ -n "$TAG" ]]; then
+              echo "CALVER=${TAG#v}" >> "$GITHUB_ENV"
+            else
+              echo "CALVER=$(bash scripts/calver.sh)" >> "$GITHUB_ENV"
+            fi
           fi
       - name: Build amd64 charly (native)
         run: |
@@ -98,9 +117,21 @@ jobs:
           # -ldflags "-X main.BuildCalVer=…" build setting is recorded in the
           # binary's module build info and read back by `go version -m`.
           go version -m bin/charly-linux-arm64 | grep -q "main.BuildCalVer=${CALVER}"
-      - if: startsWith(github.ref, 'refs/tags/v')
+      - name: Resolve the release tag to upload (tag push, or a main push whose HEAD carries a v* tag without a release)
+        id: release-tag
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            TAG=$(git tag --points-at HEAD | grep -E '^v' | sort -V | tail -1 || true)
+            if [[ -n "$TAG" ]] && ! gh release view "$TAG" >/dev/null 2>&1; then
+              echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - if: steps.release-tag.outputs.tag != ''
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ steps.release-tag.outputs.tag }}
           files: |
             bin/charly-linux-amd64
             bin/charly-linux-arm64
