@@ -69,21 +69,32 @@ jobs:
             echo "CALVER=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           elif [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
             # tag-on-merge created tags via the API (no push event — auto-merge squash
-            # merges fire ZERO workflow runs, so push triggers never see them). Build the
-            # newest v* tag; the binary must report the TAG's CalVer (the distro repos
-            # assert `charly version` == the packaged version).
-            RELEASE_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1)
-            echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-            echo "CALVER=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-            git checkout "$RELEASE_TAG"
+            # merges fire ZERO workflow runs). Build the NEWEST v* tag WITHOUT a release
+            # (a newer released tag — e.g. a manual release — must not shadow the
+            # unreleased tag-on-merge tags).
+            for TAG in $(git tag -l 'v*' --sort=-v:refname); do
+              if ! gh release view "$TAG" >/dev/null 2>&1; then
+                RELEASE_TAG="$TAG"
+                echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
+                echo "CALVER=${TAG#v}" >> "$GITHUB_ENV"
+                git checkout "$TAG"
+                break
+              fi
+            done
+            if [[ -z "$RELEASE_TAG" ]]; then
+              echo "No unreleased v* tag — skipping."
+              echo "SKIP=true" >> "$GITHUB_ENV"
+            fi
           else
             echo "RELEASE_TAG=" >> "$GITHUB_ENV"
             echo "CALVER=$(bash scripts/calver.sh)" >> "$GITHUB_ENV"
           fi
       - name: Build amd64 charly (native)
+        if: env.SKIP != 'true'
         run: |
           cd charly && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-amd64 .
       - name: Build the 9 welded plugins for amd64 + .providers
+        if: env.SKIP != 'true'
         run: |
           mkdir -p bin/plugins .plugin-src
           while read -r spec; do case "$spec" in ''|\#*) continue;; esac
@@ -99,9 +110,11 @@ jobs:
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-amd64.tar.gz -C bin/plugins .
       - name: Build arm64 charly (cross-compile)
+        if: env.SKIP != 'true'
         run: |
           cd charly && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-arm64 .
       - name: Build the 9 welded plugins for arm64 (copy amd64 .providers)
+        if: env.SKIP != 'true'
         run: |
           mkdir -p bin/plugins-arm64
           while read -r spec; do case "$spec" in ''|\#*) continue;; esac
@@ -115,8 +128,10 @@ jobs:
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-arm64.tar.gz -C bin/plugins-arm64 .
       - name: Stage the charly candy's charly.yml (the packaging source)
+        if: env.SKIP != 'true'
         run: cp packaging/charly.yml charly-candy-charly.yml
       - name: Verify the built binaries report the CalVer
+        if: env.SKIP != 'true'
         run: |
           test "$(./bin/charly-linux-amd64 version)" = "$CALVER"
           # The arm64 binary is an aarch64 ELF and CANNOT execute on the amd64
@@ -125,13 +140,7 @@ jobs:
           # -ldflags "-X main.BuildCalVer=…" build setting is recorded in the
           # binary's module build info and read back by `go version -m`.
           go version -m bin/charly-linux-arm64 | grep -q "main.BuildCalVer=${CALVER}"
-      - name: Skip the upload when the release already exists (idempotent — tag-on-merge fires on every validator completion)
-        run: |
-          if [[ -n "$RELEASE_TAG" ]] && gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Release $RELEASE_TAG already exists — skipping upload."
-            echo "SKIP_UPLOAD=true" >> "$GITHUB_ENV"
-          fi
-      - if: env.RELEASE_TAG != '' && env.SKIP_UPLOAD != 'true'
+      - if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
