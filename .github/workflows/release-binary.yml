@@ -1,6 +1,16 @@
 # Build the CalVer-stamped `charly` binary + the 9 welded command plugins for
 # amd64 AND arm64 and attach them to the GitHub release on a v<CalVer> tag push.
 #
+# tag-on-merge creates release tags via the REST API (git.createRef), which does
+# NOT emit a push event — and auto-merge squash merges (actor app/github-actions)
+# fire ZERO workflow runs at all — so `push: tags` / `push: branches` alone never
+# fire for merged PRs and the release binary silently lags main's schema (the
+# 2026.244 release-lag RCA). This workflow chains off tag-on-merge completion
+# (workflow_run — the ONE trigger whose event delivery is proven): it builds the
+# newest v* tag and uploads when that tag's release does not exist yet. The binary
+# is stamped with the TAG's CalVer so the distro repos' `charly version` ==
+# packaged-version assertion holds.
+#
 # This is the BINARY source the per-distro package repos consume: each distro
 # workflow (opencharly/charly-{alpine,arch,fedora,ubuntu,debian,openwrt})
 # downloads `charly-linux-<arch>` + `charly-plugins-linux-<arch>.tar.gz` +
@@ -33,6 +43,12 @@ on:
   push:
     tags:
       - 'v*'
+  # tag-on-merge is the ONE reliable post-merge trigger: auto-merge squash merges
+  # fire zero workflow runs, and API-created tags emit no push event. Chaining off
+  # its completion means every merged PR's tag gets its release build.
+  workflow_run:
+    workflows: ["tag-on-merge"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -46,17 +62,39 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Compute the CalVer (release tag on a tag push, else the HEAD commit)
+      - name: Resolve the release tag + CalVer (tag push, tag-on-merge completion, or manual dispatch)
         run: |
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "RELEASE_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
             echo "CALVER=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            # tag-on-merge created tags via the API (no push event — auto-merge squash
+            # merges fire ZERO workflow runs). Build the NEWEST v* tag WITHOUT a release
+            # (a newer released tag — e.g. a manual release — must not shadow the
+            # unreleased tag-on-merge tags).
+            for TAG in $(git tag -l 'v*' --sort=-v:refname); do
+              if ! gh release view "$TAG" >/dev/null 2>&1; then
+                RELEASE_TAG="$TAG"
+                echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
+                echo "CALVER=${TAG#v}" >> "$GITHUB_ENV"
+                git checkout "$TAG"
+                break
+              fi
+            done
+            if [[ -z "$RELEASE_TAG" ]]; then
+              echo "No unreleased v* tag — skipping."
+              echo "SKIP=true" >> "$GITHUB_ENV"
+            fi
           else
+            echo "RELEASE_TAG=" >> "$GITHUB_ENV"
             echo "CALVER=$(bash scripts/calver.sh)" >> "$GITHUB_ENV"
           fi
       - name: Build amd64 charly (native)
+        if: env.SKIP != 'true'
         run: |
           cd charly && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-amd64 .
       - name: Build the 9 welded plugins for amd64 + .providers
+        if: env.SKIP != 'true'
         run: |
           mkdir -p bin/plugins .plugin-src
           while read -r spec; do case "$spec" in ''|\#*) continue;; esac
@@ -72,9 +110,11 @@ jobs:
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-amd64.tar.gz -C bin/plugins .
       - name: Build arm64 charly (cross-compile)
+        if: env.SKIP != 'true'
         run: |
           cd charly && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-arm64 .
       - name: Build the 9 welded plugins for arm64 (copy amd64 .providers)
+        if: env.SKIP != 'true'
         run: |
           mkdir -p bin/plugins-arm64
           while read -r spec; do case "$spec" in ''|\#*) continue;; esac
@@ -88,8 +128,10 @@ jobs:
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-arm64.tar.gz -C bin/plugins-arm64 .
       - name: Stage the charly candy's charly.yml (the packaging source)
+        if: env.SKIP != 'true'
         run: cp packaging/charly.yml charly-candy-charly.yml
       - name: Verify the built binaries report the CalVer
+        if: env.SKIP != 'true'
         run: |
           test "$(./bin/charly-linux-amd64 version)" = "$CALVER"
           # The arm64 binary is an aarch64 ELF and CANNOT execute on the amd64
@@ -98,9 +140,10 @@ jobs:
           # -ldflags "-X main.BuildCalVer=…" build setting is recorded in the
           # binary's module build info and read back by `go version -m`.
           go version -m bin/charly-linux-arm64 | grep -q "main.BuildCalVer=${CALVER}"
-      - if: startsWith(github.ref, 'refs/tags/v')
+      - if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: |
             bin/charly-linux-amd64
             bin/charly-linux-arm64
