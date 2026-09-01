@@ -74,6 +74,7 @@ jobs:
             # unreleased tag-on-merge tags).
             for TAG in $(git tag -l 'v*' --sort=-v:refname); do
               if ! gh release view "$TAG" >/dev/null 2>&1; then
+                RELEASE_TAG="$TAG"
                 echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
                 echo "CALVER=${TAG#v}" >> "$GITHUB_ENV"
                 git checkout "$TAG"
