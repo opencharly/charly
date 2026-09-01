@@ -20,7 +20,7 @@ require (
 	github.com/opencharly/plugin-check/candy/plugin-check v0.2026243.542
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026237.1417
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026237.1417
-	github.com/opencharly/plugin-command/candy/plugin-command v0.2026237.1417
+	github.com/opencharly/plugin-command/candy/plugin-command v0.2026244.617
 	github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026242.1131
 	github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418
 	github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419
