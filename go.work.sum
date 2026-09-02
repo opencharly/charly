@@ -214,12 +214,12 @@ github.com/nlpodyssey/gopickle v0.3.0 h1:BLUE5gxFLyyNOPzlXxt6GoHEMMxD0qhsE4p0CIQ
 github.com/nlpodyssey/gopickle v0.3.0/go.mod h1:f070HJ/yR+eLi5WmM1OXJEGaTpuJEUiib19olXgYha0=
 github.com/olekukonko/tablewriter v0.0.5 h1:P2Ga83D34wi1o9J6Wh1mRuqd4mF/x/lgBS7N7AbDhec=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026243.1627 h1:vJX1sSjlHZgErfk9uxPURb6VREamRAYJt0YemuEQlmA=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026243.1627/go.mod h1:LFmW4Z6Jm/ejfRjqhQc3pFjBTNv7tAztQI5tkJUYEPY=
 github.com/opencharly/sdk v0.2026239.1643 h1:/0z0zcykUZMEOJS189RQlFoajnCS5gfsTDcUPfBC/kU=
 github.com/opencharly/sdk v0.2026239.1643/go.mod h1:BSl+KMnWVAeW4FpGwVXLz53SyBbUAjiqNoeLxfwocA4=
 github.com/opencharly/spec v0.2026232.521-0.20260826041346-cb64f9476eba h1:RNefIPey50MgotDXF04rK4jrtZe2gu54+fk651fphn4=
 github.com/opencharly/spec v0.2026232.521-0.20260826041346-cb64f9476eba/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
+github.com/opencharly/spec v0.2026245.1517 h1:AyAu3bPY7xqiZ3ZU/elv01lPRC236Hdmpd82UGTZDDU=
+github.com/opencharly/spec v0.2026245.1517/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/pb33f/ordered-map/v2 v2.3.1/go.mod h1:qxFQgd0PkVUtOMCkTapqotNgzRhMPL7VvaHKbd1HnmQ=
 github.com/pdevine/tensor v0.0.0-20240510204454-f88f4562727c h1:GwiUUjKefgvSNmv3NCvI/BL0kDebW6Xa+kcdpdc1mTY=
 github.com/pdevine/tensor v0.0.0-20240510204454-f88f4562727c/go.mod h1:PSojXDXF7TbgQiD6kkd98IHOS0QqTyUEaWRiS8+BLu8=
