@@ -2601,9 +2601,20 @@ default:
                     method: notify
                     text: "charly-dbus-notify-marker"
                   exit_status: 0
+                - check: a terminal recording is started for the desktop flow
+                  record:
+                    method: start
+                    record_name: desktop-flow
+                    record_mode: terminal
+                - check: a flow command runs inside the recording
+                  record:
+                    method: cmd
+                    record_name: desktop-flow
+                    text: "echo 'desktop-flow-marker' && uname -a"
                 - check: a terminal recording is captured with at least the predetermined number of events
                   record:
                     method: stop
+                    record_name: desktop-flow
                     artifact: /tmp/session.cast
                     artifact_min_bytes: 200
                     artifact_min_cast_events: 5
