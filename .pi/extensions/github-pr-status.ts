@@ -116,6 +116,28 @@ async function latestVerdict(repo: string, number: number): Promise<string> {
   }
 }
 
+/** Interpret GitHub's mergeStateStatus into actionable guidance. */
+function mergeableInterpretation(state: string): string {
+  switch (state) {
+    case "BEHIND":
+      return "branch is BEHIND base — update it (gh pr update-branch, or merge origin/main + push) before the validator can pass / the PR can merge";
+    case "BLOCKED":
+      return "merge blocked by required checks — the validator or CI must pass first";
+    case "DIRTY":
+      return "merge conflict — resolve conflicts with the base branch";
+    case "DRAFT":
+      return "draft PR — not mergeable until marked ready";
+    case "UNSTABLE":
+      return "mergeable but required checks are not all passing";
+    case "CLEAN":
+      return "mergeable — up to date with base and checks pass";
+    case "HAS_HOOKS":
+      return "mergeable (merge hooks apply)";
+    default:
+      return "";
+  }
+}
+
 function formatCheck(pr: PRInfo, run: any, verdict: string, failing: string): string {
   const lines = [
     `repo:        ${pr.repo}`,
@@ -125,6 +147,10 @@ function formatCheck(pr: PRInfo, run: any, verdict: string, failing: string): st
     `mergeable:   ${pr.mergeableState}`,
     `verdict:     ${verdict}`,
   ];
+  const mi = mergeableInterpretation(pr.mergeableState);
+  if (mi) {
+    lines.push(`needs update: ${pr.mergeableState === "BEHIND" ? "YES" : "no"} — ${mi}`);
+  }
   if (run) {
     lines.push(`validator run: ${run.databaseId} @ ${run.headSha?.slice?.(0, 10)}`);
     lines.push(`run status:   ${run.status}`);
@@ -148,14 +174,16 @@ export default function (pi: ExtensionAPI) {
     label: "GitHub PR + Validation Status",
     description:
       "Check the status of a GitHub pull request and its org-wide `charly/pr-validator` run. " +
-      "Use `mode: check` for a one-shot status (PR state, head SHA, mergeable state, the latest " +
+      "Use `mode: check` for a one-shot status (PR state, head SHA, mergeable state with an actionable " +
+      "interpretation — including a `needs update: YES` flag when the branch is BEHIND base — the latest " +
       "validator run ON THE CURRENT HEAD, its conclusion, the failing step, and the latest PASS/BLOCK " +
       "verdict). Use `mode: watch` to poll until the validator concludes on the current head (or the " +
       "PR merges/closes, or a timeout elapses) and return the full matrix — run `watch` inside a " +
       "background subagent so its completion wakes the main agent with the real result.",
-    promptSnippet: "Check a GitHub PR's state and its charly/pr-validator verdict",
+    promptSnippet: "Check a GitHub PR's state, mergeability, and its charly/pr-validator verdict",
     promptGuidelines: [
       "Use gh_pr_status check after opening or fixing a PR to verify the validator verdict and the failing step — the GitHub Actions validator does NOT wake the agent, so check explicitly.",
+      "A 'needs update: YES' line means the branch is BEHIND base — update it (gh pr update-branch, or merge origin/main + push) before the validator can pass / the PR can merge; a BEHIND PR with a PASS verdict still cannot merge until the branch is caught up.",
       "Use gh_pr_status watch in a background subagent when you need to wait for a validator conclusion — its completion is the wake.",
       "A 'Gate (BLOCK)' failing step means the pr-validator BLOCKED the PR — read the latest review comment and fix every finding before re-pushing.",
       "A 'Wait for the go gate' failing step means the validator never reviewed the head (CI wait timeout) — check the ci.yml 'go' check on the head; a gofmt failure there blocks the review.",
