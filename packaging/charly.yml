@@ -175,6 +175,15 @@ charly:
                         - gnupg
                         - pinentry
                         - openssl
+                        # record: gif — the asciinema candy's agg gif generator needs a
+                        # monospace font to render, and record: start's post-start
+                        # verification needs pgrep (procps-ng). agg itself is NOT in the
+                        # Arch repos (AUR-only: asciinema-agg), so the Rust toolchain is a
+                        # hard dep to build it from source when the prebuilt download is
+                        # unavailable.
+                        - ttf-dejavu
+                        - procps-ng
+                        - rust
                     optdepends:
                         tailscale: deploy-time tunnels (the tailscale-up candy installs it when a deploy opts in)
                         docker: alternative container engine — only needed for engine.run=docker (podman is the default)
@@ -216,6 +225,14 @@ charly:
                         - gnupg2
                         - pinentry
                         - openssl
+                        # record: gif — the asciinema candy's agg gif generator needs a
+                        # monospace font to render, and record: start's post-start
+                        # verification needs pgrep (procps-ng). agg itself is NOT in the
+                        # Fedora repos, so the Rust toolchain is a hard dep to build it
+                        # from source when the prebuilt download is unavailable.
+                        - dejavu-sans-mono-fonts
+                        - procps-ng
+                        - rust
                     suggests:
                         - tailscale
                         - docker
@@ -251,6 +268,16 @@ charly:
                         - gnupg
                         - pinentry-curses
                         - openssl
+                        # record: gif — the asciinema candy's agg gif generator needs a
+                        # monospace font to render, and record: start's post-start
+                        # verification needs pgrep (procps). agg itself is NOT in the
+                        # Debian repos, so the Rust toolchain (rustc + cargo) is a hard
+                        # dep to build it from source when the prebuilt download is
+                        # unavailable.
+                        - fonts-dejavu-core
+                        - procps
+                        - rustc
+                        - cargo
                     suggests:
                         - docker.io
                         - cloudflared
@@ -283,6 +310,16 @@ charly:
                         - gnupg
                         - pinentry
                         - openssl
+                        # record: gif — the asciinema candy's agg gif generator needs a
+                        # monospace font to render, and record: start's post-start
+                        # verification needs pgrep (procps-ng). agg itself is NOT in the
+                        # Alpine repos, so the Rust toolchain (rust + cargo) is a hard
+                        # dep to build it from source when the prebuilt download is
+                        # unavailable.
+                        - ttf-dejavu
+                        - procps-ng
+                        - rust
+                        - cargo
                     suggests:
                         - tailscale
                         - tesseract-ocr
