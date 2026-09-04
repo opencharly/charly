@@ -27,6 +27,9 @@ var gitClientInstance *refs.GitClient
 func gitClient() *refs.GitClient {
 	gitClientOnce.Do(func() {
 		gitClientInstance = refs.NewGitClient("")
+		if noGitCache { // the --no-git-cache bypass: every lookup serves fresh
+			gitClientInstance.BypassCache()
+		}
 	})
 	return gitClientInstance
 }
