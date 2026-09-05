@@ -140,3 +140,5 @@ require (
 )
 
 // DEV-ONLY local replaces (nested-capture Cutover A proof build; NOT to be committed)
+
+replace github.com/opencharly/sdk => /home/atrawog/Sync/Atrapub/coder/pi/opencharly/sdk
