@@ -29,9 +29,7 @@ type CLI struct {
 	// Commands marked LocalOnly (settings, version, ssh tunnel) are
 	// not re-execed — they always run on the local machine. See
 	// charly/host_exec.go for the exec dispatch.
-	Host       string `name:"host" env:"CHARLY_HOST" help:"Remote host (alias or user@host[:port]) to run this command on via SSH"`
-	NoGitCache bool   `name:"no-git-cache" help:"Bypass the git-ref cache — every resolution is fresh"`
-
+	Host             string   `name:"host" env:"CHARLY_HOST" help:"Remote host (alias or user@host[:port]) to run this command on via SSH"`
 	HostIdentityFile string   `name:"host-identity-file" env:"CHARLY_HOST_IDENTITY_FILE" help:"SSH identity file for --host" type:"path"`
 	HostOption       []string `name:"host-option" env:"CHARLY_HOST_OPTION" help:"OpenSSH option for --host (repeatable, KEY=VALUE)"`
 
@@ -134,7 +132,6 @@ type CLI struct {
 	// deliberate value/risk EXCEPTION — NOT unfixable: RDD 2026-07-01 proved externalizing is feasible
 	// but zero-value + highest-blast-radius, weakening R9's canonical identity command; operator-decided
 	// to keep core. See the NOTE above the __* internals.)
-	Cache   CacheCmd   `cmd:"" help:"Inspect or drop the git-ref cache"`
 	Version VersionCmd `cmd:"" help:"Print computed CalVer tag"`
 }
 
@@ -197,7 +194,6 @@ func main() {
 	cli.Box.Plugins = nestedCmds["box"]
 	cmdPlugins = append(cmdPlugins, topCmds...)
 	cli.Plugins = cmdPlugins
-	noGitCache = cli.NoGitCache
 	ctx := kong.Parse(&cli,
 		kong.Name("charly"),
 		kong.Description("OpenCharly — the open infrastructure compiler for you and your agents"),

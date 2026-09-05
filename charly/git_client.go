@@ -26,10 +26,10 @@ var gitClientInstance *refs.GitClient
 // shared by every host seam that resolves a remote ref.
 func gitClient() *refs.GitClient {
 	gitClientOnce.Do(func() {
+		// The singleton honors the PERSISTED bypass (refs.GitClient.SetBypass — the
+		// `charly cache bypass` operator surface, owned by the plugin-cache command
+		// candy): NewGitClient reads the cache: git: bypass flag at construction.
 		gitClientInstance = refs.NewGitClient("")
-		if noGitCache { // the --no-git-cache bypass: every lookup serves fresh
-			gitClientInstance.BypassCache()
-		}
 	})
 	return gitClientInstance
 }

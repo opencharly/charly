@@ -76,6 +76,7 @@ compiled_plugins:
     - plugin-loader
     - plugin-refs
     - plugin-candy
+    - plugin-cache
     - plugin-doctor
     - plugin-feature
     - plugin-vm
