@@ -138,10 +138,3 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 )
 
-// TEMP-LOCAL-DEV (removed for the vendor PR): resolve the compiled-in check plugin
-// from the local checkout carrying the update_gate bed-runner (plugin-check #20).
-replace github.com/opencharly/plugin-check/candy/plugin-check => /home/atrawog/Sync/Atrapub/coder/pi/opencharly/plugin-check/candy/plugin-check
-
-replace github.com/opencharly/sdk => /home/atrawog/Sync/Atrapub/coder/pi/opencharly/sdk
-
-replace github.com/opencharly/spec => /home/atrawog/Sync/Atrapub/coder/pi/opencharly/spec
