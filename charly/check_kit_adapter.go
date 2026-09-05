@@ -36,10 +36,29 @@ func (c hostCheckContext) DialTimeout() time.Duration { return c.h.cc.DialTimeou
 func (c hostCheckContext) HTTPDo(ctx context.Context, req spec.CheckHTTPRequest) (spec.CheckHTTPResponse, error) {
 	return http.DoHTTPRequest(ctx, c.h.cc.HTTPClient(), req)
 }
-func (c hostCheckContext) Box() string             { return c.h.cc.Box() }
-func (c hostCheckContext) Instance() string        { return c.h.cc.Instance() }
-func (c hostCheckContext) Distros() []string       { return c.h.cc.Distros() }
-func (c hostCheckContext) AddBackground(pid int)   { c.h.cc.AddBg(pid) }
+func (c hostCheckContext) Box() string           { return c.h.cc.Box() }
+func (c hostCheckContext) Instance() string      { return c.h.cc.Instance() }
+func (c hostCheckContext) Distros() []string     { return c.h.cc.Distros() }
+func (c hostCheckContext) AddBackground(pid int) { c.h.cc.AddBg(pid) }
+
+// InvokeProvider dispatches a provider invocation in-proc through the SAME registry
+// the out-of-process reverse server uses (providerRegistry.resolve + Provider.Invoke) -
+// the in-proc half of the one-dial contract (spec#97): session/service verbs reach the
+// runner registry without a second broker dial.
+func (c hostCheckContext) InvokeProvider(ctx context.Context, class, word, op string, paramsJSON, env []byte) ([]byte, error) {
+	prov, ok := providerRegistry.resolve(ProviderClass(class), word)
+	if !ok {
+		return nil, fmt.Errorf("check context: no provider for %s:%s", class, word)
+	}
+	res, err := prov.Invoke(ctx, &Operation{Reserved: word, Op: op, Params: paramsJSON, Env: env})
+	if err != nil {
+		return nil, fmt.Errorf("check context: invoke %s:%s: %w", class, word, err)
+	}
+	if res == nil {
+		return nil, fmt.Errorf("check context: invoke %s:%s returned no result", class, word)
+	}
+	return res.JSON, nil
+}
 func (c hostCheckContext) Mode() spec.CheckRunMode { return c.h.cc.Mode() }
 
 // kitVerbAdapter wraps a COMPILED-IN host-coupled verb candy's checkstep.CheckVerbProvider
