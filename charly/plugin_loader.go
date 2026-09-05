@@ -907,6 +907,24 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 				refWords = append(refWords, v)
 			}
 		}
+		// Also surface each INSTRUMENT's capture verb (Cutover A): an instrument entry's
+		// desugared `plugin:` word (e.g. `spice` for a `spice: {method: session}` screen
+		// capture) is NOT in the plan — it is a separate deploy-node field — so without this
+		// the loader never build-connects the out-of-process plugin candy serving it, and the
+		// instrument live-start fails with "no provider registered for plugin verb spice"
+		// (the baked search path is empty under CHARLY_PLUGIN_ONLY=1). Same over-load-safe
+		// rule: a compiled-in verb's candy is already registered.
+		for i := range n.Instrument {
+			if w := n.Instrument[i].Plugin; w != "" {
+				refWords = append(refWords, w)
+				// The serving plugin candy is OUT-OF-PROCESS (not in the image closure, not in
+				// add_candy) — inject its canonical ref so the scan finds it, the same
+				// host-side-plugin pattern as vmPluginCandyRef for verb:libvirt. The capture
+				// verbs (spice/record/wl/vnc/cdp/adb/appium) all follow the
+				// plugin-<word> repo convention.
+				addCandy = append(addCandy, "@github.com/opencharly/plugin-"+w+"/candy/plugin-"+w)
+			}
+		}
 		for _, ck := range fleet.SortedNestedKeys(n.Children) {
 			visit(n.Children[ck])
 		}
