@@ -284,10 +284,10 @@ func TestCharlyDevCandyDeclared(t *testing.T) {
 // resolution; this test is what makes deleting it safe.
 func TestInlineCandySourceDirIsProjectRoot(t *testing.T) {
 	root := t.TempDir()
-	manifest := "version: 2026.240.1943\n" +
+	manifest := "version: 2026.248.1030\n" +
 		"inline-copy-candy:\n" +
 		"    candy:\n" +
-		"        version: 2026.240.1943\n" +
+		"        version: 2026.248.1030\n" +
 		"        description: |-\n" +
 		"            Inline candy carrying a relative copy: path, the charly-dev shape.\n" +
 		"        plan:\n" +

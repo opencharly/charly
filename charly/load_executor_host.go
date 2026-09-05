@@ -28,6 +28,16 @@ type hostLoaderExecutor struct{}
 // between seam construction and the post-walk validators.
 func (hostLoaderExecutor) LoaderThreaded() spec.Threaded { return loaderThreaded() }
 
+// InKindConnectPass reports whether the current load is running inside the walk's
+// connect-declared-kind pre-pass (connectDeclaredKindPlugins → LoadConfig, inKindConnectPass=true).
+// It satisfies the sdk's OPTIONAL connectPassAwareExecutor capability: loaderkit's
+// LoadSeamsFromExecutor bypasses the materialized-tree cache for the connect pass's transient,
+// deferred-entity materialization (R1 — the external-kind decode regression: caching the nested
+// load's deferred tree under the outer load's key handed the outer load a tree with the kind
+// entities missing). An out-of-process plugin executor has no connect pass and does not implement
+// it — the cache stays active for plugin loads.
+func (hostLoaderExecutor) InKindConnectPass() bool { return inKindConnectPass() }
+
 // RunBootstrapPhase invokes every registered bootstrap-phase plugin on the raw root bytes. The
 // direct in-process call has no failure mode of its own (runBootstrapPhase already tolerates every
 // per-provider error internally) — the error return exists to match the LoaderExecutor interface's
