@@ -214,6 +214,8 @@ github.com/nlpodyssey/gopickle v0.3.0 h1:BLUE5gxFLyyNOPzlXxt6GoHEMMxD0qhsE4p0CIQ
 github.com/nlpodyssey/gopickle v0.3.0/go.mod h1:f070HJ/yR+eLi5WmM1OXJEGaTpuJEUiib19olXgYha0=
 github.com/olekukonko/tablewriter v0.0.5 h1:P2Ga83D34wi1o9J6Wh1mRuqd4mF/x/lgBS7N7AbDhec=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026247.2306 h1:qe/D0re5jCMHtUZsZqnOQhY3k+MvK0CB24HGA2XQ9GU=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026247.2306/go.mod h1:e250P2sgdTuYDrEw6ZvREIeY5Sm5rCGSzEXBjeEt8lw=
 github.com/opencharly/sdk v0.2026239.1643 h1:/0z0zcykUZMEOJS189RQlFoajnCS5gfsTDcUPfBC/kU=
 github.com/opencharly/sdk v0.2026239.1643/go.mod h1:BSl+KMnWVAeW4FpGwVXLz53SyBbUAjiqNoeLxfwocA4=
 github.com/opencharly/spec v0.2026232.521-0.20260826041346-cb64f9476eba h1:RNefIPey50MgotDXF04rK4jrtZe2gu54+fk651fphn4=
