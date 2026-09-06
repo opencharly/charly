@@ -32,7 +32,7 @@ import (
 // populated CandyDirs, so a committed-APK check passed under check live yet failed to anchor
 // ("0 candies scanned") under feature run. Any RunModeLive runner that executes a baked plan
 // MUST fold its result into the RunnerConfig (CandyDirs + CandyScanErr).
-func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerContext {
+func resolveCheckRunnerContext(box, dir string, cfg *spec.Config, extraWords ...string) checkRunnerContext {
 	// Scan the RESOLVED candy set ONCE (local + @github-fetched): it carries each
 	// candy's SourceDir (committed-APK anchoring) AND its `plugin:` block, so one
 	// scan feeds BOTH consumers (R3). A box that vendors all its candies via @github
@@ -45,6 +45,12 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 	// the bed plan, with no candy in the image closure requiring it) would otherwise
 	// leave the plugin unloaded and the `spice:` step failing as an unknown verb.
 	addCandy, refWords := deployNodePluginContext(dir, box)
+	// The caller-supplied extra words (the instrument pipeline verbs — a SEPARATE
+	// plugin-reference surface from the plan steps, RCA 2026-09-06) union into the
+	// reference scan: the plan-step scan never sees the instrument pipeline, so the
+	// pipeline verbs' serving plugins would otherwise never connect and the evidence
+	// phase's blind word dispatch fails with "no provider registered".
+	refWords = append(refWords, extraWords...)
 	// The VM plugin candy (verb:libvirt) is external (out-of-process) and in no box's image
 	// closure, so a bed whose plan dispatches `libvirt:` (e.g. check-fedora-vm's libvirt-verb-
 	// dispatches step) needs it pulled in by its canonical ref — the same host-side-plugin pattern

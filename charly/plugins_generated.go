@@ -48,7 +48,6 @@ import (
 	cp_plugin_kernel_param "github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param"
 	cp_plugin_loader "github.com/opencharly/plugin-loader/candy/plugin-loader"
 	cp_plugin_matching "github.com/opencharly/plugin-matching/candy/plugin-matching"
-	cp_plugin_media "github.com/opencharly/plugin-media/candy/plugin-media"
 	cp_plugin_migrate "github.com/opencharly/plugin-migrate/candy/plugin-migrate"
 	cp_plugin_mount "github.com/opencharly/plugin-mount/candy/plugin-mount"
 	cp_plugin_oci "github.com/opencharly/plugin-oci/candy/plugin-oci"
@@ -137,5 +136,4 @@ func init() {
 	registerCompiledPlugin(cp_plugin_agentteams.NewProvider(), cp_plugin_agentteams.NewMeta())
 	registerCompiledPlugin(cp_plugin_dsh.NewProvider(), cp_plugin_dsh.NewMeta())
 	registerCompiledPlugin(cp_plugin_ollama.NewProvider(), cp_plugin_ollama.NewMeta())
-	registerCompiledPlugin(cp_plugin_media.NewProvider(), cp_plugin_media.NewMeta())
 }

@@ -36,7 +36,12 @@ func hostBuildCheckLoadPlugins(_ context.Context, req spec.CheckLoadPluginsReque
 		// plugin fails loudly later, at actual verb dispatch, never here.
 		return spec.CheckLoadPluginsReply{}, fmt.Errorf("check-load-plugins: %w", err)
 	}
-	resolveCheckRunnerContext(req.Name, dir, cfg)
+	// The request's extra_words (the instrument pipeline verbs — a SEPARATE
+	// plugin-reference surface from the plan steps, RCA 2026-09-06) union into the
+	// reference scan: resolveCheckRunnerContext's refWords are the plan-step words, so
+	// the pipeline verbs would otherwise never connect their serving plugins and the
+	// evidence phase's blind word dispatch fails with "no provider registered".
+	resolveCheckRunnerContext(req.Name, dir, cfg, req.ExtraWords...)
 	return spec.CheckLoadPluginsReply{}, nil
 }
 
