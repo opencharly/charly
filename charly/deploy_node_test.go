@@ -27,13 +27,13 @@ func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
 	}
 }
 
-func TestHasChildren(t *testing.T) {
+func TestHasMembers(t *testing.T) {
 	empty := &spec.FleetNode{}
-	if empty.HasChildren() {
-		t.Error("empty node should not report HasChildren")
+	if empty.HasMembers() {
+		t.Error("empty node should not report HasMembers")
 	}
-	withKids := &spec.FleetNode{Children: map[string]*spec.FleetNode{"k": {}}}
-	if !withKids.HasChildren() {
-		t.Error("node with children should report HasChildren")
+	withKids := &spec.FleetNode{Member: []spec.Member{{Name: "k", Position: spec.PositionInSubstrate, Node: &spec.FleetNode{}}}}
+	if !withKids.HasMembers() {
+		t.Error("node with members should report HasMembers")
 	}
 }

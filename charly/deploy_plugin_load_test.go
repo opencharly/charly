@@ -30,9 +30,11 @@ func TestResolveDeployNodeByPath(t *testing.T) {
 	tree := map[string]spec.FleetNode{
 		"check-arch-vm": {
 			Target: "vm",
-			Children: map[string]*spec.FleetNode{
-				"arch-host": {Target: "local"},
-				"web":       {Target: "pod", Children: map[string]*spec.FleetNode{"db": {Target: "pod"}}},
+			Member: []spec.Member{
+				{Name: "arch-host", Position: spec.PositionInSubstrate, Node: &spec.FleetNode{Target: "local"}},
+				{Name: "web", Position: spec.PositionInSubstrate, Node: &spec.FleetNode{Target: "pod", Member: []spec.Member{
+					{Name: "db", Position: spec.PositionInSubstrate, Node: &spec.FleetNode{Target: "pod"}},
+				}}},
 			},
 		},
 		"pod-bed": {Target: "pod"},

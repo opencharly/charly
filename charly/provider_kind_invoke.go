@@ -97,7 +97,14 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 		if merr != nil {
 			return fmt.Errorf("node %q: decode members: %w", pn.Name, merr)
 		}
-		envJSON, err = json.Marshal(spec.StructuralKindLoadEnv{Members: members})
+		// The #StructuralKindLoadEnv wire contract is CUE-frozen at the map form; the host IR is
+		// the ONE ordered member list — convert at the marshal seam only (the wire JSON is
+		// identical: encoding/json sorts map keys, exactly as the former map value marshaled).
+		envMembers := make(map[string]*spec.Deploy, len(members))
+		for _, m := range members {
+			envMembers[m.Name] = m.Node
+		}
+		envJSON, err = json.Marshal(spec.StructuralKindLoadEnv{Members: envMembers})
 		if err != nil {
 			return fmt.Errorf("node %q: marshal member env: %w", pn.Name, err)
 		}
