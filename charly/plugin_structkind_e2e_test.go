@@ -13,9 +13,11 @@ import (
 
 // authoredMemberTree is the member subtree both beds author identically: two PEER pod members
 // (web, cache), a NESTED pod-in-pod (cache→migrate), and a cross-member ${HOST:cache} check on web.
-// The ONLY difference between the two beds is the top-node KIND: `examplestructkind:` (an external
-// STRUCTURAL plugin kind) vs `group:` (the builtin structural kind). If the F5 authored-member
-// input-threading is correct, both fold to a byte-identical uf.Fleet entry.
+// The two beds' top-node KINDS differ: `examplestructkind:` (an external STRUCTURAL plugin kind)
+// vs the POST-MIGRATE primary-substrate spelling (`pod:` primary + deploy-level siblings — the
+// group-kind removal's target shape, Cutover C task 1; the former `group:` builtin baseline is
+// gone with the kind). If the F5 authored-member input-threading is correct, the plugin bed
+// reconstructs the SAME authored member tree the builtin loader folds for the migrated spelling.
 const authoredMemberTree = `    web:
         pod:
             image: coder
@@ -82,16 +84,34 @@ check-structkind-e2e:
 		t.Fatal(err)
 	}
 
-	// --- Bed 2: the BUILTIN structural kind (group) — the equivalence baseline (no plugin) ---
-	groupDir := t.TempDir()
-	groupYAML := "version: " + ver + `
+	// --- Bed 2: the POST-MIGRATE primary-substrate spelling — the equivalence baseline (no
+	// plugin): the group-kind removal (Cutover C task 1) unrolls the former group: bed into
+	// the FIRST member's substrate (pod, carrying web's body + the deploy-config scalars)
+	// with the remaining member (cache) as a deploy-level sibling — the exact shape the
+	// unroll-group-deploy migrate row writes. The plugin bed must reconstruct the same
+	// member-decode truth the builtin loader folds for the migrated spelling. ---
+	baseDir := t.TempDir()
+	baseYAML := "version: " + ver + `
 check-structkind-e2e:
-    group:
+    pod:
         disposable: true
         lifecycle: dev
         description: e2e authored-member reconstruction
-` + authoredMemberTree
-	if err := os.WriteFile(filepath.Join(groupDir, "charly.yml"), []byte(groupYAML), 0o644); err != nil {
+        image: coder
+        plan:
+            - check: web reaches the cache
+              command: "redis-cli -h ${HOST:cache} ping"
+    cache:
+        pod:
+            image: coder
+        migrate:
+            pod:
+                image: migrator
+                plan:
+                    - check: migration ran
+                      command: "test -f /done"
+`
+	if err := os.WriteFile(filepath.Join(baseDir, "charly.yml"), []byte(baseYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,9 +119,9 @@ check-structkind-e2e:
 	if err != nil {
 		t.Fatalf("LoadUnified must parse+decode a STRUCTURAL kind with AUTHORED members via F5: %v", err)
 	}
-	groupUF, _, err := LoadUnified(groupDir)
+	baseUF, _, err := LoadUnified(baseDir)
 	if err != nil {
-		t.Fatalf("LoadUnified group baseline: %v", err)
+		t.Fatalf("LoadUnified post-migrate baseline: %v", err)
 	}
 
 	// F5: a STRUCTURAL kind folds into uf.Fleet (NOT uf.PluginKinds).
@@ -112,9 +132,17 @@ check-structkind-e2e:
 	if _, dup := pluginUF.PluginKinds["examplestructkind"]; dup {
 		t.Fatal("structural kind also landed in uf.PluginKinds — it must be uf.Fleet ONLY")
 	}
-	base, ok := groupUF.Fleet["check-structkind-e2e"]
+	base, ok := baseUF.Fleet["check-structkind-e2e"]
 	if !ok {
-		t.Fatalf("group baseline not folded into uf.Fleet; have %v", fleetKeysFor(groupUF))
+		t.Fatalf("post-migrate baseline not folded into uf.Fleet; have %v", fleetKeysFor(baseUF))
+	}
+	// The baseline's post-migrate shape: the FIRST member (web) is the PRIMARY (the
+	// entity's own substrate node), cache the remaining deploy-level sibling.
+	if base.Target != "pod" || base.Image != "coder" {
+		t.Fatalf("baseline primary wrong: target=%q image=%q", base.Target, base.Image)
+	}
+	if len(base.Member) != 1 || base.MemberByName("cache") == nil {
+		t.Fatalf("baseline members wrong: %+v", base.Member)
 	}
 
 	// The AUTHORED members were reconstructed (not empty, not synthesized): two peers + a nested.
@@ -135,10 +163,32 @@ check-structkind-e2e:
 		t.Fatalf("cross-member ${HOST:cache} check lost through input-threading: %s", mustJSON(t, dn))
 	}
 
-	// THE FOUNDATION PROOF: the external structural-plugin path is BYTE-EQUIVALENT to the builtin
-	// group path for the SAME authored member tree — one member-decode source of truth (R3).
-	if got, want := mustJSON(t, dn), mustJSON(t, base); got != want {
-		t.Fatalf("structural plugin decode != builtin group decode\n plugin: %s\n group:  %s", got, want)
+	// THE FOUNDATION PROOF: the external structural-plugin path and the builtin loader
+	// fold the SAME authored member subtree IDENTICALLY — one member-decode source of
+	// truth (R3). The plugin bed authors web+cache as members; the baseline's web body
+	// IS its primary (the post-migrate spelling), so the shared comparable unit is the
+	// cache member (the same authored subtree in both beds) plus the deploy-config
+	// scalars the plugin maps into its reply.
+	if got, want := mustJSON(t, dn.MemberByName("cache")), mustJSON(t, base.MemberByName("cache")); got != want {
+		t.Fatalf("structural plugin member decode != builtin member decode\n plugin: %s\n base:   %s", got, want)
+	}
+	if (dn.Disposable == nil) != (base.Disposable == nil) || (dn.Disposable != nil && *dn.Disposable != *base.Disposable) {
+		t.Fatalf("disposable scalar diverges: plugin %v vs base %v", dn.Disposable, base.Disposable)
+	}
+	if dn.Lifecycle != base.Lifecycle || dn.Description != base.Description {
+		t.Fatalf("deploy-config scalars diverge: plugin (%q,%q) vs base (%q,%q)", dn.Lifecycle, dn.Description, base.Lifecycle, base.Description)
+	}
+	// The parse-guard FEED (Cutover C task 0, positive pin): the connected plugin's
+	// REGISTERED input schema populates the declared-fields map.
+	threaded := loaderThreaded()
+	fields, ok := threaded.StructuralDeclaredFields["examplestructkind"]
+	if !ok {
+		t.Fatal("the connected external structural kind's input schema was not fed into StructuralDeclaredFields — the parse guard's parent-disc channel is inert for it")
+	}
+	for _, want := range []string{"marker", "disposable", "lifecycle", "description"} {
+		if !fields[want] {
+			t.Errorf("examplestructkind declared fields missing %q", want)
+		}
 	}
 }
 
