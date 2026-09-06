@@ -1102,7 +1102,7 @@ omarchy:
                         "auth_config": {},
                         "audio_config": { "audio": "pipewire" },
                         "bootloader_config": { "bootloader": "Limine", "uki": false, "removable": false },
-                        "custom_commands": [],
+                        "custom_commands": {{if .Answers.custom_commands}}{{.Answers.custom_commands}}{{else}}[]{{end}},
                         "omarchy_install": {
                           "mode": "full_disk",
                           "defer_provisioning": {{if .DeferProvisioning}}true{{else}}false{{end}},
