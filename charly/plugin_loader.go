@@ -1255,4 +1255,3 @@ func instrumentVerbs(in *spec.Instrument) []string {
 	}
 	return out
 }
-
