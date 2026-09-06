@@ -61,25 +61,25 @@ func TestBuildFleetNode_Structure(t *testing.T) {
 	if dn.Disposable == nil || !*dn.Disposable {
 		t.Errorf("fleet disposable = %v, want true", dn.Disposable)
 	}
-	if len(dn.Members) != 2 {
-		t.Fatalf("want 2 alongside members, got %d", len(dn.Members))
+	if len(dn.Member) != 2 {
+		t.Fatalf("want 2 members, got %d", len(dn.Member))
 	}
-	web := dn.Members["web"]
-	if web == nil || web.Target != "pod" || web.Image != "coder" {
+	web := dn.MemberByName("web")
+	if web == nil || web.Node == nil || web.Node.Target != "pod" || web.Node.Image != "coder" {
 		t.Fatalf("web member wrong: %+v", web)
 	}
-	if len(web.Plan) != 1 || web.Plan[0].Check == "" {
-		t.Fatalf("web inline check missing: %+v", web.Plan)
+	if len(web.Node.Plan) != 1 || web.Node.Plan[0].Check == "" {
+		t.Fatalf("web inline check missing: %+v", web.Node.Plan)
 	}
-	cache := dn.Members["cache"]
-	if cache == nil || cache.Children["migrate"] == nil {
+	cache := dn.MemberByName("cache")
+	if cache == nil || cache.Node == nil || cache.Node.MemberByName("migrate") == nil {
 		t.Fatalf("cache.migrate nested member missing: %+v", cache)
 	}
-	migrate := cache.Children["migrate"]
-	if migrate.Target != "pod" || migrate.Image != "migrator" {
-		t.Errorf("migrate member wrong: target=%q box=%q", migrate.Target, migrate.Image)
+	migrate := cache.Node.MemberByName("migrate")
+	if migrate.Node.Target != "pod" || migrate.Node.Image != "migrator" {
+		t.Errorf("migrate member wrong: target=%q box=%q", migrate.Node.Target, migrate.Node.Image)
 	}
-	if len(migrate.Plan) != 1 || migrate.Plan[0].Check == "" {
-		t.Errorf("migrate inline check missing: %+v", migrate.Plan)
+	if len(migrate.Node.Plan) != 1 || migrate.Node.Plan[0].Check == "" {
+		t.Errorf("migrate inline check missing: %+v", migrate.Node.Plan)
 	}
 }

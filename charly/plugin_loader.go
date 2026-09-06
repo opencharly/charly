@@ -17,7 +17,6 @@ import (
 
 	"cuelang.org/go/cue"
 
-	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/lock"
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
@@ -921,8 +920,8 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 		for i := range n.Instrument {
 			refWords = append(refWords, instrumentVerbs(&n.Instrument[i])...)
 		}
-		for _, ck := range fleet.SortedNestedKeys(n.Children) {
-			visit(n.Children[ck])
+		for _, m := range n.InSubstrateMembers() {
+			visit(m.Node)
 		}
 	}
 	visit(node)
@@ -937,8 +936,9 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 }
 
 // resolveDeployNodeByPath resolves a (possibly DOTTED) deploy name to its FleetNode,
-// descending node.Children for each dotted segment (the SAME nested-tree shape
-// ResolveDeployChain walks). A bare name is the top-level entry; a dotted name
+// descending MemberByName over the ONE ordered member tree for each dotted segment (the SAME
+// nested-tree shape ResolveDeployChain walks — spec/exec.ResolveDeployChain uses the identical
+// MemberByName descent). A bare name is the top-level entry; a dotted name
 // (root.child[.grandchild…]) is the nested child the bed runner deploys via `charly fleet
 // add <root>.<child>`. A leading "vm:" is stripped first via spec.SplitVmAddress (RCA #8/#9,
 // FINAL/K5 unit 6a, live-probe-caught) — the SAME legacy-vm CLI-addressing convention
@@ -960,11 +960,11 @@ func resolveDeployNodeByPath(tree map[string]spec.FleetNode, name string) (*spec
 	}
 	cur := &root
 	for _, seg := range parts[1:] {
-		child, ok := cur.Children[seg]
-		if !ok || child == nil {
+		m := cur.MemberByName(seg)
+		if m == nil || m.Node == nil {
 			return nil, false
 		}
-		cur = child
+		cur = m.Node
 	}
 	return cur, true
 }

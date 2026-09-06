@@ -118,14 +118,16 @@ check-structkind-e2e:
 	}
 
 	// The AUTHORED members were reconstructed (not empty, not synthesized): two peers + a nested.
-	if len(dn.Members) != 2 || dn.Members["web"] == nil || dn.Members["cache"] == nil {
-		t.Fatalf("authored peer members not reconstructed: %+v", dn.Members)
+	if len(dn.Member) != 2 || dn.MemberByName("web") == nil || dn.MemberByName("cache") == nil {
+		t.Fatalf("authored peer members not reconstructed: %+v", dn.Member)
 	}
-	if dn.Members["web"].Image != "coder" || dn.Members["web"].Target != "pod" {
-		t.Fatalf("web member not reconstructed from authored input: %+v", dn.Members["web"])
+	web := dn.MemberByName("web").Node
+	if web.Image != "coder" || web.Target != "pod" {
+		t.Fatalf("web member not reconstructed from authored input: %+v", web)
 	}
-	if dn.Members["cache"].Children["migrate"] == nil || dn.Members["cache"].Children["migrate"].Image != "migrator" {
-		t.Fatalf("nested authored member cache.migrate not reconstructed: %+v", dn.Members["cache"])
+	migrate := dn.MemberByName("cache").Node.MemberByName("migrate")
+	if migrate == nil || migrate.Node == nil || migrate.Node.Image != "migrator" {
+		t.Fatalf("nested authored member cache.migrate not reconstructed: %+v", dn.MemberByName("cache").Node)
 	}
 	// The cross-member ${HOST:cache} check survived input-threading (hoisted to the owner plan
 	// with venue="web" by LoadUnified's generic member-plan hoist, same as the builtin path).

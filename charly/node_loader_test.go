@@ -62,17 +62,21 @@ shop:
 	if !ok {
 		t.Fatalf("fleet shop not loaded; deploys=%v", deployKeys(uf.Fleet))
 	}
-	if len(shop.Members) != 2 || shop.Members["web"] == nil || shop.Members["cache"] == nil {
-		t.Fatalf("shop members wrong: %v", deployKeys2(shop.Members))
+	if len(shop.Member) != 2 {
+		t.Fatalf("shop members wrong: want 2, got %d (%v)", len(shop.Member), memberNames(shop.Member))
 	}
-	if shop.Members["web"].Image != "coder" {
-		t.Errorf("web member box=%q, want coder", shop.Members["web"].Image)
+	web, cache := shop.MemberByName("web"), shop.MemberByName("cache")
+	if web == nil || cache == nil {
+		t.Fatalf("shop members wrong: %v", memberNames(shop.Member))
+	}
+	if web.Node.Image != "coder" {
+		t.Errorf("web member box=%q, want coder", web.Node.Image)
 	}
 	// Post-cutover: flattenFleetVenues HOISTS the member's step into the root
 	// fleet Plan, stamping venue from tree position, and CLEARS the member's own
 	// Plan. So the web member's step now lives in shop.Plan with venue "web".
-	if len(shop.Members["web"].Plan) != 0 {
-		t.Errorf("web member Plan should be cleared after hoist, got %d", len(shop.Members["web"].Plan))
+	if len(web.Node.Plan) != 0 {
+		t.Errorf("web member Plan should be cleared after hoist, got %d", len(web.Node.Plan))
 	}
 	foundWebVenue := false
 	for _, s := range shop.Plan {
@@ -156,10 +160,10 @@ func deployKeys(m map[string]spec.FleetNode) []string {
 	}
 	return out
 }
-func deployKeys2(m map[string]*spec.FleetNode) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
+func memberNames(ms []spec.Member) []string {
+	out := make([]string, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, m.Name)
 	}
 	return out
 }

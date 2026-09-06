@@ -27,7 +27,7 @@ import (
 // walk only ever holds paths + nodes (a live DeployExecutor never crosses the wire), re-ran per
 // ancestor by the resolve-target-add seam's reconstructParentExec.
 func deriveChildExecutorForPath(path string, node *spec.FleetNode, parentExec spec.DeployExecutor) (spec.DeployExecutor, error) {
-	if node == nil || !node.HasChildren() {
+	if node == nil || len(node.InSubstrateMembers()) == 0 {
 		return parentExec, nil
 	}
 	switch deployTraitDescent(fleet.ClassifyNodeTarget(node, path)).Transport {
