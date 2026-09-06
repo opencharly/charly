@@ -70,6 +70,26 @@ type pluginCheckResult struct {
 func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.CheckResult {
 	word := c.Plugin
 	res := spec.CheckResult{Verb: "plugin"}
+	// BUILTIN SCHEMA GATE before ANY authored-input validation (the box-mode
+	// ordering fix): a COMPILED-IN plugin unit registers its PROVIDERS at init()
+	// (RegisterBuiltinPluginUnit) but its SERVED SCHEMA only through the sync.Once
+	// loadBuiltinPluginUnits gate. A box-mode check run inside a fresh container
+	// (charly check live on a deployed bed) reaches this dispatch through an entry
+	// path that runs NO project plugin load, so connectBakedPlugin below resolves
+	// the init-registered builtin provider IMMEDIATELY (registry hit, no connect)
+	// and validation then ran against an EMPTY input-def registry — every
+	// `plugin verb:*` check step failed with "no input def registered (schema not
+	// loaded)" while the deploy phase (whose loadDeployPlugins path runs the gate)
+	// passed. Gate BEFORE any resolve/validation — the SAME idempotent gate the
+	// kind-class dispatch already runs (provider_kind_invoke.go runPluginKind).
+	// Idempotent (sync.Once); an out-of-process/baked unit is unaffected (its
+	// schema registers at connect, still before validation). A broken builtin
+	// schema fails the verb loudly, never silently.
+	if err := loadBuiltinPluginUnits(); err != nil {
+		res.Status = spec.StatusFail
+		res.Message = "builtin plugin schema gate: " + err.Error()
+		return res
+	}
 	// connectBakedPlugin (not a bare ResolveVerb) so a BAKED verb plugin resolves
 	// project-lessly inside a deployed container / on a host where it is installed alongside
 	// charly — additive: a registry hit returns immediately, and with no baked binary it is a
