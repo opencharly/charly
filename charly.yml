@@ -1,4 +1,4 @@
-version: 2026.240.1943
+version: 2026.248.1030
 # Canonical repo identity. After the 2026-06 box inversion main imports the five
 # active distro submodules (arch / cachyos / debian / fedora / ubuntu)
 # ONE-DIRECTIONALLY to reference their relocated boxes; the submodules no longer

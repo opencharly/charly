@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"cuelang.org/go/cue"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -167,6 +168,7 @@ func loaderThreaded() spec.Threaded {
 		Kinds:                    map[string]bool{},
 		DeploySubstrates:         map[string]bool{},
 		StructuralKinds:          map[string]bool{},
+		StructuralDeclaredFields: map[string]map[string]bool{},
 		Primaries:                map[string]string{},
 		DeployTraits:             map[string]*spec.DeployTraits{},
 		ExternalDeploySubstrates: map[string]bool{},
@@ -231,6 +233,37 @@ func loaderThreaded() spec.Threaded {
 		if isExternalDeploySubstrate(w) {
 			t.ExternalDeploySubstrates[w] = true
 		}
+	}
+	// Cutover C task 0 (the parse-guard feed): snapshot each structural kind's REGISTERED
+	// input-schema body FIELD names (t.StructuralDeclaredFields) from the process-wide
+	// compiled plugin schema set — never a hand-maintained word list (R3). The loader's
+	// in-body member scan consults it to keep a structural body's DECLARED fields as data
+	// even when a field name collides with a kind word (group's `iterate:` carrying
+	// `agent:`), so a body's kind-word keys are members EXCEPT the kind's own declared
+	// fields. A word with no registered input def (schema not loaded — e.g. an external
+	// structural plugin whose connect has not happened yet) is left absent: the
+	// documented no-declared-schema fallback treats every kind-word key as a member.
+	for k := range t.StructuralKinds {
+		pluginSchemas.mu.Lock()
+		def, ok := pluginSchemas.inputDefs[provKey(ClassKind, k)]
+		unified := pluginSchemas.unified
+		pluginSchemas.mu.Unlock()
+		if !ok {
+			continue
+		}
+		d := unified.LookupPath(cue.ParsePath(def))
+		if d.Err() != nil {
+			continue
+		}
+		it, err := d.Fields(cue.Optional(true), cue.Definitions(false))
+		if err != nil {
+			continue
+		}
+		fields := map[string]bool{}
+		for it.Next() {
+			fields[it.Selector().Unquoted()] = true
+		}
+		t.StructuralDeclaredFields[k] = fields
 	}
 	return t
 }
