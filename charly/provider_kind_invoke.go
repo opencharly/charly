@@ -223,7 +223,15 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 	}
 	t := loaderThreaded()
 	pl := requireProjectLoader()
-	deployShape := pl.IsDeployShape(pn) || len(pl.ResourceChildren(pn)) > 0
+	// The shape classifier predicate MUST match the Fleet gate's agent_provisioned
+	// exemption (spec.ValidateDeploymentTree → ValidateDeployRequiresBox) exactly:
+	// an agent_provisioned body IS a deploy shape. loaderkit.IsDeployShape recognizes
+	// only from:/image: bodies and the ResourceChildren fallback, so the canonical
+	// imageless agent_provisioned iterate-entity (no image, no member sibling) — the
+	// exact shape the gate exempts — classified as a standalone TEMPLATE and folded
+	// into the template map, silently absent from acc.Fleet and every rp.Deploy
+	// consumer ("no entity"; RCA 2026-09-07, substrate_imageless_deploy_test.go).
+	deployShape := pl.IsDeployShape(pn) || len(pl.ResourceChildren(pn)) > 0 || agentProvisionedBody(rawBody)
 	var env spec.StructuralKindLoadEnv
 	if deployShape {
 		bn, err := pl.BuildFleetNode(pn, t)
