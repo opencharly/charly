@@ -463,7 +463,7 @@ func seedDispatchProject(t *testing.T, repoRoot string) string {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rootManifest := "version: 2026.248.1030\ndiscover:\n    - path: candy\n      recursive: true\n"
+	rootManifest := "version: 2026.249.2125\ndiscover:\n    - path: candy\n      recursive: true\n"
 	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(rootManifest), 0o644); err != nil {
 		t.Fatal(err)
 	}

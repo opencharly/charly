@@ -169,6 +169,7 @@ func loaderThreaded() spec.Threaded {
 		DeploySubstrates:         map[string]bool{},
 		StructuralKinds:          map[string]bool{},
 		StructuralDeclaredFields: map[string]map[string]bool{},
+		DeployDeclaredFields:     map[string]map[string]bool{},
 		Primaries:                map[string]string{},
 		DeployTraits:             map[string]*spec.DeployTraits{},
 		ExternalDeploySubstrates: map[string]bool{},
@@ -211,7 +212,7 @@ func loaderThreaded() spec.Threaded {
 	// K1-LOADER RELOCATION: snapshot each recognized kind/substrate word's DECLARED #DeployTraits
 	// (the SAME deployTraitsFor the loader's per-node descent stamp, loaderkit.StampFleetDescents, calls) so the
 	// venue-hop descent stamp reads DATA, never the registry. A word whose deployTraitsFor is nil
-	// (a non-substrate kind, e.g. group/distro) is left absent — the DATA closure returns nil for
+	// (a non-substrate kind, e.g. distro) is left absent — the DATA closure returns nil for
 	// it, matching deployTraitsFor's nil-for-unrecognized-word semantics via DescentFromTraits(nil).
 	for k := range t.Kinds {
 		if tr := deployTraitsFor(k); tr != nil {
@@ -238,34 +239,64 @@ func loaderThreaded() spec.Threaded {
 	// input-schema body FIELD names (t.StructuralDeclaredFields) from the process-wide
 	// compiled plugin schema set — never a hand-maintained word list (R3). The loader's
 	// in-body member scan consults it to keep a structural body's DECLARED fields as data
-	// even when a field name collides with a kind word (group's `iterate:` carrying
-	// `agent:`), so a body's kind-word keys are members EXCEPT the kind's own declared
-	// fields. A word with no registered input def (schema not loaded — e.g. an external
+	// even when a field name collides with a kind word (a declared `iterate:` block
+	// carrying the kind word `agent:`), so a body's kind-word keys are members EXCEPT
+	// the kind's own declared fields. A word with no registered input def (schema not loaded — e.g. an external
 	// structural plugin whose connect has not happened yet) is left absent: the
 	// documented no-declared-schema fallback treats every kind-word key as a member.
 	for k := range t.StructuralKinds {
-		pluginSchemas.mu.Lock()
-		def, ok := pluginSchemas.inputDefs[provKey(ClassKind, k)]
-		unified := pluginSchemas.unified
-		pluginSchemas.mu.Unlock()
-		if !ok {
+		fields := registeredInputDefFields(k)
+		if fields == nil {
 			continue
-		}
-		d := unified.LookupPath(cue.ParsePath(def))
-		if d.Err() != nil {
-			continue
-		}
-		it, err := d.Fields(cue.Optional(true), cue.Definitions(false))
-		if err != nil {
-			continue
-		}
-		fields := map[string]bool{}
-		for it.Next() {
-			fields[it.Selector().Unquoted()] = true
 		}
 		t.StructuralDeclaredFields[k] = fields
 	}
+	// Cutover C task 1 (the SUBSTRATE parse-guard feed — the sdk #225/#221 channel): snapshot
+	// each deploy-substrate word's REGISTERED input-schema body FIELD names
+	// (t.DeployDeclaredFields) — the #Deploy-schema twin of the structural feed above, same
+	// registry, same fallback semantics. The sdk parse consults it to keep a substrate body's
+	// DECLARED fields as data even when the field's VALUE SHAPE would classify as an
+	// in-substrate member (the pod body's `iterate:` carrying the `agent:` kind-word key —
+	// the canonical ADE-iterate-bed regression): a declared field's value is NEVER looked
+	// inside. A substrate word with no registered input def is left absent — the plain
+	// value-shape scan falls back unchanged.
+	for k := range t.DeploySubstrates {
+		fields := registeredInputDefFields(k)
+		if fields == nil {
+			continue
+		}
+		t.DeployDeclaredFields[k] = fields
+	}
 	return t
+}
+
+// registeredInputDefFields snapshots ONE registered kind's input-schema body FIELD names
+// from the process-wide compiled plugin schema set (the shared extraction primitive for the
+// StructuralDeclaredFields and DeployDeclaredFields feeds — R3). Returns nil when the kind has
+// no registered input def (schema not loaded — e.g. an external plugin whose connect has not
+// happened yet): the caller leaves the map entry absent, the documented
+// no-declared-schema fallback.
+func registeredInputDefFields(kind string) map[string]bool {
+	pluginSchemas.mu.Lock()
+	def, ok := pluginSchemas.inputDefs[provKey(ClassKind, kind)]
+	unified := pluginSchemas.unified
+	pluginSchemas.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	d := unified.LookupPath(cue.ParsePath(def))
+	if d.Err() != nil {
+		return nil
+	}
+	it, err := d.Fields(cue.Optional(true), cue.Definitions(false))
+	if err != nil {
+		return nil
+	}
+	fields := map[string]bool{}
+	for it.Next() {
+		fields[it.Selector().Unquoted()] = true
+	}
+	return fields
 }
 
 // activeMaterializer is the registered per-node kind-decode DISPATCH POLICY — the spec.Materializer

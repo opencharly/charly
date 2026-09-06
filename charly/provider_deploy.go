@@ -8,25 +8,16 @@ import (
 
 // deployTargetWords is the canonical deploy-target set (the cross-ref-inferred
 // node.Target values) — DERIVED from spec.ResourceKinds (R3: no hand-duplicated list to
-// drift from the CUE vocabulary) minus "group", the ONE ResourceKinds entry that is a
-// targetless deploy GROUP (a node placed under another, never itself a `target:` value —
-// see /charly-core:deploy "group: is EXCLUSIVELY a targetless deploy group"). Every
-// remaining word is asserted served by an external out-of-process plugin
+// drift from the CUE vocabulary). The former minus-"group" special case DIED with the
+// group-kind removal (Cutover C task 1): the targetless deploy group is no longer a
+// #ResourceKind entry, so the derivation is the PLAIN resource-kinds list. Every word
+// is asserted served by an external out-of-process plugin
 // (externalizedDeploySubstrates) — ALL FIVE substrates externalize today; there is no
 // in-proc DeployTargetProvider concept left (the former interface + its ResolveTarget
 // type-assertion branch in unified_targets.go were confirmed dead — zero implementers,
 // `git grep 'func.*ResolveTarget(node \*spec.FleetNode'` matches only the package-level
 // dispatcher itself — and deleted).
-var deployTargetWords = func() []string {
-	out := make([]string, 0, len(spec.ResourceKinds))
-	for _, k := range spec.ResourceKinds {
-		if k == "group" {
-			continue
-		}
-		out = append(out, k)
-	}
-	return out
-}()
+var deployTargetWords = append([]string(nil), spec.ResourceKinds...)
 
 // externalizedDeploySubstrates is THE single source of truth for which canonical
 // deploy-substrate kinds are served by an EXTERNAL out-of-process plugin instead

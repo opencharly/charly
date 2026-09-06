@@ -20,7 +20,7 @@ import (
 // registry — the SINGLE plugin-declared source spec.StampDescent stamps onto node.Descent. The
 // substrate kinds are compiled-in (registered at init), so this resolves EVERYWHERE, including
 // project-less commands, with no prescan/schema bump. Returns nil for a word that is not a
-// substrate kind (a targetless group, an empty target) → the external-in-place default.
+// substrate kind (an unrecognized word, or an empty target) → the external-in-place default.
 func deployTraitsFor(word string) *spec.DeployTraits {
 	prov, ok := providerRegistry.ResolveKind(word)
 	if !ok {
