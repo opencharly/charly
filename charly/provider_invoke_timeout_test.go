@@ -8,7 +8,7 @@ import (
 )
 
 // blockingProvider is a Provider whose Invoke blocks until the ctx is done —
-// the shape of a hung out-of-process plugin (the fleet-del VM-member hang).
+// the shape of a hung out-of-process plugin (the deploy-del VM-member hang).
 type blockingProvider struct{}
 
 func (blockingProvider) Reserved() string     { return "blocking" }
@@ -19,7 +19,7 @@ func (blockingProvider) Invoke(ctx context.Context, _ *Operation) (*Result, erro
 }
 
 // TestInvokeTyped_FailsFastOnHungPlugin is the regression guard for the
-// fleet-del VM-member hang: a host→plugin call with no caller deadline must
+// deploy-del VM-member hang: a host→plugin call with no caller deadline must
 // apply the default timeout and fail fast with a clear error, never deadlock
 // the host forever.
 func TestInvokeTyped_FailsFastOnHungPlugin(t *testing.T) {

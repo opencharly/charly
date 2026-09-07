@@ -25,7 +25,7 @@ import (
 // kind is now an externalized plugin candy routed through runPluginKind — group (candy/plugin-group,
 // C2-group), the 5 substrate kinds pod/vm/kubernetes/local/android (candy/plugin-substrate, C2-substrate),
 // and the LAST one, the candy box⊻layer factory (candy/plugin-candy-kind, C2-candy). All are
-// COMPILED-IN, host-decoding into the typed core maps (substrates → uf.Fleet/uf.Pod/uf.VM/…; candy
+// COMPILED-IN, host-decoding into the typed core maps (substrates → uf.Deploy/uf.Pod/uf.VM/…; candy
 // → uf.Box/uf.Candy via the bootstrap-critical candyIsImage + buildCandy that STAY core) and
 // validating their rich value host-side against the KEPT #<Kind>Value / #CandyValue def
 // (validateKindValueCUE). So spec.KindWords is now EMPTY and checkKindProviderBijection over it is a

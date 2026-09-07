@@ -6,17 +6,17 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// testFleetDoc is a fixture decode target matching deploykit.FleetConfig's shape
-// (Fleet map[string]spec.FleetNode, yaml key "deploy") without importing deploykit.
-type testFleetDoc struct {
-	Fleet map[string]spec.FleetNode `yaml:"deploy" json:"deploy"`
+// testDeployDoc is a fixture decode target matching deploykit.DeployConfig's shape
+// (Deploy map[string]spec.DeployNode, yaml key "deploy") without importing deploykit.
+type testDeployDoc struct {
+	Deploy map[string]spec.DeployNode `yaml:"deploy" json:"deploy"`
 }
 
 // Note: vmshared.VmSpec carries no Disposable / Lifecycle fields and
 // the IsDisposableFields helper — disposability is now a DEPLOY
 // property only (see /charly-internals:disposable). The former
 // TestVmSpec_DisposableRoundTrip / TestVmSpec_LifecycleAloneDoesNotAuthorize
-// tests moved to the FleetNode-level equivalents below.
+// tests moved to the DeployNode-level equivalents below.
 
 // TestDeployBoxConfig_DisposableRoundTrip — same invariants for
 // the container-deploy side.
@@ -25,12 +25,12 @@ func TestDeployBoxConfig_DisposableRoundTrip(t *testing.T) {
 disposable: true
 lifecycle: dev
 `
-	var c spec.FleetNode
+	var c spec.DeployNode
 	if err := decodeViaCUEForTest(t, yamlStr, &c); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if !c.IsDisposable() {
-		t.Error("FleetNode.IsDisposable() = false; want true")
+		t.Error("DeployNode.IsDisposable() = false; want true")
 	}
 	if got := c.LifecycleTag(); got != "dev" {
 		t.Errorf("LifecycleTag = %q; want dev", got)
@@ -41,12 +41,12 @@ lifecycle: dev
 // mirror of the critical anti-derivation test.
 func TestDeployBoxConfig_LifecycleAloneDoesNotAuthorize(t *testing.T) {
 	yamlStr := `lifecycle: dev`
-	var c spec.FleetNode
+	var c spec.DeployNode
 	if err := decodeViaCUEForTest(t, yamlStr, &c); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if c.IsDisposable() {
-		t.Fatal("FleetNode{Lifecycle: dev}.IsDisposable() = true; want false.")
+		t.Fatal("DeployNode{Lifecycle: dev}.IsDisposable() = true; want false.")
 	}
 }
 
@@ -54,7 +54,7 @@ func TestDeployBoxConfig_LifecycleAloneDoesNotAuthorize(t *testing.T) {
 // the same image with different disposable values must behave
 // independently (the multi-instance requirement).
 func TestMultipleInstances_IndependentFlags(t *testing.T) {
-	// Under singular kinds, FleetConfig.Deploy is keyed
+	// Under singular kinds, DeployConfig.Deploy is keyed
 	// off the `deployment:` (singular) YAML map, not the legacy plural
 	// `images:`. The resolver renamed both files (deploy.yml carries
 	// `deployment:`) — fixture follows suit.
@@ -72,7 +72,7 @@ deploy:
   fedora-coder-scratch:
     disposable: true
 `
-	var cfg testFleetDoc
+	var cfg testDeployDoc
 	if err := decodeViaCUEForTest(t, yamlStr, &cfg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -86,7 +86,7 @@ deploy:
 		{"fedora-coder-scratch", true}, // explicit disposable: true
 	}
 	for _, tc := range tests {
-		e, ok := cfg.Fleet[tc.key]
+		e, ok := cfg.Deploy[tc.key]
 		if !ok {
 			t.Fatalf("image %q missing", tc.key)
 		}

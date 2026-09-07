@@ -558,6 +558,11 @@ func TestCandyPortRelayMultiple(t *testing.T) {
 // regardless of what generate.go supplied. This test FAILS on that shape and passes on the
 // consolidated one.
 func TestScanAllCandyWithConfigOpts_LocalCandyGetsInitSystemsCompletion(t *testing.T) {
+	// Isolate the USER config-stack layer (sdk v0.2026250.702+ LoadUnified merges
+	// system → user → in-dir): a sibling test's deploy-state write into the shared
+	// TestMain XDG_CONFIG_HOME would otherwise merge a candy map that shadows this
+	// fixture's local svc candy (R1 2026-09-07, the CC-2 sdk 702 pin).
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	dir := t.TempDir()
 	candyDir := filepath.Join(dir, "candy", "svc")
 	if err := os.MkdirAll(candyDir, 0o755); err != nil {

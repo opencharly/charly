@@ -44,6 +44,11 @@ func (zzWireTestBootstrapProvider) Invoke(_ context.Context, op *Operation) (*Re
 func TestBootstrapTransformReachesParse(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	RegisterBuiltinProvider(zzWireTestBootstrapProvider{}) // global but marker-gated → no pollution
+	// Isolate the USER config-stack layer (sdk v0.2026250.702+ LoadUnified merges
+	// system → user → in-dir): a sibling test's deploy-state write into the shared
+	// TestMain XDG_CONFIG_HOME would otherwise merge into this config and drop the
+	// F9 marker comment before the transform runs (R1 2026-09-07, the CC-2 sdk 702 pin).
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	dir := t.TempDir()
 	cfg := "# CHARLY_F9_WIRE_TEST\nversion: 2026.001.0001\n"
 	if err := os.WriteFile(filepath.Join(dir, "charly.yml"), []byte(cfg), 0o644); err != nil {

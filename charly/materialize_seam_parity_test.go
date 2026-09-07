@@ -10,7 +10,7 @@ import (
 // materialize_seam_parity_test.go — the K1-unit-1 byte-equivalence gate: proves the
 // spec.Materializer-routed materialize pipeline (materialize.go/node_parsed.go/loader_threaded.go
 // dispatching per node into candy/plugin-loader, which calls back through the DecodeEntity/
-// BuildFleetEntity seam into the UNCHANGED clause-M dispatch, provider_kind_invoke.go) produces a
+// BuildDeployEntity seam into the UNCHANGED clause-M dispatch, provider_kind_invoke.go) produces a
 // project structurally and byte-identical to itself across independent loads of the SAME real,
 // large fixture (box/fedora's charly.yml — 46 boxes, 116 candies, the full document loop +
 // discovered-manifest fold + embedded-defaults merge + namespace recursion this cutover's
@@ -67,7 +67,7 @@ func TestMaterializeSeam_RealFixtureDeterministic(t *testing.T) {
 	}
 
 	// Byte-equivalence across the two independent loads, field by field, for every map the
-	// Materializer/dispatch chain writes: Box/Candy/Fleet (dedicated fields) + PluginKinds (which
+	// Materializer/dispatch chain writes: Box/Candy/Deploy (dedicated fields) + PluginKinds (which
 	// ALSO now carries the 5 standalone-substrate-TEMPLATE kinds vm/pod/kubernetes/local/android — K1
 	// unit-1 follow-up, foldStandaloneTemplateReply's generic fold, node_normalize.go). PluginKinds
 	// is json:"-" on spec.UnifiedFile so it's compared explicitly, not via a whole-struct marshal which
@@ -78,7 +78,7 @@ func TestMaterializeSeam_RealFixtureDeterministic(t *testing.T) {
 	}{
 		{"Box", uf1.Box, uf2.Box},
 		{"Candy", uf1.Candy, uf2.Candy},
-		{"Fleet", uf1.Fleet, uf2.Fleet},
+		{"Deploy", uf1.Deploy, uf2.Deploy},
 		{"PluginKinds", uf1.PluginKinds, uf2.PluginKinds},
 	}
 	for _, f := range fields {

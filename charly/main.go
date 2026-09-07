@@ -110,7 +110,7 @@ type CLI struct {
 
 	// Every non-machinery command — the deploy-lifecycle + leaf-domain set (ssh,
 	// start, stop, status, restart, update, remove, logs,
-	// shell, cmd, cp, volume, service, config, fleet, reap-orphans) PLUS check
+	// shell, cmd, cp, volume, service, config, deploy, reap-orphans) PLUS check
 	// — is no longer a hardcoded field: each arrives via cli.Plugins as a builtin
 	// CommandProvider in its own plugin_command_<name>.go (collectCommandPlugins()).
 	// (mcp/secrets/udev/tmux/preempt/feature/vm/alias AND clean/settings/candy/doctor AND migrate are now
@@ -194,6 +194,14 @@ func main() {
 	cli.Box.Plugins = nestedCmds["box"]
 	cmdPlugins = append(cmdPlugins, topCmds...)
 	cli.Plugins = cmdPlugins
+
+	// CC-2 cutover: the retired `fleet` CLI word hard-errors BEFORE kong.Parse with a
+	// pointed message (R5 — no alias; the word is gone from the grammar, command:deploy
+	// registers only `deploy`). Same exit-80 usage-error convention as the bundle-era
+	// cutover's `charly bundle`.
+	if word, ok := firstCommandWord(os.Args[1:]); ok && word == "fleet" {
+		retireCommandWord(word)
+	}
 	ctx := kong.Parse(&cli,
 		kong.Name("charly"),
 		kong.Description("OpenCharly — the open infrastructure compiler for you and your agents"),

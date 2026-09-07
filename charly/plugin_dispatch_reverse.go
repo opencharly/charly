@@ -79,7 +79,7 @@ type executorInvoker interface {
 // substrate — the host's own substrate→plugin ref (externalDeploySubstratePluginRef). The
 // known-substrate default is what lets a box/<distro> project (whose candy closure is empty —
 // it vendors no candies) resolve deploy:pod / deploy:kubernetes / … for `charly config` and
-// the fleet from-box legs; `charly fleet add` already reaches those via deployNodePluginContext's
+// the deploy from-box legs; `charly deploy add` already reaches those via deployNodePluginContext's
 // auto-inject, so only the config/from-box dispatch needs this default. Any other class or word
 // keeps "" — byte-identical S2/S3b behavior.
 func substrateFallbackRef(class ProviderClass, word, extraRef string) string {
@@ -96,7 +96,7 @@ func substrateFallbackRef(class ProviderClass, word, extraRef string) string {
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	// Fail fast on a hung PLUGIN→PLUGIN call, mirroring the host→plugin guard in
 	// invokeTyped (#468): the broker context a plugin passes back to the host carries
-	// no deadline of its own, so a peer that never answers (the fleet-del teardown
+	// no deadline of its own, so a peer that never answers (the deploy-del teardown
 	// deadlock — a plugin waiting on a peer that is itself waiting) would block this
 	// goroutine in futex_wait forever. Bound it with the same default invoke timeout
 	// when the caller supplied none.
@@ -116,9 +116,9 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		// DEPLOY-class word naming a known externalized substrate with an empty caller extraRef,
 		// the host defaults the ref from its OWN substrate→plugin map (substrateFallbackRef →
 		// externalDeploySubstratePluginRef — the same auto-inject deployNodePluginContext uses
-		// for fleet-add), so a candy-less box/<distro> project reaches an externalized substrate
-		// provider for `charly config` and the fleet from-box legs too — which, unlike `charly
-		// fleet add`, never run loadDeployPlugins' auto-inject. Restores the connect the deleted
+		// for deploy-add), so a candy-less box/<distro> project reaches an externalized substrate
+		// provider for `charly config` and the deploy from-box legs too — which, unlike `charly
+		// deploy add`, never run loadDeployPlugins' auto-inject. Restores the connect the deleted
 		// pod-config seam threaded explicitly (deployPodPluginCandyRef →
 		// connectPluginByWordRef(ClassDeployTarget, "pod", ref)).
 		prov, ok = connectPluginByWordRef(class, word, substrateFallbackRef(class, word, req.GetExtraRef()))

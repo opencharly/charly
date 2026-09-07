@@ -32,9 +32,9 @@ func substrateNodeFromYAML(t *testing.T, doc string) *genericNode {
 // node, for BOTH substrate shapes — isolating the plugin round-trip from LoadUnified's later
 // member-plan hoisting:
 //
-//   - a DEPLOY-shape node (`pod:` with image + nested children) folds into uf.Fleet,
-//     byte-identical to buildFleetNode(gn) (the former in-proc standaloneKind →
-//     buildFleetNodeInto path); and
+//   - a DEPLOY-shape node (`pod:` with image + nested children) folds into uf.Deploy,
+//     byte-identical to buildDeployNode(gn) (the former in-proc standaloneKind →
+//     buildDeployNodeInto path); and
 //   - a standalone TEMPLATE-shape node (a bare `vm:` — the PRIMARY VM authoring form) folds
 //     into uf.VM, byte-identical to decodeNodeValue(gn, &vmshared.VmSpec) (the former
 //     buildStandaloneResource path) — the C2-substrate TEMPLATE fold arm that extends F5's
@@ -44,7 +44,7 @@ func substrateNodeFromYAML(t *testing.T, doc string) *genericNode {
 // locks it through the REAL compiled-in plugin provider (providerRegistry.ResolveKind). Compiled-in,
 // so NOT -short-gated (no external build).
 func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
-	// --- DEPLOY shape (folds uf.Fleet) ---
+	// --- DEPLOY shape (folds uf.Deploy) ---
 	depDoc := `substrate-dep:
     pod:
         image: coder
@@ -73,16 +73,16 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if err := foldSubstrateKind(prov, depPn, &acc); err != nil {
 		t.Fatalf("foldSubstrateKind (deploy): %v", err)
 	}
-	bn, ok := acc.Fleet["substrate-dep"]
+	bn, ok := acc.Deploy["substrate-dep"]
 	if !ok {
-		t.Fatalf("deploy shape not folded into acc.Fleet; keys %v", fleetKeysForAcc(&acc))
+		t.Fatalf("deploy shape not folded into acc.Deploy; keys %v", deployKeysForAcc(&acc))
 	}
 	if acc.PluginKinds["pod"]["substrate-dep"] != nil {
-		t.Fatal("deploy shape also landed in acc.PluginKinds[\"pod\"] — must be acc.Fleet ONLY")
+		t.Fatal("deploy shape also landed in acc.PluginKinds[\"pod\"] — must be acc.Deploy ONLY")
 	}
-	baseBn, err := requireProjectLoader().BuildFleetNode(depPn, loaderThreaded())
+	baseBn, err := requireProjectLoader().BuildDeployNode(depPn, loaderThreaded())
 	if err != nil {
-		t.Fatalf("baseline BuildFleetNode: %v", err)
+		t.Fatalf("baseline BuildDeployNode: %v", err)
 	}
 	if got, want := mustJSON(t, bn), mustJSON(t, *baseBn); got != want {
 		t.Fatalf("DEPLOY-shape plugin fold != direct core decode\n plugin: %s\n core:   %s", got, want)
@@ -118,8 +118,8 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if !ok {
 		t.Fatalf("template shape not folded into acc.PluginKinds[\"vm\"]; got %+v", acc2.PluginKinds["vm"])
 	}
-	if _, dup := acc2.Fleet["substrate-tmpl"]; dup {
-		t.Fatal("template shape also landed in acc.Fleet — must be acc.PluginKinds[\"vm\"] ONLY")
+	if _, dup := acc2.Deploy["substrate-tmpl"]; dup {
+		t.Fatal("template shape also landed in acc.Deploy — must be acc.PluginKinds[\"vm\"] ONLY")
 	}
 	// The template canonicalizes GENERICALLY (entityBodyJSON — no concrete-kind type,
 	// Cutover N); the plugin echoes it byte-faithfully. Baseline against the same generic
@@ -145,11 +145,11 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	}
 }
 
-// fleetKeysForAcc mirrors fleetKeysFor (plugin_structkind_e2e_test.go) for the
+// deployKeysForAcc mirrors deployKeysFor (plugin_structkind_e2e_test.go) for the
 // spec.MaterializedProject accumulator these K1-unit-1-retyped dispatch functions now take.
-func fleetKeysForAcc(acc *spec.MaterializedProject) []string {
-	out := make([]string, 0, len(acc.Fleet))
-	for k := range acc.Fleet {
+func deployKeysForAcc(acc *spec.MaterializedProject) []string {
+	out := make([]string, 0, len(acc.Deploy))
+	for k := range acc.Deploy {
 		out = append(out, k)
 	}
 	return out

@@ -52,9 +52,9 @@ type pluginDeployTarget struct {
 	hasLifecycle  bool
 	hasPreresolve bool
 
-	// node is the dispatch-merged FleetNode (set by ResolveTarget). nil for a ref-based deploy
+	// node is the dispatch-merged DeployNode (set by ResolveTarget). nil for a ref-based deploy
 	// with no charly.yml entry.
-	node *spec.FleetNode
+	node *spec.DeployNode
 
 	// exec is the INITIAL executor ResolveTarget computed from the node's host: field
 	// (specexec.RootExecutorForDeployNode) — the plugin may override it internally for a
@@ -68,9 +68,9 @@ type pluginDeployTarget struct {
 	// venue instead of re-running PrepareVenue.
 	venueJSON json.RawMessage
 
-	// nodeOnly mirrors `charly fleet add --node-only` (set by the dispatcher from
+	// nodeOnly mirrors `charly deploy add --node-only` (set by the dispatcher from
 	// deployAddCmd.NodeOnly, matching the pre-S3b type-assertion pattern — see
-	// fleet_add_cmd.go).
+	// deploy_add_cmd.go).
 	nodeOnly bool
 
 	// build is the host-ENGINE context (project Config + dir + DistroCfg) the RunHostStep
@@ -155,7 +155,7 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 // interface value cannot itself cross the []byte wire to the plugin's decoded
 // spec.DeployTargetDispatchRequest, the SAME executor is ALSO flattened into the returned
 // venue_json (specexec.DescriptorFromExecutor) — deriveChildExecutorForPath's "ssh" transport hop
-// (fleet_add_cmd.go) is always a plain *specexec.SSHExecutor for a single vm-guest hop, never a
+// (deploy_add_cmd.go) is always a plain *specexec.SSHExecutor for a single vm-guest hop, never a
 // composed *specexec.NestedExecutor, so it round-trips faithfully. The caller threads the result as
 // the dispatch request's VenueJSON, so resolveRootExecutor (candy/plugin-fleet/deploy_target.go)
 // re-materializes the IDENTICAL guest venue instead of falling back to
@@ -228,7 +228,7 @@ func (t *pluginDeployTarget) Add(ctx context.Context, dctx *spec.DeployContext, 
 	ctx = withOverlayBuildInputs(ctx, &overlayBuildInputs{plans: plans, parentExec: opts.ParentExec, parentNode: opts.ParentNode})
 
 	// Secret injection + artifact retrieval + the register-hint-driven k3s-post-provision
-	// dispatch now run PLUGIN-SIDE inside command:fleet's handleDeployApply (Cone A shape 3, see
+	// dispatch now run PLUGIN-SIDE inside command:deploy's handleDeployApply (Cone A shape 3, see
 	// candy/plugin-fleet/secrets_artifacts.go), wrapped around this SAME dispatch call, in the
 	// SAME relative order (secrets injected before, artifacts+k3s dispatched after) — this Add no
 	// longer needs the reply's ArtifactKey for anything itself.
@@ -275,7 +275,7 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPl
 		return err
 	}
 	// The k3s-post-provision re-establishment on update (R1 fix, K1-alpha regression) now runs
-	// PLUGIN-SIDE inside command:fleet's handleDeployApply, gated on kube ALREADY being connected
+	// PLUGIN-SIDE inside command:deploy's handleDeployApply, gated on kube ALREADY being connected
 	// (candy/plugin-fleet/secrets_artifacts.go's kubeAlreadyConnected — a pure DescribeProvider
 	// query, no connect attempt, no side effect) — see that file's header for the full rationale
 	// this comment used to carry.
@@ -344,7 +344,7 @@ func (t *pluginDeployTarget) bracketedLifecycle() bool {
 }
 
 // Start dispatches OpStart. When the substrate's DECLARED trait says its lifecycle is bracketed
-// (today only pod) the request carries HasPlan=true, so command:fleet's handleLifecycleSimple
+// (today only pod) the request carries HasPlan=true, so command:deploy's handleLifecycleSimple
 // brackets its OWN dispatch with the Q1 resource-arbiter claim by InvokeProvider("verb","arbiter")
 // (the "arbiter-bracket-*" HostBuild seam is DELETED, K-wave 2 cone R2 bank E) — FLOOR-SLIM-proper
 // Unit-8's K4-exit: core no longer brackets the dispatch call itself (the former arbiter_bracket.go).
@@ -468,7 +468,7 @@ var ErrNotSupportedOnExternal = fmt.Errorf("lifecycle operation not supported on
 // ---------------------------------------------------------------------------
 
 // ResolveTarget returns the UnifiedDeployTarget for `name`, dispatching on the node's canonical
-// target. The node MUST be the dispatch-merged FleetNode (project+operator field-merged deploy
+// target. The node MUST be the dispatch-merged DeployNode (project+operator field-merged deploy
 // tree) — the adapter consumes node fields (Nested/Env/ephemeral/disposable) directly
 // and NEVER re-reads them from disk.
 //
@@ -478,9 +478,9 @@ var ErrNotSupportedOnExternal = fmt.Errorf("lifecycle operation not supported on
 //   - "X: unknown target Y" — Y is not a canonical substrate word (a typo)
 //   - "X: target Y is a known substrate but its deploy provider is not connected" — Y is valid but
 //     its out-of-process plugin is not compiled-in / failed to load (unresolvedDeployTargetError)
-func ResolveTarget(node *spec.FleetNode, name string) (spec.UnifiedDeployTarget, error) {
+func ResolveTarget(node *spec.DeployNode, name string) (spec.UnifiedDeployTarget, error) {
 	if node == nil {
-		return nil, fmt.Errorf("no deployment %q; run `charly fleet show`", name)
+		return nil, fmt.Errorf("no deployment %q; run `charly deploy show`", name)
 	}
 	if node.Target == "" {
 		return nil, fmt.Errorf("deployment %q missing required `target:` field "+

@@ -78,7 +78,7 @@ Consult this table before the first tool call of every task; when several rows m
 | `charly clean` / build-artifact retention / `keep_images` / `keep_check_runs` / image-tag pruning / `.check` run cleanup | `/charly-core:clean` |
 | `charly docs` / the opencharly.ai site / the opencharly/docs repo / Starlight/Astro / `candy/plugin-docs` (runtime plugin) or `candy/docs-site` | `/charly-build:docs` |
 | `charly docs` / the opencharly.ai site / the opencharly/docs repo / `candy/docs-site` / the check-docs bed / Starlight/Astro | `/charly-tools:docs-site` |
-| `charly fleet add/del` / pod or container deploys | `/charly-core:deploy` |
+| `charly deploy add/del` / pod or container deploys | `/charly-core:deploy` |
 | `charly migrate` / schema migration / legacy → latest CalVer / CalVer schema version | `/charly-build:migrate` |
 | `charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:` | `/charly-internals:vm-deploy-target` |
 | `charly update` / `charly vm *` / VM entities in `vm.yml` or `vm:` | `/charly-vm:vm` |

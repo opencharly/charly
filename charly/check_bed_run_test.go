@@ -23,13 +23,13 @@ import (
 // parsing (the prior "stays in charly per Ambiguous-item-1" ruling predated the gate that forced
 // this split question).
 
-// TestCheckBeds_DerivesFromDisposableFleets asserts the R10 bed set is derived
-// from the `disposable: true` fleets in the Deploy map (the separate kind:check
-// block was removed — a bed IS a disposable fleet); a non-disposable deploy is
+// TestCheckBeds_DerivesFromDisposableDeploys asserts the R10 bed set is derived
+// from the `disposable: true` deploys in the Deploy map (the separate kind:check
+// block was removed — a bed IS a disposable deploy); a non-disposable deploy is
 // NOT a bed.
-func TestCheckBeds_DerivesFromDisposableFleets(t *testing.T) {
+func TestCheckBeds_DerivesFromDisposableDeploys(t *testing.T) {
 	uf := &spec.UnifiedFile{
-		Fleet: map[string]spec.FleetNode{
+		Deploy: map[string]spec.DeployNode{
 			"sample-pod-bed":   {Target: "pod", Image: "sample-image", Disposable: new(true)},
 			"sample-vm-bed":    {Target: "vm", From: "sample-vm", Disposable: new(true)},
 			"sample-local-bed": {Target: "local", From: "sample-local", Disposable: new(true)},
@@ -38,7 +38,7 @@ func TestCheckBeds_DerivesFromDisposableFleets(t *testing.T) {
 	}
 	beds := uf.CheckBeds()
 	if got := len(beds); got != 3 {
-		t.Errorf("CheckBeds() = %d entries, want 3 (only disposable fleets)", got)
+		t.Errorf("CheckBeds() = %d entries, want 3 (only disposable deploys)", got)
 	}
 	if _, ok := beds["plain-deploy"]; ok {
 		t.Error("a non-disposable deploy must NOT be enumerated as a bed")

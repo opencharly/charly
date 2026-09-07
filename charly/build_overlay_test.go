@@ -46,7 +46,7 @@ func TestOverlayBuildInputsCtxRoundTrip(t *testing.T) {
 		t.Fatalf("overlayBuildInputsFrom on a bare ctx = %v, want nil", got)
 	}
 	plans := []*spec.InstallPlan{{Candy: "marker", AddCandies: []string{"marker"}}}
-	node := &spec.FleetNode{Image: "base"}
+	node := &spec.DeployNode{Image: "base"}
 	exec := exec.ShellExecutor{}
 	ctx := withOverlayBuildInputs(context.Background(), &overlayBuildInputs{plans: plans, parentExec: exec, parentNode: node})
 	got := overlayBuildInputsFrom(ctx)
