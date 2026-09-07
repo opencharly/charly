@@ -16,8 +16,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/opencharly/spec/deploy"
 	specexec "github.com/opencharly/spec/exec"
-	"github.com/opencharly/spec/fleet"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -26,11 +26,11 @@ import (
 // none-transport child. Registry-coupled (deployTraitDescent), so it stays host-side; the plugin's
 // walk only ever holds paths + nodes (a live DeployExecutor never crosses the wire), re-ran per
 // ancestor by the resolve-target-add seam's reconstructParentExec.
-func deriveChildExecutorForPath(path string, node *spec.FleetNode, parentExec spec.DeployExecutor) (spec.DeployExecutor, error) {
+func deriveChildExecutorForPath(path string, node *spec.DeployNode, parentExec spec.DeployExecutor) (spec.DeployExecutor, error) {
 	if node == nil || len(node.InSubstrateMembers()) == 0 {
 		return parentExec, nil
 	}
-	switch deployTraitDescent(fleet.ClassifyNodeTarget(node, path)).Transport {
+	switch deployTraitDescent(deploy.ClassifyNodeTarget(node, path)).Transport {
 	case "none":
 		if parentExec != nil {
 			return parentExec, nil

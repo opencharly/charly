@@ -41,7 +41,7 @@ func snapshotCheckEnv(cc *hostCheckCarrier, _ *spec.Op) *spec.CheckEnv {
 	// onto it to address the live domain and cannot LoadUnified to compute it themselves (the
 	// go-libvirt shed dropped that in-core remap). A pod/kubernetes/android deployment leaves VmName empty,
 	// so VmTargetName() == Box (unchanged).
-	ce := &spec.CheckEnv{Box: cc.VmTargetName(), Instance: cc.Instance(), Distros: cc.Distros(), Mode: runModeName(cc.Mode()), DialTimeoutNs: int64(cc.DialTimeout())}
+	ce := &spec.CheckEnv{Box: cc.VmTargetName(), Instance: cc.Instance(), Distros: cc.Distros(), Mode: runModeName(cc.Mode()), DialTimeoutNs: int64(cc.DialTimeout()), MCPProvide: cc.MCPProvide()}
 	// The container name is meaningful only for a live (non-box) run with a real box —
 	// the same condition under which a live-container verb runs at all.
 	if cc.Mode() != spec.CheckModeBox && cc.Box() != "" && cc.Box() != "." {

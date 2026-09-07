@@ -33,6 +33,13 @@ type hostCheckCarrier struct {
 	addBg        func(pid int) // nil when there is no scenario context (a no-op AddBackground)
 	candyDirs    map[string]string
 	candyScanErr error
+	// mcpProvide carries the deployment's mcp_provide declarations (P4, substrate-neutral
+	// mcp: verb resolution): a VM/host venue has no podman-inspectable OCI label, so the
+	// check env snapshot must carry the declarations itself. Populated from the wire env
+	// (plugin_dispatch_reverse.go) — the plugin-side live-VM gathers seed it from the
+	// resolved vm template — and re-emitted by snapshotCheckEnv on every out-of-process
+	// verb dispatch. Empty for container venues (the OCI label resolution path applies).
+	mcpProvide []spec.CandyMCPProvide
 }
 
 // The accessors mirror the kit.Runner method names the check dispatch reads, so the reverse-channel
@@ -67,6 +74,10 @@ func (c *hostCheckCarrier) VmTargetName() string {
 	}
 	return c.box
 }
+
+// MCPProvide mirrors kit.Runner.MCPProvide: the deployment's mcp_provide declarations the
+// check env carries for VM/host venues (plugin-side seeded; see the struct field comment).
+func (c *hostCheckCarrier) MCPProvide() []spec.CandyMCPProvide { return c.mcpProvide }
 
 // opEffectiveContexts returns the op's resolved execution contexts: an explicit
 // Context wins, else the verb's VerbCatalog default, else nil. The do-mode/context
