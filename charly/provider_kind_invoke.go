@@ -193,8 +193,9 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 // re-decoded soundly from the raw op.Params by a plugin nor validated by a self-contained
 // plugin schema. So the host: (1) validates the authored value against the KEPT #<Kind>Value
 // def (the closedness the removed #Node arm gave); (2) detects the shape via
-// sdk/loaderkit.IsDeployShape/ResourceChildren (reached through the ProjectLoader seam on pn
-// directly, K1 unit 3b — no genericNode reconstruction needed here); (3) pre-decodes the
+// sdk/loaderkit.IsDeployShape (reached through the ProjectLoader seam on pn
+// directly, K1 unit 3b, parser consolidation F1.2/F1.4 — no genericNode
+// reconstruction needed here); (3) pre-decodes the
 // CANONICAL node via the SAME relocated loaderkit.BuildDeployNode (deploy) /
 // DecodeStandaloneTemplateJSON (template) — the SINGLE decode source of truth (R3); (4)
 // threads it to the plugin's ops.OpLoad via op.Env (spec.StructuralKindLoadEnv.Standalone); (5)
@@ -223,15 +224,16 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 	}
 	t := loaderThreaded()
 	pl := requireProjectLoader()
-	// The shape classifier predicate MUST match the Deploy gate's agent_provisioned
-	// exemption (spec.ValidateDeploymentTree → ValidateDeployRequiresBox) exactly:
-	// an agent_provisioned body IS a deploy shape. loaderkit.IsDeployShape recognizes
-	// only from:/image: bodies and the ResourceChildren fallback, so the canonical
-	// imageless agent_provisioned iterate-entity (no image, no member sibling) — the
-	// exact shape the gate exempts — classified as a standalone TEMPLATE and folded
-	// into the template map, silently absent from acc.Deploy and every rp.Deploy
-	// consumer ("no entity"; RCA 2026-09-07, substrate_imageless_deploy_test.go).
-	deployShape := pl.IsDeployShape(pn) || len(pl.ResourceChildren(pn)) > 0 || agentProvisionedBody(rawBody)
+	// The shape classifier is the ONE loaderkit.IsDeployShape (parser consolidation
+	// F1.2/F1.4) — its arms are the resource-member child channel, the scalar
+	// cross-ref, the from:/image: mapping body, AND the agent_provisioned: true
+	// imageless spelling, so it stays in lockstep with the Deploy gate's
+	// agent_provisioned exemption (spec.ValidateDeploymentTree → ValidateDeployRequiresBox)
+	// exactly — the canonical imageless agent_provisioned iterate-entity (no image, no
+	// member sibling) classifies as a DEPLOY and folds into acc.Deploy (RCA 2026-09-07,
+	// substrate_imageless_deploy_test.go). The former host OR-composite over
+	// ResourceChildren + agentProvisionedBody is deleted.
+	deployShape := pl.IsDeployShape(pn)
 	var env spec.StructuralKindLoadEnv
 	if deployShape {
 		bn, err := pl.BuildDeployNode(pn, t)
@@ -346,7 +348,8 @@ func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 // substrate kinds (#<Kind>Value) AND candy (#CandyValue).
 //
 // entityBodyJSON (the generic body→wire mechanism BOTH the op.Params plugin-kind path and the
-// substrate TEMPLATE thread used) is now sdk/loaderkit.EntityBodyJSON (K1 unit 3b), reached
+// substrate TEMPLATE thread used) is now sdk/loaderkit.EntityBodyJSON (K1 unit 3b, F1.5 —
+// returning pn.Body directly), reached
 // directly through requireProjectLoader() at each call site — no core wrapper survives it (its
 // former callers here are all pn-based now).
 //

@@ -137,3 +137,10 @@ require (
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 )
+
+// dev-only worktree replaces for the F1 parser-consolidation wave (sdk+spec branches):
+// dropped for the real tag pins before merge.
+replace github.com/opencharly/sdk => ../../sdk
+replace github.com/opencharly/spec => ../../spec
+replace github.com/opencharly/plugin-loader/candy/plugin-loader => ../../plugin-loader/candy/plugin-loader
+

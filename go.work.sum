@@ -97,8 +97,8 @@ github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6/go.mod h1:CJlz5H+gyd6C
 github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3VfY/Cnk=
 github.com/nlpodyssey/gopickle v0.3.0/go.mod h1:f070HJ/yR+eLi5WmM1OXJEGaTpuJEUiib19olXgYha0=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026250.724 h1:mtq7ujyZWkS57Y8o+zv1bfC7pd7b7ThqIyZy3y+iCpQ=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026250.724/go.mod h1:WXMy279oahu4d/eNM5fSlkEsrihirdWZgi2l1y2Odjc=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026250.1843 h1:3+64KNqEShvxGWi0+nkHlLTJ5MTMMe4cG+OKDX3pfX4=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026250.1843/go.mod h1:4j+DqHannuMwF3o1z+Py3V+ow/eiLtQc7+P53UclfbY=
 github.com/opencharly/spec v0.2026250.709 h1:Fv2dspCPit2L7lwwwn29yXuWArFfyrMle65cH7A4SeU=
 github.com/opencharly/spec v0.2026250.709/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/pdevine/tensor v0.0.0-20240510204454-f88f4562727c/go.mod h1:PSojXDXF7TbgQiD6kkd98IHOS0QqTyUEaWRiS8+BLu8=
