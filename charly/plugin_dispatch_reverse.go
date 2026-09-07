@@ -205,6 +205,15 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 				// live-VM gathers seed it from the resolved vm template, P4) — threaded through
 				// the carrier so snapshotCheckEnv re-emits them on out-of-process verb dispatch.
 				mcpProvide: env.MCPProvide,
+				// The check-run candy source-dir map rides the wire env with it (the in-venue
+				// sender — candy/plugin-check's pluginSnapshotCheckEnv — folds it from its own
+				// runner's CandyDirs; spec #CheckEnv.candy_dirs, spec PR #121): the host-side
+				// committed-APK anchor resolveCheckApk → checkhost.ResolveCommittedApk reads
+				// h.cc.CandyDirs(), so an in-pod step's relative `apk:` path anchors against the
+				// AUTHORING candy's source tree IDENTICALLY to an out-of-pod step. Without this
+				// unwrap a baked-plan install step (check-android-emulator-pod's
+				// adb-install-apidemos) reported "0 candies scanned".
+				candyDirs: env.CandyDirs,
 			}
 			hvr := &hostVerbResolver{cc: carrier}
 			var (
