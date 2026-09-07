@@ -5,7 +5,7 @@ package main
 // command:deploy provider (candy/plugin-fleet v0.2026250.558+) registers only
 // `deploy`; this intercept fires BEFORE kong.Parse so a stray `charly fleet …`
 // invocation fails with a pointed message instead of kong's generic unknown-command
-// error). Exit code 80 matches kong's usage-error exit (the bundle→fleet cutover's
+// error). Exit code 80 matches kong's usage-error exit (the bundle-era cutover's
 // `charly bundle` also exited 80 — same convention, pointier message).
 
 import (
@@ -45,7 +45,7 @@ func firstCommandWord(args []string) (string, bool) {
 }
 
 // retiredCommandExit is the exit code for a retired-word invocation: kong's usage
-// error code (80), the same code the bundle→fleet cutover's `charly bundle` exited.
+// error code (80), the same code the bundle-era cutover's `charly bundle` exited.
 const retiredCommandExit = 80
 
 // retireCommandWord emits the CC-2 cutover's hard error for the retired `fleet`

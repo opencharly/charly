@@ -197,7 +197,7 @@ func main() {
 
 	// CC-2 cutover: the retired `fleet` CLI word hard-errors BEFORE kong.Parse with a
 	// pointed message (R5 — no alias; the word is gone from the grammar, command:deploy
-	// registers only `deploy`). Same exit-80 usage-error convention as the bundle→fleet
+	// registers only `deploy`). Same exit-80 usage-error convention as the bundle-era
 	// cutover's `charly bundle`.
 	if word, ok := firstCommandWord(os.Args[1:]); ok && word == "fleet" {
 		retireCommandWord(word)
