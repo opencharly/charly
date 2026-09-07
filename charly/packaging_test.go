@@ -6,8 +6,11 @@ package main
 // per-distro package repos pass it to the plugin as --candy. The three legacy
 // pkg/* files (arch PKGBUILD, fedora spec, debian control) were removed with the
 // nFPM cutover, so this file asserts (a) the section parses into the
-// spec.Packaging type with every entry a plain package name, and (b) the variant
-// plugin sets are exactly the 9 welded plugins the release workflow publishes.
+// spec.Packaging type with every entry a plain package name, (b) the variant
+// plugin sets are exactly the 10 welded plugins the release workflow publishes
+// (the 9 + plugin-mcp), and (c) the systemd: unit + config: sections the
+// package ships (the systemd-started charly MCP server's units and its
+// system-wide /etc/charly/charly.yml project).
 
 import (
 	"os"
@@ -97,7 +100,7 @@ func checkPlainNames(t *testing.T, what string, names ...string) {
 }
 
 // TestPackagingVariantsCoverWeldedPlugins — every variant plugin must be one of
-// the 9 welded plugins the release workflow publishes, and the union of all
+// the 10 welded plugins the release workflow publishes, and the union of all
 // variant plugin sets must cover every one of them. A variant naming a plugin
 // absent from the release tarball fails loudly at package-build time (the plugin
 // validates the variant's list against the --plugins dir); this test catches the
@@ -119,6 +122,80 @@ func TestPackagingVariantsCoverWeldedPlugins(t *testing.T) {
 		if !union[w] {
 			t.Errorf("welded plugin %q appears in no packaging variant", w)
 		}
+	}
+}
+
+// TestPackagingSystemdDeclarations — the packaging.systemd section ships two
+// non-autostarting charly-mcp units (system + user scope), both binding the MCP
+// server to loopback only on the HOST (P3 — --listen 127.0.0.1:18765; a
+// pod/VM deployment overrides with --listen 0.0.0.0:18765) and both running
+// from the shipped system project (/etc/charly). sdk/packagekit renders them to
+// /usr/lib/systemd/{system,user}/<name>.service; the per-distro install tests
+// assert the units exist and are disabled (the non-autostarting contract — the
+// operator starts on demand with systemctl start / systemctl --user start).
+func TestPackagingSystemdDeclarations(t *testing.T) {
+	pkg := loadPackaging(t)
+	if len(pkg.Systemd) != 2 {
+		t.Fatalf("packaging.systemd has %d unit(s), want 2 (system + user charly-mcp)", len(pkg.Systemd))
+	}
+	byScope := map[string]*spec.PackagingSystemdUnit{}
+	for _, u := range pkg.Systemd {
+		if u.Name != "charly-mcp" {
+			t.Errorf("unit name = %q, want %q", u.Name, "charly-mcp")
+		}
+		if !strings.Contains(u.Exec, "127.0.0.1:18765") {
+			t.Errorf("unit %q exec %q does not bind 127.0.0.1:18765 (the host loopback default)", u.Scope, u.Exec)
+		}
+		if u.Restart != "on-failure" {
+			t.Errorf("unit %q restart = %q, want on-failure (an on-demand unit: a clean stop stays stopped)", u.Scope, u.Restart)
+		}
+		if u.Working_directory != "/etc/charly" {
+			t.Errorf("unit %q working_directory = %q, want /etc/charly (the shipped system project)", u.Scope, u.Working_directory)
+		}
+		byScope[u.Scope] = u
+	}
+	if byScope["system"] == nil {
+		t.Error("no system-scope unit (rendered to /usr/lib/systemd/system/charly-mcp.service)")
+	}
+	if byScope["user"] == nil {
+		t.Error("no user-scope unit (rendered to /usr/lib/systemd/user/charly-mcp.service)")
+	}
+	sys := byScope["system"]
+	if len(sys.After) == 0 || !slices.Contains(sys.After, "network-online.target") {
+		t.Errorf("system unit after = %v, want network-online.target", sys.After)
+	}
+	if len(sys.Wants) == 0 || !slices.Contains(sys.Wants, "network-online.target") {
+		t.Errorf("system unit wants = %v, want network-online.target", sys.Wants)
+	}
+}
+
+// TestPackagingConfigDeclared — the packaging.config section ships a system-wide
+// project charly.yml (/etc/charly/charly.yml) carrying the plugin candy ref the
+// systemd-started MCP server needs (plugin-mcp), so the server resolves a local
+// project (via WorkingDirectory=/etc/charly) instead of falling back to a network
+// fetch of opencharly/charly. sdk/packagekit renders it into the package; the
+// per-distro install tests assert the box-validate passes on the installed file
+// (the shipped system project is a valid charly.yml at the declared schema version).
+func TestPackagingConfigDeclared(t *testing.T) {
+	pkg := loadPackaging(t)
+	cfg := pkg.Config
+	if cfg == nil {
+		t.Fatal("packaging.config is missing")
+	}
+	if cfg.Path != "/etc/charly/charly.yml" {
+		t.Errorf("config.path = %q, want /etc/charly/charly.yml", cfg.Path)
+	}
+	if cfg.Version == "" {
+		t.Error("config.version is empty (must be the packaged charly's schema version — what charly migrate would produce)")
+	}
+	if cfg.Description == "" {
+		t.Error("config.description is empty")
+	}
+	if len(cfg.Plugins) == 0 {
+		t.Fatal("config.plugins is empty (the systemd MCP server would have no plugin source)")
+	}
+	if !strings.Contains(cfg.Plugins[0], "plugin-mcp") {
+		t.Errorf("config.plugins[0] = %q, want a plugin-mcp candy ref", cfg.Plugins[0])
 	}
 }
 
