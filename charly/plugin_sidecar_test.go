@@ -24,7 +24,7 @@ func testProjectDeployConfig(uf *spec.UnifiedFile) *spec.DeployConfig {
 	}
 	return &spec.DeployConfig{
 		Provides: uf.Provides,
-		Deploy:    uf.Deploy,
+		Deploy:   uf.Deploy,
 		Sidecar:  sidecars,
 	}
 }

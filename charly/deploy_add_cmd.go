@@ -16,8 +16,8 @@ package main
 import (
 	"fmt"
 
-	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/deploy"
+	specexec "github.com/opencharly/spec/exec"
 	"github.com/opencharly/spec/spec"
 )
 
