@@ -21,7 +21,13 @@ import (
 func fixtureNamespacedProject(t *testing.T) (string, *spec.Config) {
 	t.Helper()
 	root := t.TempDir()
+	// The explicit `repo:` decouples the walk's repo-identity cycle-break from the ambient
+	// git identity of the test TMPDIR (see namespace_test.go's fixture note): without it, a
+	// TMPDIR inside ANY git checkout makes the same-directory RELATIVE namespace import mount as
+	// a REF back to the root project — which self-loops ProjectCandiesScanned's namespace
+	// recursion (a namespace pointing at its own root recurses forever).
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
+repo: atrawog/cc2-ns-test
 import:
   - sub: ./sub.yml
 app:
@@ -81,7 +87,9 @@ func TestFindImageByLeaf(t *testing.T) {
 // name-resolution concern, not a per-image collection concern.
 func TestWalkBaseChain_RootInternalOnly(t *testing.T) {
 	root := t.TempDir()
+	// Hermetic `repo:`, see fixtureNamespacedProject's note above.
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
+repo: atrawog/cc2-ns-test
 import:
   - sub: ./sub.yml
 parent:

@@ -4,11 +4,21 @@ import (
 	"testing"
 )
 
+// The fixtures declare an explicit `repo:` identity so the walk's repo-identity cycle-break
+// (loaderkit.Walk -> walkNamespace -> seams.RepoIdentity) never mistakes a same-directory
+// RELATIVE namespace import for a self-import back-edge. Without it, running the tests with
+// TMPDIR inside ANY git checkout (e.g. the CI TMPDIR=/tmp/charly-ci, itself a charly clone)
+// makes RootRepoIdentity(root) return that checkout's origin identity — which equals
+// RepoIdentity("./sub.yml", ...) for every fixture temp dir under it — so the namespace mounts
+// as a REF back to the root project and its Box never materializes. The declared identity is
+// fixed and non-colliding: it can never equal a real git origin.
+
 // TestImportList_Unmarshal covers the mixed-shape import list: bare strings
 // (flat root imports) and single-key maps (namespaced child imports).
 func TestImportList_Unmarshal(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
+repo: atrawog/cc2-ns-test
 import:
   - build.yml
   - sub: ./sub.yml
@@ -54,6 +64,7 @@ widget:
 func TestResolveImageRef_Qualified(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
+repo: atrawog/cc2-ns-test
 import:
   - sub: ./sub.yml
 app:
@@ -97,6 +108,7 @@ widget:
 func TestImportNamespace_MutualCycle(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
+repo: atrawog/cc2-ns-test
 import:
   - sub: ./sub
 app:

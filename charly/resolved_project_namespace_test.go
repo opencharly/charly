@@ -25,6 +25,7 @@ func writeNamespaceImportFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: `+LatestSchemaVersion().String()+`
+repo: atrawog/cc2-ns-test
 import:
   - fedora: ./fedora.yml
 `)
