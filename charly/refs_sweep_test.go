@@ -215,7 +215,7 @@ func TestCandyCutoverSweep_AllRemotePinsResolve(t *testing.T) {
 // require:/candy: list in CHARLY'S OWN tree (root charly.yml + candy/**) may
 // reference a candy via the OLD in-repo @github.com/opencharly/charly/candy/<name>
 // form EXCEPT the check-* test fixtures, which are charly's own R10 bed candies
-// composed as LOCAL members (fleet add rejects remote primary candy refs — the
+// composed as LOCAL members (deploy add rejects remote primary candy refs — the
 // named gap). A non-check-* charly/candy ref is a stale pre-cutover pin. The
 // box/* trees are SUBMODULE repos with their own cutover timelines and are
 // deliberately excluded.
@@ -239,7 +239,7 @@ func TestCandyCutoverSweep_NoCharlyCandyRefs(t *testing.T) {
 		for _, m := range re.FindAllStringSubmatch(string(b), -1) {
 			name := m[1]
 			if strings.HasPrefix(name, "check-") {
-				continue // check-* R10 bed fixtures stay in-repo (fleet-add gap)
+				continue // check-* R10 bed fixtures stay in-repo (deploy-add gap)
 			}
 			stale = append(stale, fmt.Sprintf("%s: %s", f, m[0]))
 		}

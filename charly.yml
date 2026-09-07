@@ -203,7 +203,7 @@ eval-vm:
 # finds the delivered project (`charly --host` strips -C; ssh is non-interactive, so
 # pam_env/UsePAM delivers /etc/environment — NOT ~/.bashrc). 6G RAM is headroom for
 # the in-guest go-build (the pruned closure builds only 2 plugins, not the full
-# fleet that OOM'd at 3.8G). The bed that references it (check-local-vm) gets its own domain
+# deploy that OOM'd at 3.8G). The bed that references it (check-local-vm) gets its own domain
 # charly-check-local-vm (keyed by the DEPLOY, not this entity) + per-domain disk overlay + host ssh
 # port, so it is collision-free with every other eval VM bed by construction.
 eval-host-vm:
@@ -643,8 +643,8 @@ kimi:
 # =============================================================================
 # kind: check — disposable, zero-operator-side-effect R10 test beds.
 # =============================================================================
-# Each entry is a disposable deployment (a FleetNode), folded into the
-# Fleet map at load time so every deploy verb resolves it by name. Run the
+# Each entry is a disposable deployment (a DeployNode), folded into the
+# Deploy map at load time so every deploy verb resolves it by name. Run the
 # full R10 acceptance sequence on any of them — build → check box → deploy →
 # check live → fresh update (R10 gate) → tear down — with:
 #
@@ -833,12 +833,12 @@ check-k3s-vm:
 # + kubernetes (the helm client — /usr/bin/helm; R3: no dedicated candy/helm, the
 # toolchain candy already installs it) + helm-chart (the install leg). The bed proves
 # BOTH helm capabilities end to end IN-VENUE. The INSTALL lives in the helm-chart
-# candy, NOT the bed's own plan: fleet add lowers only CANDY plans' run: steps, and
+# candy, NOT the bed's own plan: deploy add lowers only CANDY plans' run: steps, and
 # `charly check live` runs the bed's plan in verify-only mode (mutating steps skipped),
 # so a mutating `run: helm-release:` step in the bed's own plan would never execute.
-# The helm-chart candy's run: steps run during fleet add — an in-venue kubectl wait
+# The helm-chart candy's run: steps run during deploy add — an in-venue kubectl wait
 # for the node to be Ready (the k3s-server candy's node-ready check is a check: step
-# that does not run during fleet add), then the `helm-release:` step lowers to the
+# that does not run during deploy add), then the `helm-release:` step lowers to the
 # external:helm-release install-step KIND (F3 — the plugin's declared StepContract
 # {Scope system, Venue host-native, Emits false} carried opaquely through the
 # InstallPlan IR), Invokes the plugin's OpExecute over the E3b reverse channel with
@@ -913,7 +913,7 @@ check-helm-vm:
                 cluster: "check-helm-vm-ctx"
               timeout: "240s"
               context: [runtime]
-            # The INSTALL (helm-chart candy's run: steps) already happened during fleet
+            # The INSTALL (helm-chart candy's run: steps) already happened during deploy
             # add — the bed's own plan is verify-only, so it asserts, never mutates.
             # The release-exists assertion is the helm-chart candy's own ADE check step
             # (R3 — the candy that installs also asserts existence); the bed keeps the
@@ -991,7 +991,7 @@ check-k8s-deploy-app:
 # =============================================================================
 check-k8s-deploy:
     # MEMBER 1 (name-sorts first) — the k3s control plane. bringUpMembers does vm
-    # create + fleet add (k3s-server over SSH); K3sPostProvision merges the
+    # create + deploy add (k3s-server over SSH); K3sPostProvision merges the
     # kubeconfig to context vm-check-k8s-deploy-cluster (this member's own per-deploy
     # domain identity, task #18). The kube: assertion checks live HERE (this
     # member has a real SSH venue; the kube: verb dispatches host-side regardless,
@@ -1208,7 +1208,7 @@ check-sidecar-pod:
               command:
                 command: ${CHARLY_BIN} start check-sidecar-pod && ${CHARLY_BIN} status --json
                 in_container: false
-            - check: the NESTED ephemeral vm member (check-sidecar-pod-ephvm, tree position, sibling to the pod node above) registered its lifecycle through candy/plugin-fleet's OpEphemeralRegister (FINAL/K5 unit 6a, the ephemeral_lifecycle.go move) when `charly fleet add check-sidecar-pod` brought up the whole tree — the persisted EphemeralRuntime block in charly.yml AND the systemd TTL transient timer are the register-half proof. vm is the ONLY substrate whose Add path calls the ephemeral seam today (validate_ephemeral.go rejects pod/kubernetes ephemeral at load time, tracked to the bed-robustness batch). The TIMER conjunct runs FIRST so each conjunct's verdict is independently visible on failure (RCA #5). Asserted via the WHOLE-DUMP `fleet show` form (no positional box arg), NOT `fleet show <name>` — that single-arg lookup (deploykit.DeployKey, a bare pass-through) can never find a vm entry's per-host state, which every vm deploy persists under a "vm:"-prefixed, VmDomainIdentity-sanitized key (a PRE-EXISTING, universal gap unrelated to this cutover, registered to the bed-robustness batch — RCA in CHANGELOG). The grep anchors on the entry's OWN unique `deploy_address` marker (EphemeralRuntime.DeployAddress, FINAL/K5 unit 6a) — not any ephemeral marker anywhere in the dump — so this step is structurally unable to pass vacuously, and doubles as the DeployAddress field's own persistence proof. RCA #4 (unit 6a): the systemd-timer conjunct's grep pattern greps the STABLE PREFIX of the unit `registerTransientTimer` actually creates — `charly-fleet-del-<SanitizeUnitName(fullDottedDeployName)>-<unix-ts>` (sdk/deploykit's SanitizeUnitName, dots AND slashes to hyphens, applied to the FULL dotted deploy address, not the leaf name) — a bed-caught real bug in the assertion itself (registration was proven to fire correctly via a live leftover systemd timer; the pre-fix pattern used the leaf name alone and could never match). RCA #5 (unit 6a): the explicit del + clear-half round-trip this step pair USED TO prove is DROPPED here — `charly check live` is documented, intentional `VerifyOnly` (runs ONLY check:/agent-check: steps, NEVER run:/agent-run:), so a `run: fleet del ...` step between two check: steps NEVER EXECUTES during a check-live pass; that precondition was structurally unfireable regardless of keying/env. The persist/clear round-trip's CLEAR half is now proven by an orchestrator-driven LIVE PROBE instead (mutating round-trips are probe territory, idempotent state checks are check-live territory) — see CHANGELOG.
+            - check: the NESTED ephemeral vm member (check-sidecar-pod-ephvm, tree position, sibling to the pod node above) registered its lifecycle through candy/plugin-fleet's OpEphemeralRegister (FINAL/K5 unit 6a, the ephemeral_lifecycle.go move) when `charly deploy add check-sidecar-pod` brought up the whole tree — the persisted EphemeralRuntime block in charly.yml AND the systemd TTL transient timer are the register-half proof. vm is the ONLY substrate whose Add path calls the ephemeral seam today (validate_ephemeral.go rejects pod/kubernetes ephemeral at load time, tracked to the bed-robustness batch). The TIMER conjunct runs FIRST so each conjunct's verdict is independently visible on failure (RCA #5). Asserted via the WHOLE-DUMP `deploy show` form (no positional box arg), NOT `deploy show <name>` — that single-arg lookup (deploykit.DeployKey, a bare pass-through) can never find a vm entry's per-host state, which every vm deploy persists under a "vm:"-prefixed, VmDomainIdentity-sanitized key (a PRE-EXISTING, universal gap unrelated to this cutover, registered to the bed-robustness batch — RCA in CHANGELOG). The grep anchors on the entry's OWN unique `deploy_address` marker (EphemeralRuntime.DeployAddress, FINAL/K5 unit 6a) — not any ephemeral marker anywhere in the dump — so this step is structurally unable to pass vacuously, and doubles as the DeployAddress field's own persistence proof. RCA #4 (unit 6a): the systemd-timer conjunct's grep pattern greps the STABLE PREFIX of the unit `registerTransientTimer` actually creates — `charly-deploy-del-<SanitizeUnitName(fullDottedDeployName)>-<unix-ts>` (sdk/deploykit's SanitizeUnitName, dots AND slashes to hyphens, applied to the FULL dotted deploy address, not the leaf name) — a bed-caught real bug in the assertion itself (registration was proven to fire correctly via a live leftover systemd timer; the pre-fix pattern used the leaf name alone and could never match). RCA #5 (unit 6a): the explicit del + clear-half round-trip this step pair USED TO prove is DROPPED here — `charly check live` is documented, intentional `VerifyOnly` (runs ONLY check:/agent-check: steps, NEVER run:/agent-run:), so a `run: deploy del ...` step between two check: steps NEVER EXECUTES during a check-live pass; that precondition was structurally unfireable regardless of keying/env. The persist/clear round-trip's CLEAR half is now proven by an orchestrator-driven LIVE PROBE instead (mutating round-trips are probe territory, idempotent state checks are check-live territory) — see CHANGELOG.
               id: ephemeral-register-roundtrip
               stdout:
                 - contains: EPHEMERAL-REGISTERED-OK
@@ -1217,8 +1217,8 @@ check-sidecar-pod:
                 - runtime
               command:
                 command: |
-                    systemctl --user list-timers 2>/dev/null | grep -q charly-fleet-del-check-sidecar-pod-check-sidecar-pod-ephvm &&
-                    ${CHARLY_BIN} fleet show 2>/dev/null | grep -q 'deploy_address:.*check-sidecar-pod\.check-sidecar-pod-ephvm' &&
+                    systemctl --user list-timers 2>/dev/null | grep -q charly-deploy-del-check-sidecar-pod-check-sidecar-pod-ephvm &&
+                    ${CHARLY_BIN} deploy show 2>/dev/null | grep -q 'deploy_address:.*check-sidecar-pod\.check-sidecar-pod-ephvm' &&
                     echo EPHEMERAL-REGISTERED-OK
                 in_container: false
             - check: proves the FINAL/K5 unit 6a M4c "box pull" command-dispersal end to end — candy/plugin-box's new command-pull word (pullGrammar/dispatchPull) reenters the hidden core "__box-pull" command over the "cli" HostBuild seam, which still runs BoxPullCmd's UNCHANGED Run body (dispatchBuildEnsure, core-min wave 3 — a call into the compiled-in candy/plugin-build build:ensure word rather than an in-core ensure-image orchestration). Targets check-k8s-deploy-app (the underlying BOX name check-sidecar-pod's pod image deploys — NOT the deploy name itself, which is not a resolvable box), already present in local storage from this bed's own image-build phase, so the pull is a genuine idempotent no-op — asserts the build:ensure word's own unchanged "present" line on stderr. Fails without the new grammar/dispatch/reentry chain actually working; mutates nothing.
@@ -1238,7 +1238,7 @@ check-sidecar-pod:
             ephemeral:
                 ttl: 30m
                 # NESTED under check-sidecar-pod (tree position, sibling to the pod: node above) so it
-                # is brought up automatically as part of `charly fleet add check-sidecar-pod` and torn
+                # is brought up automatically as part of `charly deploy add check-sidecar-pod` and torn
                 # down as part of the bed's own cleanup (or explicitly, mid-plan, by the steps above).
                 # 30m TTL keeps the systemd safety-net window well inside the bed's own run duration.
 check-pod-overlay:
@@ -1247,7 +1247,7 @@ check-pod-overlay:
         disposable: true
         lifecycle: dev
         description: >-
-            R10 for add_candy: on a pod: deploy — the FIRST disposable bed in this repo to combine the pod substrate with add_candy:, and the acceptance gate for the three-bug fix that makes the feature work end-to-end for the first time: (1) hostBuildOverlay's ctx-threaded plans carrier (overlayBuildInputs) is now seeded in production at (*pluginDeployTarget).Add, so the overlay's candy scan actually sees add_candy: [ripgrep] instead of an empty plan list; (2) the overlay's first-ever PrepareVenue state-save (ResolvedImage, and separately a first-ever `charly config` volume-persist, VolumeProjectChecked) no longer falls through fleetDiscForEntity's pod-workload check to "group", which used to corrupt charly.yml on the next read; (3) the check-bed runner's config/start steps no longer force --tag <base-build-tag> for an add_candy bed (CheckBedReply.HasAddCandy), so they deploy the just-built overlay instead of clobbering it with the un-overlaid base image. ripgrep's `package:` field compiles to a SystemPackagesStep, so add_candy: [ripgrep] forces a REAL overlay Containerfile synthesis (hostBuildOverlay + deploykit.OCITarget), not a synthetic no-op. This is NON-VACUOUS both initially and across a genuine `charly update` fresh rebuild (the bed runner's own post-rebuild check-live pass, extended by this same cutover to cover every runtime pod bed — not only ones with nested children — re-evaluates this plan's checks against the ACTUALLY-rebuilt container, not a same-pass no-op): any of the three bugs regressing breaks the overlay build itself or drops ripgrep from the running container, on EITHER the initial deploy or the fresh rebuild.
+            R10 for add_candy: on a pod: deploy — the FIRST disposable bed in this repo to combine the pod substrate with add_candy:, and the acceptance gate for the three-bug fix that makes the feature work end-to-end for the first time: (1) hostBuildOverlay's ctx-threaded plans carrier (overlayBuildInputs) is now seeded in production at (*pluginDeployTarget).Add, so the overlay's candy scan actually sees add_candy: [ripgrep] instead of an empty plan list; (2) the overlay's first-ever PrepareVenue state-save (ResolvedImage, and separately a first-ever `charly config` volume-persist, VolumeProjectChecked) no longer falls through deployDiscForEntity's pod-workload check to "group", which used to corrupt charly.yml on the next read; (3) the check-bed runner's config/start steps no longer force --tag <base-build-tag> for an add_candy bed (CheckBedReply.HasAddCandy), so they deploy the just-built overlay instead of clobbering it with the un-overlaid base image. ripgrep's `package:` field compiles to a SystemPackagesStep, so add_candy: [ripgrep] forces a REAL overlay Containerfile synthesis (hostBuildOverlay + deploykit.OCITarget), not a synthetic no-op. This is NON-VACUOUS both initially and across a genuine `charly update` fresh rebuild (the bed runner's own post-rebuild check-live pass, extended by this same cutover to cover every runtime pod bed — not only ones with nested children — re-evaluates this plan's checks against the ACTUALLY-rebuilt container, not a same-pass no-op): any of the three bugs regressing breaks the overlay build itself or drops ripgrep from the running container, on EITHER the initial deploy or the fresh rebuild.
         add_candy:
             - '@github.com/opencharly/layer-ripgrep:v2026.235.1653' # the standalone repo (the cutover's kind-prefixed naming)
         plan:
@@ -1430,9 +1430,9 @@ check-group:
 # the disposable eval VM (moved off the operator host per the eval-bed hygiene directive).
 # The TOP node is an EXTERNAL STRUCTURAL plugin kind (examplestructkind, out-of-process,
 # NOT compiled in): its authored resource-MEMBER child is pre-decoded HOST-SIDE (the core
-# buildFleetNode recursion) and threaded to the plugin's OpLoad via op.Env; the plugin
-# ATTACHES it to its spec.Deploy reply so the host folds a COMPLETE Fleet (with the AUTHORED
-# member) into uf.Fleet — byte-equivalent to a builtin group (proven hermetically by
+# buildDeployNode recursion) and threaded to the plugin's OpLoad via op.Env; the plugin
+# ATTACHES it to its spec.Deploy reply so the host folds a COMPLETE Deploy (with the AUTHORED
+# member) into uf.Deploy — byte-equivalent to a builtin group (proven hermetically by
 # TestExternalStructKind_StructuralDecode, which also covers peer + nested + cross-member
 # reconstruction). This bed is the RUNTIME leg: the reconstructed authored member is a `vm:`
 # node (check-structkind-vm) with a nested kind:local grandchild (check-structkind-member)
@@ -1456,7 +1456,7 @@ check-structkind:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole RUNTIME witness of F5 authored-member INPUT-threading, run inside the disposable eval VM: the top node is the external STRUCTURAL plugin kind examplestructkind (out-of-process, candy/plugin-example-structkind), whose authored resource-member child is pre-decoded host-side via the core buildFleetNode recursion and threaded to the plugin's OpLoad via op.Env; the plugin attaches it to its spec.Deploy reply so the host folds a COMPLETE Fleet (with the authored member) into uf.Fleet, byte-equivalent to a builtin group. The reconstructed authored member is a `vm:` node (check-structkind-vm) with a nested kind:local grandchild (check-structkind-member, a deploy of check-structkind-app) that lands INSIDE the eval VM guest via kit.NestedExecutor; the marker check authored on the member's OWN plan asserts /etc/check-structkind-marker in the GUEST — proving the reconstructed authored member deploys end-to-end off the operator's workstation. The check must live on the member's node plan: a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy. Hermetic peer/nested/cross-member reconstruction is proven by TestExternalStructKind_StructuralDecode.
+            Sole RUNTIME witness of F5 authored-member INPUT-threading, run inside the disposable eval VM: the top node is the external STRUCTURAL plugin kind examplestructkind (out-of-process, candy/plugin-example-structkind), whose authored resource-member child is pre-decoded host-side via the core buildDeployNode recursion and threaded to the plugin's OpLoad via op.Env; the plugin attaches it to its spec.Deploy reply so the host folds a COMPLETE Deploy (with the authored member) into uf.Deploy, byte-equivalent to a builtin group. The reconstructed authored member is a `vm:` node (check-structkind-vm) with a nested kind:local grandchild (check-structkind-member, a deploy of check-structkind-app) that lands INSIDE the eval VM guest via kit.NestedExecutor; the marker check authored on the member's OWN plan asserts /etc/check-structkind-marker in the GUEST — proving the reconstructed authored member deploys end-to-end off the operator's workstation. The check must live on the member's node plan: a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy. Hermetic peer/nested/cross-member reconstruction is proven by TestExternalStructKind_StructuralDecode.
     check-structkind-vm:
         vm:
             from: eval-vm
@@ -1487,7 +1487,7 @@ check-structkind:
 #     uf.Local (the standalone TEMPLATE fold arm — decode-only, no host mutation);
 #   - check-substrate is a `vm: {from: eval-vm}` bed whose nested `local:` member
 #     (check-substrate-member, from: check-substrate-app) is decoded via foldSubstrateKind (the
-#     deploy fold into uf.Fleet) and DEPLOYED into the guest via kit.NestedExecutor.
+#     deploy fold into uf.Deploy) and DEPLOYED into the guest via kit.NestedExecutor.
 # The nested member applies check-substrate-layer INSIDE the guest; the marker check on the
 # member's OWN plan asserts /etc/check-substrate-marker in the GUEST — proving both substrate
 # shapes decode + deploy end-to-end off the operator's host, byte-equivalent to the former
@@ -1510,7 +1510,7 @@ check-substrate:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole R10 witness of the externalized substrate structural kinds (candy/plugin-substrate, C2-substrate), run inside the disposable eval VM: a BARE `local:` TEMPLATE (check-substrate-app, template shape → uf.Local) plus a nested `local:` DEPLOY member (check-substrate-member, deploy shape → uf.Fleet), BOTH decoded out of core through the compiled-in plugin-substrate. runPluginKind → foldSubstrateKind pre-decodes each node via the core loader, validates its value against the KEPT #LocalValue def, threads the canonical result to plugin-substrate's OpLoad, and folds the ECHO into uf.Local / uf.Fleet. The nested member applies check-substrate-layer INSIDE the guest via kit.NestedExecutor, and the marker check asserts /etc/check-substrate-marker in the GUEST — proving both substrate shapes reconstruct + deploy end-to-end off the operator's workstation, byte-equivalent to the former in-proc standaloneKind.
+            Sole R10 witness of the externalized substrate structural kinds (candy/plugin-substrate, C2-substrate), run inside the disposable eval VM: a BARE `local:` TEMPLATE (check-substrate-app, template shape → uf.Local) plus a nested `local:` DEPLOY member (check-substrate-member, deploy shape → uf.Deploy), BOTH decoded out of core through the compiled-in plugin-substrate. runPluginKind → foldSubstrateKind pre-decodes each node via the core loader, validates its value against the KEPT #LocalValue def, threads the canonical result to plugin-substrate's OpLoad, and folds the ECHO into uf.Local / uf.Deploy. The nested member applies check-substrate-layer INSIDE the guest via kit.NestedExecutor, and the marker check asserts /etc/check-substrate-marker in the GUEST — proving both substrate shapes reconstruct + deploy end-to-end off the operator's workstation, byte-equivalent to the former in-proc standaloneKind.
     check-substrate-member:
         local:
             from: check-substrate-app
@@ -1519,7 +1519,7 @@ check-substrate:
             plan:
                 - check: command=test -f /etc/check-substrate-marker && echo SUBSTRATE-DEPLOY-OK
                   id: substrate-marker-in-guest
-                  description: the nested substrate local DEPLOY (folded into uf.Fleet via plugin-substrate) applied its inherited template's marker layer INSIDE the eval VM guest
+                  description: the nested substrate local DEPLOY (folded into uf.Deploy via plugin-substrate) applied its inherited template's marker layer INSIDE the eval VM guest
                   stdout:
                     - contains: SUBSTRATE-DEPLOY-OK
                   context:
@@ -1531,13 +1531,13 @@ check-substrate:
 # out-of-process; it dials back through the SDK Executor to write markers on the host
 # venue under a disposable /tmp scratch dir, and returns a plugin-script reverse op
 # the host records + replays at teardown. Zero operator side-effect (markers under
-# /tmp, removed by `charly fleet del`).
+# /tmp, removed by `charly deploy del`).
 check-exampledeploy:
     exampledeploy:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole proof of the external (out-of-process) deploy-target lifecycle (Add/Test/Update/Del) over the E3b ExecutorService reverse channel, AND of the F2 executable deploy channel. Composes plugin-example-deploy as an external deploy: substrate; Add Invokes the host-built plugin out-of-process with the deployment's InstallPlan views — carrying the serializable per-step IR. The plugin dials back through the SDK Executor to (a) write an apply + a probe marker, (b) WALK + EXECUTE the plan's steps on the host venue (a file-write step lands /tmp/charly-exampledeploy-steps/written and a shell-hook env step lands env.d/plugin-example-deploy.env), and (c) PUSH /tmp/charly-exampledeploy-steps/pushed via the reverse-channel PutFile leg. Host-side command probes assert the probe marker, the executed-step effects, and the pushed file; the fresh-rebuild (charly update) re-applies idempotently; teardown (charly fleet del) replays the recorded plugin-script reverse ops so every scratch dir is gone (zero residue).
+            Sole proof of the external (out-of-process) deploy-target lifecycle (Add/Test/Update/Del) over the E3b ExecutorService reverse channel, AND of the F2 executable deploy channel. Composes plugin-example-deploy as an external deploy: substrate; Add Invokes the host-built plugin out-of-process with the deployment's InstallPlan views — carrying the serializable per-step IR. The plugin dials back through the SDK Executor to (a) write an apply + a probe marker, (b) WALK + EXECUTE the plan's steps on the host venue (a file-write step lands /tmp/charly-exampledeploy-steps/written and a shell-hook env step lands env.d/plugin-example-deploy.env), and (c) PUSH /tmp/charly-exampledeploy-steps/pushed via the reverse-channel PutFile leg. Host-side command probes assert the probe marker, the executed-step effects, and the pushed file; the fresh-rebuild (charly update) re-applies idempotently; teardown (charly deploy del) replays the recorded plugin-script reverse ops so every scratch dir is gone (zero residue).
         add_candy:
             - '@github.com/opencharly/plugin-example-deploy/candy/plugin-example-deploy:v2026.237.1420'
         plan:
@@ -2051,7 +2051,7 @@ charly-cli:
                 == Bed purpose ==
                 This bed proves an agent can OPERATE the charly management command
                 surface end-to-end. Use `charly box build os` to build the `os` image,
-                then `charly fleet add os os` (or `charly start os`) to bring it up as a
+                then `charly deploy add os os` (or `charly start os`) to bring it up as a
                 running pod, and `charly status` to confirm it. The bed's `check:` steps
                 assert the `os` pod is running with its predetermined marker file —
                 satisfy them by driving the real charly commands, not by hand-crafting
@@ -3148,7 +3148,7 @@ check-commands-local:
               command:
                 command: "${CHARLY_BIN} status >/dev/null && ${CHARLY_BIN} status --json"
                 in_container: false
-            - check: command=charly reap-orphans exits 0 and reports "no orphaned ephemerals" on this clean bed (proving the externalized reap-orphans command, candy/plugin-substrate's command:reap-orphans (K5), dispatches in-proc and its deploykit.LoadFleetConfig-driven orphan scan runs end-to-end with zero ephemeral vm_state entries to reap)
+            - check: command=charly reap-orphans exits 0 and reports "no orphaned ephemerals" on this clean bed (proving the externalized reap-orphans command, candy/plugin-substrate's command:reap-orphans (K5), dispatches in-proc and its deploykit.LoadDeployConfig-driven orphan scan runs end-to-end with zero ephemeral vm_state entries to reap)
               id: reap-orphans-runs
               exit_status: 0
               stdout:

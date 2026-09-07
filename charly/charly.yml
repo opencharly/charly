@@ -1830,7 +1830,7 @@ openrc:
             RUN{{range $i, $unit := .Units}}{{if $i}} && \
                {{else}} {{end}}rc-update add {{$unit}} default{{end}}
         # A container has no OpenRC pid-1 supervisor to hand control to, exactly as with
-        # supervisord's own fallback: keep the container alive so `charly fleet` can exec into it.
+        # supervisord's own fallback: keep the container alive so `charly deploy` can exec into it.
         fallback_entrypoint:
             - sleep
             - infinity

@@ -137,7 +137,7 @@ func releaseResourceClaim(claimant string) {
 // dispatchAndRunLifecycle resolves node/box/instance's LifecycleTarget for op (the shared
 // dispatchLifecycleTarget core-M step) and, on success, runs the caller's op-specific body against
 // it — the shared core every start/stop/shell/logs/service/cmd case below delegates to.
-func dispatchAndRunLifecycle(op string, node *spec.FleetNode, box, instance string, run func(spec.LifecycleTarget) error) error {
+func dispatchAndRunLifecycle(op string, node *spec.DeployNode, box, instance string, run func(spec.LifecycleTarget) error) error {
 	lt, err := dispatchLifecycleTarget(op, node, spec.DeployKey(box, instance))
 	if err != nil {
 		return err

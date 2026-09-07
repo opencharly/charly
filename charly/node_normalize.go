@@ -4,11 +4,11 @@ package main
 // (provider_kind_invoke.go's runPluginKind/foldSubstrateKind) — the standalone-template shape
 // detection + fold, plus the generic ensureMap helper. This file is the CORE-RESIDENT half of the
 // node-form kind-decode split; its former per-node DISPATCH ORCHESTRATOR (normalizeNodeInto — the
-// not-found policy: route to the fleet builder / defer-during-connect-pass / warn-and-skip / hard
+// not-found policy: route to the deploy builder / defer-during-connect-pass / warn-and-skip / hard
 // error) MOVED to candy/plugin-loader as the spec.Materializer seam (K1 unit 1, #46) — see
 // charly/loader_threaded.go (hostMaterializeSeams/decodeEntityViaRegistry/
-// buildFleetEntityViaRegistry) + sdk/loaderkit/materialize.go. The entity-body assembly +
-// fleet/resource-member tree-builder mechanism (isDeployShape/decodeStandaloneTemplateJSON/
+// buildDeployEntityViaRegistry) + sdk/loaderkit/materialize.go. The entity-body assembly +
+// deploy/resource-member tree-builder mechanism (isDeployShape/decodeStandaloneTemplateJSON/
 // resourceChildren, formerly here) is now sdk/loaderkit (K1 unit 3b), reached directly through
 // requireProjectLoader() from provider_kind_invoke.go — no core wrapper survives them, since their
 // only callers threaded pn straight into the seam.
@@ -34,7 +34,7 @@ func isStandaloneResourceKind(disc string) bool {
 
 // foldStandaloneTemplateReply is now sdk/loaderkit.FoldStandaloneTemplateReply (K1 unit 3a) — the
 // C2-substrate TEMPLATE fold arm (the standalone counterpart of runPluginKind's deploy fold into
-// acc.Fleet). GENERIC by construction: no per-kind-word switch — every standalone-template kind
+// acc.Deploy). GENERIC by construction: no per-kind-word switch — every standalone-template kind
 // (vm/pod/kubernetes/local/android) folds into the SAME map[disc][name] shape PluginKinds already uses
 // for every other templated kind. This file keeps a same-named/same-signature core wrapper (R3)
 // since provider_kind_invoke.go calls it by this name.
@@ -44,12 +44,12 @@ func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, a
 
 // agentProvisionedBody reports whether an authored substrate body (the canonical
 // EntityBodyJSON form foldSubstrateKind already holds) carries agent_provisioned: true —
-// the imageless deploy spelling the Fleet gate (spec.ValidateDeploymentTree →
+// the imageless deploy spelling the Deploy gate (spec.ValidateDeploymentTree →
 // ValidateDeployRequiresBox) exempts from the pod box requirement. The shape-classifier
 // predicate in foldSubstrateKind consults this so the deploy-vs-template fold stays in
 // lockstep with the gate: an agent_provisioned body IS a deploy shape (RCA 2026-09-07 —
 // the minimal imageless iterate-entity classified as a standalone TEMPLATE and silently
-// vanished from acc.Fleet; see substrate_imageless_deploy_test.go).
+// vanished from acc.Deploy; see substrate_imageless_deploy_test.go).
 func agentProvisionedBody(body json.RawMessage) bool {
 	var probe struct {
 		AgentProvisioned bool `json:"agent_provisioned"`

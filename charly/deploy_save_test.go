@@ -14,13 +14,13 @@ import (
 // removal) — those moved to candy/plugin-fleet/deploy_state_writer_test.go (the tests-move-with-
 // subjects doctrine: the subject is deploykit.SaveDeployState/RemoveVmDeployEntry, plugin-side).
 // What stays in core is the WIRING: dispatchDeployTarget("add") reaches the compiled-in
-// command:fleet plugin's OpDeployDispatch → handleDeployApply → persistDeployState, which writes
+// command:deploy plugin's OpDeployDispatch → handleDeployApply → persistDeployState, which writes
 // the deploy entry through the plugin's own deploykit.SaveDeployState. The seam helpers
-// (deploy_dispatch_seam_test_helpers_test.go) + testLoadFleetConfig (charly's real LoadUnified)
+// (deploy_dispatch_seam_test_helpers_test.go) + testLoadDeployConfig (charly's real LoadUnified)
 // remain core test infrastructure.
 
 // TestDeployDispatchReachesOpDeployDispatch proves the WIRING half: dispatchDeployTarget("add")
-// reaches the command:fleet plugin's OpDeployDispatch and its deploy-state write path — the
+// reaches the command:deploy plugin's OpDeployDispatch and its deploy-state write path — the
 // entry lands in deploy.yml through the plugin's own deploykit.SaveDeployState. The persistence
 // SEMANTICS (which fields land, no-clobber, abort-on-invalid, selective/idempotent removal) are
 // covered by candy/plugin-fleet's deploy_state_writer_test.go; this test only proves the
@@ -39,11 +39,11 @@ func TestDeployDispatchReachesOpDeployDispatch(t *testing.T) {
 		Target:        "pod",
 	})
 
-	dc, err := testLoadFleetConfig()
+	dc, err := testLoadDeployConfig()
 	if err != nil {
 		t.Fatalf("reload after dispatch: %v", err)
 	}
-	if _, ok := dc.Fleet["wiring-probe"]; !ok {
+	if _, ok := dc.Deploy["wiring-probe"]; !ok {
 		t.Fatal("dispatchDeployTarget(add) did not reach OpDeployDispatch — no deploy entry written")
 	}
 }

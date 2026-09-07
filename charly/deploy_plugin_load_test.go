@@ -12,13 +12,13 @@ import (
 // tests (same behavior, same assertions).
 
 // TestResolveDeployNodeByPath proves the dotted-path resolution that lets the deploy-plugin
-// loader find a NESTED child deploy (the bed runner deploys arch-host via `charly fleet add
+// loader find a NESTED child deploy (the bed runner deploys arch-host via `charly deploy add
 // check-arch-vm.arch-host` — a dotted name that is NOT a top-level tree key). Without this,
 // deployNodePluginContext surfaced no plugin words for the nested child and its substrate
 // word never loaded its provider (the "unknown target local" regression).
 //
 // The "vm:"-prefixed cases are the FINAL/K5 unit 6a RCA #8 live-probe-caught regression: a
-// "vm:"-prefixed CLI address (the established convention for `charly fleet del vm:<name>` /
+// "vm:"-prefixed CLI address (the established convention for `charly deploy del vm:<name>` /
 // `vm:<parent.child>`) used to resolve to NOTHING here, since the dotted-path split ran on the
 // RAW name with the prefix still attached (`tree["vm:"+segment]` never matches — the tree is
 // keyed by the plain name). deployNodePluginContext (this function's one caller) then collected
@@ -27,13 +27,13 @@ import (
 // touches the tree) masked the miss until the LATER actual dispatch needed the never-connected
 // provider ("known substrate but its deploy provider is not connected").
 func TestResolveDeployNodeByPath(t *testing.T) {
-	tree := map[string]spec.FleetNode{
+	tree := map[string]spec.DeployNode{
 		"check-arch-vm": {
 			Target: "vm",
 			Member: []spec.Member{
-				{Name: "arch-host", Position: spec.PositionInSubstrate, Node: &spec.FleetNode{Target: "local"}},
-				{Name: "web", Position: spec.PositionInSubstrate, Node: &spec.FleetNode{Target: "pod", Member: []spec.Member{
-					{Name: "db", Position: spec.PositionInSubstrate, Node: &spec.FleetNode{Target: "pod"}},
+				{Name: "arch-host", Position: spec.PositionInSubstrate, Node: &spec.DeployNode{Target: "local"}},
+				{Name: "web", Position: spec.PositionInSubstrate, Node: &spec.DeployNode{Target: "pod", Member: []spec.Member{
+					{Name: "db", Position: spec.PositionInSubstrate, Node: &spec.DeployNode{Target: "pod"}},
 				}}},
 			},
 		},

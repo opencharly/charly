@@ -151,7 +151,7 @@ func TestExternalDeployPlugin_ReverseChannelEndToEnd(t *testing.T) {
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "e3deploy-test", closer); err != nil {
 		t.Fatalf("RegisterPluginProviders: %v", err)
 	}
-	routed, err := ResolveTarget(&spec.FleetNode{Target: "exampledeploy"}, "e3deploy")
+	routed, err := ResolveTarget(&spec.DeployNode{Target: "exampledeploy"}, "e3deploy")
 	if err != nil {
 		t.Fatalf("ResolveTarget(external deploy): %v", err)
 	}

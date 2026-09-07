@@ -165,9 +165,9 @@ import: [a.yml]
 func TestLoadUnified_MultiDocumentNodeForm(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-import: [fleet.yml]
+import: [deploy.yml]
 `)
-	writeFixture(t, root, "fleet.yml", `chrome:
+	writeFixture(t, root, "deploy.yml", `chrome:
   candy:
     package: [chromium]
 ---
@@ -205,9 +205,9 @@ browsers:
 func TestLoadUnified_LegacyKindKeyedRejected(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-import: [fleet.yml]
+import: [deploy.yml]
 `)
-	writeFixture(t, root, "fleet.yml", `candy:
+	writeFixture(t, root, "deploy.yml", `candy:
   name: broken
 box:
   name: broken-too

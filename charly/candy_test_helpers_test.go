@@ -194,8 +194,8 @@ func (a *testCandyReader) Port() ([]string, error) {
 var _ spec.CandyReader = (*testCandyReader)(nil)
 
 // testConstructStepExecutor returns the SAME in-proc reverse-channel executor
-// the invokeOpCompile helper (fleet_compile_parity_test.go) threads onto the ctx it hands
-// command:fleet's OpCompile (K5-A item 1, compile-seam ctx-threading): a test
+// the invokeOpCompile helper (deploy_compile_parity_test.go) threads onto the ctx it hands
+// command:deploy's OpCompile (K5-A item 1, compile-seam ctx-threading): a test
 // exercising charly's own construct-step routing directly (in-process, package
 // main) needs a REAL executor reaching the provider registry for any `run: plugin:
 // <word>` op, exactly as the real compile path does — the "construct-step" HostBuild
