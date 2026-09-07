@@ -4347,7 +4347,7 @@ check-r10-stage:
               id: r10-stage-a-writes
               stage: write
               command:
-                command: "echo marker-from-A > /usr/share/nginx/html/stage-marker"
+                command: "echo marker-from-A > /home/fedora/stage-marker"
               context: [runtime]
     r10-stage-assertor:
         vm:
@@ -4357,7 +4357,7 @@ check-r10-stage:
                   id: r10-stage-b-asserts
                   stage: assert
                   command:
-                    command: "test -f /usr/share/nginx/html/stage-marker && cat /usr/share/nginx/html/stage-marker"
+                    command: "test -f /home/fedora/stage-marker && cat /home/fedora/stage-marker"
                   stdout:
                     - contains: marker-from-A
                   context: [runtime]
@@ -4389,7 +4389,7 @@ check-r10-stage-race:
             - check: member A writes the cross-venue marker (no stage — sleeps 4s)
               id: r10-race-a-writes
               command:
-                command: "sh -c 'sleep 4 && echo marker-from-A > /usr/share/nginx/html/stage-marker'"
+                command: "sh -c 'sleep 4 && echo marker-from-A > /home/fedora/stage-marker'"
               context: [runtime]
     r10-race-assertor:
         vm:
@@ -4398,7 +4398,7 @@ check-r10-stage-race:
                 - check: member B asserts the marker (no stage — races the writer)
                   id: r10-race-b-asserts
                   command:
-                    command: "test -f /usr/share/nginx/html/stage-marker && cat /usr/share/nginx/html/stage-marker"
+                    command: "test -f /home/fedora/stage-marker && cat /home/fedora/stage-marker"
                   stdout:
                     - contains: marker-from-A
                   context: [runtime]
