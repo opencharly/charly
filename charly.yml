@@ -4182,3 +4182,223 @@ check-boxload-pod:
               command:
                 command: podman --remote --url unix:///run/user/1000/podman/podman.sock image exists localhost/charly-boxload-probe:latest
                 in_container: true
+# =============================================================================
+# CC R10 fixture beds (Cutover C task 8 — the member-tree rebuild's R10 witness:
+# `parallel:` whole-member concurrency, the forced-failure drain, and `stage:`
+# cross-venue ordering). Proven end-to-end in the /tmp/cc-r10 scratch project
+# against the CC-wave binary (plugin-deploy-vm v2026.250.1108, charly carrying
+# spec .957 + sdk .948), then PORTED VERBATIM into this tree (same r10-vm
+# template, same markers, same bed bodies) and re-run HERE from the final
+# committed tree — the plan's task-8 matrix. The fixtures share ONE reusable
+# Fedora 43 cloud-image VM template (r10-vm) that drops a deterministic marker
+# at /usr/share/nginx/html/index.html in cloud-init, so every check below is a
+# plain marker read over the guest (test -f + cat). The member named after the
+# vm: primary is the DEPLOY-LEVEL SIBLING in the tree-position sense: the bed
+# root is the primary VM, `parallel: true` sits on ITS kind node (one flag — no
+# per-member duplication), and each member runs its own plan on its own VM.
+# =============================================================================
+r10-vm:
+    vm:
+        source:
+            kind: cloud_image
+            distro: fedora
+            url: https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2
+            checksum:
+                type: sha256
+                value: 846574c8a97cd2d8dc1f231062d73107cc85cbbbda56335e264a46e3a6c8ab2f
+            base_user: fedora
+        disk_size: 6G
+        ram: 2G
+        cpu: 1
+        firmware: bios
+        backend: libvirt
+        network:
+            mode: user
+        ssh:
+            user: fedora
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            package:
+                - nginx
+                - curl
+                - qemu-guest-agent
+            runcmd:
+                - "setenforce 0 || true"
+                - "sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config || true"
+                - "echo 'charly-r10-vm-marker' > /usr/share/nginx/html/index.html"
+                - "systemctl enable --now nginx"
+                - "systemctl enable --now qemu-guest-agent"
+        libvirt:
+            devices:
+                channels:
+                    - type: unix
+                      name: org.qemu.guest_agent.0
+                      path: '{{.VmStateDir}}/qga.sock'
+                graphics:
+                    - type: spice
+                      autoport: "yes"
+                      listen: 127.0.0.1
+                video:
+                    - model: virtio
+                      heads: 1
+                      accel3d: false
+# =============================================================================
+# CASE 1 — the two-VM-MEMBER bed: the bed root is the PRIMARY VM (member A), and
+# r10-vm-member (member B) is a deploy-level sibling. parallel: true sits on the
+# PRIMARY's kind node (one flag — no per-member duplication), so both members'
+# plans run concurrently as independent Runners (sdk/kit planrun_staged). Both
+# members are recorded: each member's steps land in the venue-keyed summary.
+# Expected: PASS 12/12 (the two plan checks + the generated lifecycle steps).
+# =============================================================================
+check-r10-two-vm:
+    vm:
+        from: r10-vm
+        parallel: true
+        disposable: true
+        lifecycle: dev
+        description: >-
+            CC R10 CASE 1: two-VM-MEMBER bed — the bed root is the PRIMARY VM (member A),
+            and r10-vm-member (member B) is a deploy-level sibling. parallel: true sits on
+            the PRIMARY's kind node (one flag — no per-member duplication), so both members'
+            plans run concurrently as independent Runners (sdk/kit planrun_staged). Both
+            members are recorded: each member's steps land in the venue-keyed summary.
+        plan:
+            - check: the primary VM member's marker file is present
+              id: r10-primary-marker
+              command:
+                command: "test -f /usr/share/nginx/html/index.html && cat /usr/share/nginx/html/index.html"
+              stdout:
+                - contains: charly-r10-vm-marker
+              context: [runtime]
+    r10-vm-member:
+        vm:
+            from: r10-vm
+            plan:
+                - check: the deploy-level sibling VM member's marker file is present
+                  id: r10-member-marker
+                  command:
+                    command: "test -f /usr/share/nginx/html/index.html && cat /usr/share/nginx/html/index.html"
+                  stdout:
+                    - contains: charly-r10-vm-marker
+                  context: [runtime]
+# =============================================================================
+# CASE 2 — the FORCED-FAILURE DRAIN twin of check-r10-two-vm. Member A (the
+# primary) completes its plan step; member B (r10-vm-member-fail) has a step
+# FORCED to fail (command=false). The bed must: complete the other member's
+# steps, tear down ALL members on the terminal path, exit 2, and produce a
+# summary that is byte-stable across two consecutive runs (only calver +
+# durations differ).
+# =============================================================================
+check-r10-two-vm-fail:
+    vm:
+        from: r10-vm
+        parallel: true
+        disposable: true
+        lifecycle: dev
+        description: >-
+            CC R10 CASE 2: the FORCED-FAILURE DRAIN twin of check-r10-two-vm. Member A
+            (the primary) completes its plan step; member B (r10-vm-member-fail) has a step
+            FORCED to fail (command=false). The bed must: complete the other member's steps,
+            tear down ALL members on the terminal path, exit 2, and produce a summary that is
+            byte-stable across two consecutive runs (only calver + durations differ).
+        plan:
+            - check: the primary VM member's marker file is present (completes despite member B failing)
+              id: r10-fail-primary-marker
+              command:
+                command: "test -f /usr/share/nginx/html/index.html && cat /usr/share/nginx/html/index.html"
+              stdout:
+                - contains: charly-r10-vm-marker
+              context: [runtime]
+    r10-vm-member-fail:
+        vm:
+            from: r10-vm
+            plan:
+                - check: this step is FORCED to fail
+                  id: r10-forced-fail
+                  command:
+                    command: "false"
+                  context: [runtime]
+# =============================================================================
+# CASE 3 — the `stage:` CROSS-VENUE ORDERING case (positive). Member A (the
+# primary, stage: write) writes a marker; member B (r10-stage-assertor,
+# stage: assert) asserts it. Stage groups execute in first-seen order: stage
+# "write" drains before stage "assert" starts, so the assert only ever runs
+# AFTER the write. parallel:true does not interact with stages (stages dominate
+# the walk). Expected: PASS. The negative control (check-r10-stage-race, the
+# same member pair WITHOUT stages) races the assert and FAILS by design — proving
+# the stage: ordering is exactly what makes this bed pass.
+# =============================================================================
+check-r10-stage:
+    vm:
+        from: r10-vm
+        parallel: true
+        disposable: true
+        lifecycle: dev
+        description: >-
+            CC R10 CASE 3 (positive): the stage: CROSS-VENUE ORDERING case. Member A
+            (the primary, stage: write) writes a marker; member B (r10-stage-assertor,
+            stage: assert) asserts it. Stage groups execute in first-seen order:
+            stage "write" drains before stage "assert" starts, so the assert only ever
+            runs AFTER the write. parallel:true does not interact with stages (stages
+            dominate) — the proof that the CC stage walk orders cross-venue steps.
+        plan:
+            - check: member A writes the cross-venue marker (stage write)
+              id: r10-stage-a-writes
+              stage: write
+              command:
+                command: "echo marker-from-A > /usr/share/nginx/html/stage-marker"
+              context: [runtime]
+    r10-stage-assertor:
+        vm:
+            from: r10-vm
+            plan:
+                - check: member B asserts the marker member A wrote (stage assert — only valid after stage write drained)
+                  id: r10-stage-b-asserts
+                  stage: assert
+                  command:
+                    command: "test -f /usr/share/nginx/html/stage-marker && cat /usr/share/nginx/html/stage-marker"
+                  stdout:
+                    - contains: marker-from-A
+                  context: [runtime]
+# =============================================================================
+# CASE 3 NEGATIVE CONTROL — no stages, parallel whole-member plan races the
+# assert. Identical member pair to check-r10-stage but WITHOUT stage: fields.
+# Whole-member plans run concurrently (parallel:true, no stages), so member B's
+# assert races member A's write. The writer step sleeps 4s (a deliberate fixture
+# making the race deterministic): B's assert fires while the marker does not yet
+# exist and FAILS. Expected outcome: bed exit 2 with the assert step failed and
+# the write step completing — proving the stage: ordering in the positive twin
+# is what makes that bed pass.
+# =============================================================================
+check-r10-stage-race:
+    vm:
+        from: r10-vm
+        parallel: true
+        disposable: true
+        lifecycle: dev
+        description: >-
+            CC R10 CASE 3 (negative control): identical member pair to check-r10-stage
+            but WITHOUT stage: fields. Whole-member plans run concurrently (parallel:true,
+            no stages), so member B's assert races member A's write. The writer step sleeps
+            4s (a deliberate fixture making the race deterministic): B's assert fires while
+            the marker does not yet exist and FAILS. Expected outcome: bed exit 2 with the
+            assert step failed and the write step completing — proving the stage: ordering
+            in the positive twin is what makes that bed pass.
+        plan:
+            - check: member A writes the cross-venue marker (no stage — sleeps 4s)
+              id: r10-race-a-writes
+              command:
+                command: "sh -c 'sleep 4 && echo marker-from-A > /usr/share/nginx/html/stage-marker'"
+              context: [runtime]
+    r10-race-assertor:
+        vm:
+            from: r10-vm
+            plan:
+                - check: member B asserts the marker (no stage — races the writer)
+                  id: r10-race-b-asserts
+                  command:
+                    command: "test -f /usr/share/nginx/html/stage-marker && cat /usr/share/nginx/html/stage-marker"
+                  stdout:
+                    - contains: marker-from-A
+                  context: [runtime]
