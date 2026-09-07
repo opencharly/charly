@@ -213,7 +213,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 				// AUTHORING candy's source tree IDENTICALLY to an out-of-pod step. Without this
 				// unwrap a baked-plan install step (check-android-emulator-pod's
 				// adb-install-apidemos) reported "0 candies scanned".
-				candyDirs:   env.CandyDirs,
+				candyDirs: env.CandyDirs,
 			}
 			hvr := &hostVerbResolver{cc: carrier}
 			var (
