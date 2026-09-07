@@ -121,7 +121,7 @@ charly:
             section: admin
             variants:
                 default:
-                    description: The seven everyday welded command plugins.
+                    description: The eight everyday welded command plugins.
                     plugins:
                         - plugin-secrets
                         - plugin-feature
@@ -130,8 +130,9 @@ charly:
                         - plugin-clean
                         - plugin-settings
                         - plugin-candy
+                        - plugin-mcp
                 full:
-                    description: All nine welded command plugins.
+                    description: All ten welded command plugins.
                     plugins:
                         - plugin-secrets
                         - plugin-udev
@@ -142,6 +143,7 @@ charly:
                         - plugin-clean
                         - plugin-settings
                         - plugin-candy
+                        - plugin-mcp
                 minimal:
                     description: The doctor/clean/settings core.
                     plugins:
@@ -334,6 +336,45 @@ charly:
                     # Linux-only), so no .msix can be built. Kept so the plugin's msix
                     # format path has a metadata entry to parse.
                     depends: []
+            # systemd — non-autostarting systemd units shipped in the package
+            # (system + user scope). Installed but NEVER enabled: nothing starts at
+            # boot; the operator starts on demand (systemctl start charly-mcp /
+            # systemctl --user start charly-mcp). Rendered to
+            # /usr/lib/systemd/{system,user}/<name>.service by sdk/packagekit; only
+            # deb/rpm/archlinux formats carry them (apk/ipk have no systemd). On the
+            # HOST the server binds loopback only (P3) — --listen 0.0.0.0:18765 is
+            # the explicit opt-in, normal inside a pod/VM deployment.
+            systemd:
+                - name: charly-mcp
+                  scope: system
+                  exec: /usr/bin/charly mcp serve --listen 127.0.0.1:18765
+                  description: Charly MCP server (Streamable HTTP on 127.0.0.1:18765)
+                  restart: on-failure
+                  after:
+                      - network-online.target
+                  wants:
+                      - network-online.target
+                  working_directory: /etc/charly
+                - name: charly-mcp
+                  scope: user
+                  exec: /usr/bin/charly mcp serve --listen 127.0.0.1:18765
+                  description: Charly MCP server (user session, Streamable HTTP on 127.0.0.1:18765)
+                  restart: on-failure
+                  working_directory: /etc/charly
+            # config — a system-wide project charly.yml shipped in the package
+            # (/etc/charly/charly.yml): the plugin config the systemd-started MCP
+            # server resolves via its WorkingDirectory=/etc/charly, so the server
+            # uses a local project instead of falling back to a network fetch of
+            # opencharly/charly. version: is the SCHEMA version of the packaged
+            # charly — the repo's current schema version (what charly migrate
+            # would produce); the charly/packaging_test.go variant+config tests
+            # assert it parses.
+            config:
+                path: /etc/charly/charly.yml
+                version: 2026.249.2125
+                description: System-wide charly MCP server project (started via systemd)
+                plugins:
+                    - '@github.com/opencharly/plugin-mcp/candy/plugin-mcp:v2026.250.0635'
         plan:
             - check: the charly binary resolves on the deployment's PATH
               exit_status: 0

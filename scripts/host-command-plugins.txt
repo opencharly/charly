@@ -16,15 +16,16 @@
 # generate-packages` plugin (sdk/packagekit) reads the `packaging:` section of
 # charly's packaging metadata (`packaging/charly.yml`) to select each variant's plugin
 # set, and `charly/packaging_test.go` asserts the variant sets cover exactly
-# these 9 plugins.
+# these 10 plugins.
 #
 # One `<name>@<tag>` per line; blank lines and `#` comments are ignored.
 #
 # The PIN is part of this file because the candy de-submodule cutover moved every
 # one of these into its own repo: the release workflow clones `opencharly/<name>`
 # at `<tag>` and builds `candy/<name>` from that checkout. charly/go.mod is NOT a
-# usable pin source here — it carries only 7 of the 9, because the two command-only
-# plugins are not compiled in and so have no require line.
+# usable pin source here — it carries only 7 of the 10, because the three
+# command-only plugins (secrets, udev, mcp) are not compiled in and so have no
+# require line.
 #
 # Bump a pin the way any other ref is bumped: to a MERGED tag, never a branch.
 plugin-secrets@v2026.240.0122
@@ -36,3 +37,4 @@ plugin-doctor@v2026.239.1615
 plugin-clean@v2026.239.1615
 plugin-settings@v2026.239.1612
 plugin-candy@v2026.239.1617
+plugin-mcp@v2026.250.0635
