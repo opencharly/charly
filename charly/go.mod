@@ -18,7 +18,7 @@ require (
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026248.730
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026237.1416
-	github.com/opencharly/plugin-check/candy/plugin-check v0.2026250.537
+	github.com/opencharly/plugin-check/candy/plugin-check v0.2026250.724
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026237.1417
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026237.1417
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026244.617
@@ -35,7 +35,7 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026237.1421
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026242.2145
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026250.558
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026250.829
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026237.1423
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026237.1423
