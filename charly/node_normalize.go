@@ -42,6 +42,24 @@ func foldStandaloneTemplateReply(disc, name string, replyJSON json.RawMessage, a
 	return requireProjectLoader().FoldStandaloneTemplateReply(disc, name, replyJSON, acc)
 }
 
+// agentProvisionedBody reports whether an authored substrate body (the canonical
+// EntityBodyJSON form foldSubstrateKind already holds) carries agent_provisioned: true —
+// the imageless deploy spelling the Fleet gate (spec.ValidateDeploymentTree →
+// ValidateDeployRequiresBox) exempts from the pod box requirement. The shape-classifier
+// predicate in foldSubstrateKind consults this so the deploy-vs-template fold stays in
+// lockstep with the gate: an agent_provisioned body IS a deploy shape (RCA 2026-09-07 —
+// the minimal imageless iterate-entity classified as a standalone TEMPLATE and silently
+// vanished from acc.Fleet; see substrate_imageless_deploy_test.go).
+func agentProvisionedBody(body json.RawMessage) bool {
+	var probe struct {
+		AgentProvisioned bool `json:"agent_provisioned"`
+	}
+	if json.Unmarshal(body, &probe) != nil {
+		return false
+	}
+	return probe.AgentProvisioned
+}
+
 // ensureMap allocates a nil map[string]V in place.
 func ensureMap[V any](m *map[string]V) {
 	if *m == nil {

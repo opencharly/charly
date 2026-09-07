@@ -12,8 +12,10 @@ import (
 
 // TestLoadUnified_NodeForm proves the loader parses a unified node-form charly.yml
 // end-to-end: kit.ClassifyDoc → kit.DocShapeNode → validate-before-execute (#NodeDoc) →
-// normalizeNodeInto → the projected spec.UnifiedFile maps. Candy + box + a fleet group
-// with two alongside pod members + an inline cross-member check.
+// normalizeNodeInto → the projected spec.UnifiedFile maps. Candy + box + a fleet bed in
+// the POST-MIGRATE primary-substrate spelling (the former group bed unrolled — Cutover C
+// task 1): a pod primary + one deploy-level pod member with an inline member check (the
+// flattenFleetVenues venue-hoist witness).
 func TestLoadUnified_NodeForm(t *testing.T) {
 	dir := t.TempDir()
 	doc := `version: "` + latestSchemaVersion.String() + `"
@@ -30,16 +32,14 @@ coder:
     base: fedora
     candy: [redis]
 shop:
-  group: {}
-  web:
-    pod:
-      image: coder
-      plan:
-        - check: web reaches the cache
-          command: "redis-cli -h ${HOST:cache} ping"
+  pod:
+    image: coder
   cache:
     pod:
       image: coder
+      plan:
+        - check: cache reaches itself
+          command: "redis-cli ping"
 `
 	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
@@ -62,30 +62,30 @@ shop:
 	if !ok {
 		t.Fatalf("fleet shop not loaded; deploys=%v", deployKeys(uf.Fleet))
 	}
-	if len(shop.Member) != 2 {
-		t.Fatalf("shop members wrong: want 2, got %d (%v)", len(shop.Member), memberNames(shop.Member))
+	if len(shop.Member) != 1 {
+		t.Fatalf("shop members wrong: want 1, got %d (%v)", len(shop.Member), memberNames(shop.Member))
 	}
-	web, cache := shop.MemberByName("web"), shop.MemberByName("cache")
-	if web == nil || cache == nil {
+	cache := shop.MemberByName("cache")
+	if cache == nil {
 		t.Fatalf("shop members wrong: %v", memberNames(shop.Member))
 	}
-	if web.Node.Image != "coder" {
-		t.Errorf("web member box=%q, want coder", web.Node.Image)
+	if shop.Image != "coder" {
+		t.Errorf("shop primary box=%q, want coder (the promoted first member's body)", shop.Image)
 	}
 	// Post-cutover: flattenFleetVenues HOISTS the member's step into the root
 	// fleet Plan, stamping venue from tree position, and CLEARS the member's own
-	// Plan. So the web member's step now lives in shop.Plan with venue "web".
-	if len(web.Node.Plan) != 0 {
-		t.Errorf("web member Plan should be cleared after hoist, got %d", len(web.Node.Plan))
+	// Plan. So the cache member's step now lives in shop.Plan with venue "cache".
+	if len(cache.Node.Plan) != 0 {
+		t.Errorf("cache member Plan should be cleared after hoist, got %d", len(cache.Node.Plan))
 	}
-	foundWebVenue := false
+	foundCacheVenue := false
 	for _, s := range shop.Plan {
-		if s.Venue == "web" {
-			foundWebVenue = true
+		if s.Venue == "cache" {
+			foundCacheVenue = true
 		}
 	}
-	if !foundWebVenue {
-		t.Errorf("expected a hoisted step with venue %q in shop.Plan", "web")
+	if !foundCacheVenue {
+		t.Errorf("expected a hoisted step with venue %q in shop.Plan", "cache")
 	}
 }
 

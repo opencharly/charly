@@ -12,14 +12,12 @@ import (
 // is a scalar cross-ref and stays in the value.
 const fleetNodeForm = `
 shop:
-  group:
+  pod:
     disposable: true
-  web:
-    pod:
-      image: coder
-      plan:
-        - check: web reaches the cache
-          command: "redis-cli -h ${HOST:cache} ping"
+    image: coder
+    plan:
+      - check: web reaches the cache
+        command: "redis-cli -h ${HOST:cache} ping"
   cache:
     pod:
       image: coder
@@ -32,9 +30,11 @@ shop:
 `
 
 // TestBuildFleetNode_Structure proves the fleet builder turns the unified
-// node-form into the correct FleetNode tree: a disposable group with two
-// alongside pod members (Peer), an inline cross-member check in a member's Plan,
-// and a deeply-nested pod-in-pod (Nested) with its own inline check.
+// node-form into the correct FleetNode tree: a disposable pod PRIMARY (the
+// post-migrate member-tree spelling — the former group bed's first member
+// promoted, Cutover C task 1) with an inline cross-member check in its own
+// Plan, one deploy-level pod sibling (Peer), and a deeply-nested pod-in-pod
+// (Nested) with its own inline check.
 func TestBuildFleetNode_Structure(t *testing.T) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(fleetNodeForm), &doc); err != nil {
@@ -55,24 +55,26 @@ func TestBuildFleetNode_Structure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildFleetNode: %v", err)
 	}
-	if dn.Target != "" {
-		t.Errorf("fleet group Target = %q, want empty (group)", dn.Target)
+	if dn.Target != "pod" {
+		t.Errorf("fleet primary Target = %q, want pod", dn.Target)
+	}
+	if dn.Image != "coder" {
+		t.Errorf("fleet primary image = %q, want coder (the promoted first member's body)", dn.Image)
 	}
 	if dn.Disposable == nil || !*dn.Disposable {
 		t.Errorf("fleet disposable = %v, want true", dn.Disposable)
 	}
-	if len(dn.Member) != 2 {
-		t.Fatalf("want 2 members, got %d", len(dn.Member))
+	if len(dn.Plan) != 1 || dn.Plan[0].Check == "" {
+		t.Fatalf("primary inline check missing: %+v", dn.Plan)
 	}
-	web := dn.MemberByName("web")
-	if web == nil || web.Node == nil || web.Node.Target != "pod" || web.Node.Image != "coder" {
-		t.Fatalf("web member wrong: %+v", web)
-	}
-	if len(web.Node.Plan) != 1 || web.Node.Plan[0].Check == "" {
-		t.Fatalf("web inline check missing: %+v", web.Node.Plan)
+	if len(dn.Member) != 1 {
+		t.Fatalf("want 1 deploy-level member, got %d", len(dn.Member))
 	}
 	cache := dn.MemberByName("cache")
-	if cache == nil || cache.Node == nil || cache.Node.MemberByName("migrate") == nil {
+	if cache == nil || cache.Node == nil || cache.Node.Target != "pod" || cache.Node.Image != "coder" {
+		t.Fatalf("cache member wrong: %+v", cache)
+	}
+	if cache.Node.MemberByName("migrate") == nil {
 		t.Fatalf("cache.migrate nested member missing: %+v", cache)
 	}
 	migrate := cache.Node.MemberByName("migrate")
