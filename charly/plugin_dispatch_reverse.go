@@ -201,6 +201,10 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 				distros:     env.Distros,
 				dialTimeout: dialTimeout,
 				httpBase:    &http.Client{Timeout: 10 * time.Second},
+				// The deployment's mcp_provide declarations ride the wire env (the plugin-side
+				// live-VM gathers seed it from the resolved vm template, P4) — threaded through
+				// the carrier so snapshotCheckEnv re-emits them on out-of-process verb dispatch.
+				mcpProvide: env.MCPProvide,
 			}
 			hvr := &hostVerbResolver{cc: carrier}
 			var (
