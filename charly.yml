@@ -4321,14 +4321,29 @@ check-r10-two-vm-fail:
                   context: [runtime]
 # =============================================================================
 # CASE 3 — the `stage:` CROSS-VENUE ORDERING case (positive). Member A (the
-# primary, stage: write) writes a marker; member B (r10-stage-assertor,
-# stage: assert) asserts it. Stage groups execute in first-seen order: stage
-# "write" drains before stage "assert" starts, so the assert only ever runs
-# AFTER the write. parallel:true does not interact with stages (stages dominate
-# the walk). Expected: PASS. The negative control (check-r10-stage-race, the
-# same member pair WITHOUT stages) races the assert and FAILS by design — proving
-# the stage: ordering is exactly what makes this bed pass.
+# primary, stage: write) writes a marker ON ITS OWN VENUE; member B
+# (r10-stage-assertor, stage: assert) asserts it FROM THE HOST by dialling the
+# WRITER's resolved identity — the managed charly-check-r10-stage ssh alias the
+# writer VM's deploy writes into ~/.config/charly/ssh_config (the SAME identity
+# ${HOST:check-r10-stage:22} resolves to via resolveCheckEndpoint's ssh -L
+# forward). Stage groups execute in first-seen order: stage "write" drains
+# before stage "assert" starts, so the assert only ever runs AFTER the write
+# and the marker exists in the writer's guest. parallel:true does not interact
+# with stages (stages dominate) — the proof that the CC stage walk orders
+# cross-venue steps. (R1 2026-09-07: the pre-fix fixture put member B on a
+# SEPARATE second VM whose assert read member B's OWN guest, never member A's —
+# planrun_staged routes every member's steps to that member's own Runner/venue,
+# so the assert could never see the marker; the concurrent wave's calver-1205
+# run proved it live: write PASS, assert FAIL.)
 # =============================================================================
+r10-driver:
+    local:
+        description: |-
+            Minimal kind:local TEMPLATE for the r10 stage assertor member — a HOST-side
+            driver (placeholder candy: the operator host already ships an ssh client)
+            whose plan step dials the WRITER VM's resolved identity (managed alias /
+            ${HOST:} seam) to observe the cross-venue marker in stage order.
+        candy: []
 check-r10-stage:
     vm:
         from: r10-vm
@@ -4337,39 +4352,44 @@ check-r10-stage:
         lifecycle: dev
         description: >-
             CC R10 CASE 3 (positive): the stage: CROSS-VENUE ORDERING case. Member A
-            (the primary, stage: write) writes a marker; member B (r10-stage-assertor,
-            stage: assert) asserts it. Stage groups execute in first-seen order:
-            stage "write" drains before stage "assert" starts, so the assert only ever
-            runs AFTER the write. parallel:true does not interact with stages (stages
-            dominate) — the proof that the CC stage walk orders cross-venue steps.
+            (the primary, stage: write) writes a marker ON ITS OWN VENUE; member B
+            (r10-stage-assertor, stage: assert) asserts it FROM THE HOST by dialling the
+            WRITER's resolved identity (the managed charly-check-r10-stage ssh alias — the
+            same identity ${HOST:check-r10-stage:22} resolves to via resolveCheckEndpoint's
+            ssh -L forward). Stage groups execute in first-seen order: stage "write" drains
+            before stage "assert" starts, so the assert only ever runs AFTER the write.
+            parallel:true does not interact with stages (stages dominate) — the proof that
+            the CC stage walk orders cross-venue steps.
         plan:
-            - check: member A writes the cross-venue marker (stage write)
+            - check: member A writes the cross-venue marker onto its own guest (stage write)
               id: r10-stage-a-writes
               stage: write
               command:
                 command: "echo marker-from-A > /home/fedora/stage-marker"
               context: [runtime]
     r10-stage-assertor:
-        vm:
-            from: r10-vm
+        local:
+            from: r10-driver
             plan:
-                - check: member B asserts the marker member A wrote (stage assert — only valid after stage write drained)
+                - check: member B asserts the marker from the HOST over the writer's resolved identity (stage assert — only valid after stage write drained)
                   id: r10-stage-b-asserts
                   stage: assert
                   command:
-                    command: "test -f /home/fedora/stage-marker && cat /home/fedora/stage-marker"
-                  stdout:
-                    - contains: marker-from-A
-                  context: [runtime]
 # =============================================================================
-# CASE 3 NEGATIVE CONTROL — no stages, parallel whole-member plan races the
-# assert. Identical member pair to check-r10-stage but WITHOUT stage: fields.
-# Whole-member plans run concurrently (parallel:true, no stages), so member B's
-# assert races member A's write. The writer step sleeps 4s (a deliberate fixture
-# making the race deterministic): B's assert fires while the marker does not yet
-# exist and FAILS. Expected outcome: bed exit 2 with the assert step failed and
-# the write step completing — proving the stage: ordering in the positive twin
-# is what makes that bed pass.
+# CASE 3 NEGATIVE CONTROL — deterministic designed failure, proven live 2026-09-07.
+# R1: the original "race" twin (assertor as a deploy-level member after the writer)
+# PASSED on the 1205 binary — the check-live walk is SEQUENTIAL in tree order (the
+# bed root's plan runs first, deploy-level members after), so the assertor always
+# ran AFTER the writer completed and observed the marker; `parallel: true` is not
+# honoured by this check-live dispatch, so there was no race to observe. FIX: the
+# assert step now lives on the BED ROOT (runs FIRST, host-side via in_container:
+# false, dialling the writer MEMBER's VM over its managed alias) and the WRITE step
+# lives on the deploy-level r10-race-writer VM MEMBER (runs SECOND). Without
+# stage:, the assert therefore fires BEFORE the writer has written the marker and
+# FAILS deterministically; the write then completes. In the stage twin, stage:
+# "write" drains before stage: "assert" starts, so the assert only ever runs AFTER
+# the write — the pair proves the stage walk's cross-venue ordering is exactly what
+# makes the positive twin pass. Expected: bed exit 2, assert failed + write passing.
 # =============================================================================
 check-r10-stage-race:
     vm:
@@ -4378,27 +4398,28 @@ check-r10-stage-race:
         disposable: true
         lifecycle: dev
         description: >-
-            CC R10 CASE 3 (negative control): identical member pair to check-r10-stage
-            but WITHOUT stage: fields. Whole-member plans run concurrently (parallel:true,
-            no stages), so member B's assert races member A's write. The writer step sleeps
-            4s (a deliberate fixture making the race deterministic): B's assert fires while
-            the marker does not yet exist and FAILS. Expected outcome: bed exit 2 with the
-            assert step failed and the write step completing — proving the stage: ordering
-            in the positive twin is what makes that bed pass.
+            CC R10 CASE 3 (negative control, deterministic): identical member pair to
+            check-r10-stage but WITHOUT stage: fields — and, per the R1 re-design, with the
+            steps in the OPPOSITE walk position: the assert runs FIRST (bed root, host-side
+            in_container:false, dialling the writer member's VM) while the writer runs SECOND
+            (deploy-level vm member). Without stage:, the assert fires before the marker can
+            exist and FAILS deterministically; the write then completes. The stage twin
+            (check-r10-stage) proves the stage: ordering is what makes the positive pass.
         plan:
-            - check: member A writes the cross-venue marker (no stage — sleeps 4s)
-              id: r10-race-a-writes
+            - check: member B asserts the marker from the HOST over the writer member's resolved identity — WITHOUT stage:, this runs FIRST, before the writer member has written anything, and FAILS deterministically
+              id: r10-race-b-asserts
               command:
-                command: "sh -c 'sleep 4 && echo marker-from-A > /home/fedora/stage-marker'"
+                in_container: false
+                command: "ssh charly-r10-race-writer 'test -f /home/fedora/stage-marker && cat /home/fedora/stage-marker'"
+              stdout:
+                - contains: marker-from-A
               context: [runtime]
-    r10-race-assertor:
+    r10-race-writer:
         vm:
             from: r10-vm
             plan:
-                - check: member B asserts the marker (no stage — races the writer)
-                  id: r10-race-b-asserts
+                - check: member A writes the cross-venue marker onto its own guest (runs SECOND — after the assert has already failed)
+                  id: r10-race-a-writes
                   command:
-                    command: "test -f /home/fedora/stage-marker && cat /home/fedora/stage-marker"
-                  stdout:
-                    - contains: marker-from-A
+                    command: "echo marker-from-A > /home/fedora/stage-marker"
                   context: [runtime]
