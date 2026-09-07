@@ -12,7 +12,7 @@ require (
 	github.com/opencharly/plugin-agentteams/candy/plugin-agentteams v0.2026237.1414
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026237.1414
-	github.com/opencharly/plugin-box/candy/plugin-box v0.2026250.552
+	github.com/opencharly/plugin-box/candy/plugin-box v0.2026250.1030
 	github.com/opencharly/plugin-build/candy/plugin-build v0.2026250.552
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026248.730
@@ -26,7 +26,7 @@ require (
 	github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418
 	github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419
 	github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026237.1419
-	github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026237.1419
+	github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026250.951
 	github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026237.1419
 	github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap v0.2026237.1419
 	github.com/opencharly/plugin-example-command/candy/plugin-example-command v0.2026237.1420

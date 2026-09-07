@@ -129,8 +129,8 @@ github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414 h1:qqbo30s
 github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414/go.mod h1:wHCdH3V5NCsDrR2MSApA5BCBj/XLwIA90caT2RNMULE=
 github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026237.1414 h1:afdK2wMwKQ2gr2LQKxDdtp8I/RbQdK04VakA97iqPgU=
 github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026237.1414/go.mod h1:RI6E4PWf/ESn1aADG1XmJKBV6UbokuFGjbqZpiX48MU=
-github.com/opencharly/plugin-box/candy/plugin-box v0.2026250.552 h1:hwaSY4smLIwvd5gqU/ftxq3yOyLkke+ntzb3i35zHV4=
-github.com/opencharly/plugin-box/candy/plugin-box v0.2026250.552/go.mod h1:w7aWEKoHxY7IgLZJqMYWLjjXocF/sSOdVLIJpnNLEw0=
+github.com/opencharly/plugin-box/candy/plugin-box v0.2026250.1030 h1:IVoWfCxw8OHnykE177lOOEFNHU2alEPkwfgECjnIRC0=
+github.com/opencharly/plugin-box/candy/plugin-box v0.2026250.1030/go.mod h1:r+CobdyVo0ZoM1Iqc/kqC2g0wVsW/O7MGRJGC7DrfmM=
 github.com/opencharly/plugin-build/candy/plugin-build v0.2026250.552 h1:VUgkrggm4W3AH8PscJVW6D34MdIi68R6qti2AT6Lu1c=
 github.com/opencharly/plugin-build/candy/plugin-build v0.2026250.552/go.mod h1:4jOczARyMNgqNQTTA0F6tR/pCXS1GDwyfnA6cuAVJVs=
 github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415 h1:ESjbSX0lZgdp64mucEA8lwzT4nQv25Cj5Rtf9XnaU6k=
@@ -157,8 +157,8 @@ github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419 h1:DcdNk
 github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419/go.mod h1:tL1Tiob105rvxInfA9H5UqFKB5rTEMFE9F6l6dDMnrw=
 github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026237.1419 h1:ZFMury3xLAH4BH3LFNEIVbodRua6AXDTNwCXRz53fjo=
 github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026237.1419/go.mod h1:lM0klmUElJ61ImzGI1GRsJM1sn1n82APZZOyYsBPeVg=
-github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026237.1419 h1:n3aw1FXKRwiGXHYWn3sJhxdIi75/c++3czIszZBbITc=
-github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026237.1419/go.mod h1:5Uz4H7GYjW9WS8yPJGlr+dRv/jrR985d+PbaxJeAJZ8=
+github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026250.951 h1:5UBXwbx5VtRsgp7Wj7Rw1hvsb+iFHbm1OHWNSLVs050=
+github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026250.951/go.mod h1:5Uz4H7GYjW9WS8yPJGlr+dRv/jrR985d+PbaxJeAJZ8=
 github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026237.1419 h1:PSgk+nndtBbAUiEGFQr98IkjglpMxb7Je/GfTSUBrJ0=
 github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026237.1419/go.mod h1:qBiKVNKkrbVZZ0D1N5dfPDQmgmwOmfim+f5lJ4iQVlw=
 github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap v0.2026237.1419 h1:FCUi1/L0xXwFPY+/KkzNb9kWbfA/CTnCHC1jBTJoJ6I=
@@ -241,14 +241,8 @@ github.com/opencharly/plugin-user/candy/plugin-user v0.2026242.2148 h1:Qd7xae43/
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026242.2148/go.mod h1:X+COgIvHq7NIpaK3rraNOeyDESN3R8ZhGD99sNcFZms=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026250.542 h1:wD3qUFYHibrZi7GnjZRA6m3L8whe/UBmkeD1M+nQENs=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026250.542/go.mod h1:c928FYEmTDs7rvFibYc7+mpijKbMogaYyA/BZF01Kgw=
-github.com/opencharly/sdk v0.2026250.758 h1:nmIon4zR4GHN90na9J3e5Otg6NQeQO1PImpqGdIQ0k0=
-github.com/opencharly/sdk v0.2026250.758/go.mod h1:qhXB1t3GnIgaFhk6u9b2gCDuhhPx00fz7HSX6Qk10OQ=
 github.com/opencharly/sdk v0.2026250.948 h1:m2v6/HIoO8lIokuacMWUZNLVAaoUnhDzOUFF8MJpX+8=
 github.com/opencharly/sdk v0.2026250.948/go.mod h1:7QxCspRXdA8vrrQl7p7SV0Y8XnSGZ/AAflF3ln6zsDY=
-github.com/opencharly/spec v0.2026250.709 h1:Fv2dspCPit2L7lwwwn29yXuWArFfyrMle65cH7A4SeU=
-github.com/opencharly/spec v0.2026250.709/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
-github.com/opencharly/spec v0.2026250.948 h1:68fDUK7pSM0JZAlUipOz+TP5ib+PAXfinQ4uN8y8o/M=
-github.com/opencharly/spec v0.2026250.948/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/opencharly/spec v0.2026250.957 h1:gcOujwZPiRHhCiybIJFbH27zilEmtZdY7nIgEO9+nQ4=
 github.com/opencharly/spec v0.2026250.957/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
