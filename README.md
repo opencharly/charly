@@ -24,7 +24,7 @@ everything inside one, and why `disposable: true` is a statement about a running
 about a file.
 
 One box can be deployed many times, onto several substrates, on several machines; each of those is
-a deploy, and the deploys on one machine are that machine's fleet.
+a deploy, and the deploys on one machine are that machine's deploy.
 
 Full documentation: **[opencharly.ai](https://opencharly.ai)**.
 
@@ -117,7 +117,7 @@ charly --repo opencharly/distro-fedora check run check-tutorial-shell  # → bui
 |---|---|---|
 | **Build** | a `candy:` with `base:` and a candy list | `charly box build <box>` |
 | **Run** | nothing more | `charly shell <box>` |
-| **Deploy** | a substrate keyword — `pod:` `vm:` `kubernetes:` `local:` `android:` | `charly fleet add`, `charly start` |
+| **Deploy** | a substrate keyword — `pod:` `vm:` `kubernetes:` `local:` `android:` | `charly deploy add`, `charly start` |
 | **Evaluate** | a `plan:` on each candy | `charly check box`, `charly check live`, `charly check run` |
 
 A deploy marked `disposable: true` is a **check bed**, and `charly check run <bed>` chains build,
@@ -198,7 +198,7 @@ and its owning plugin candy, regenerated on every docs build.
 | **substrate** | `pod` `vm` `kubernetes` `local` `android` |
 | **kind** — the entity keywords themselves | `candy` `distro` `group` `agent` |
 | **verb** — probes a `plan:` can call | `file` `http` `cdp` `vnc` `adb` `kube` |
-| **command** — `charly` subcommands | `fleet` `check` `clean` `marketplace` |
+| **command** — `charly` subcommands | `deploy` `check` `clean` `marketplace` |
 | **step** — install operations | `service-custom` `reboot` |
 | **builder** — multi-stage build patterns | `pixi` `npm` `cargo` `aur` |
 
@@ -265,7 +265,7 @@ machine of its own.
 A top-level `local:` deploy installs packages and systemd units onto *the machine charly is
 running on*. The same deploy, nested under a disposable `vm:`, installs them into a throwaway
 guest instead. Either way it is reversible: a `local:` deploy records each step it applies in an
-install ledger, and `charly fleet del <name>` tears it back down.
+install ledger, and `charly deploy del <name>` tears it back down.
 
 ### Where a running candybox actually lives
 
@@ -306,7 +306,7 @@ Full teaching glossary: [the words](https://opencharly.ai/concepts/00-vocabulary
 | **android** | the device substrate — an `android:` deploy installs APKs onto a device or emulator |
 | **host** | a field on a `local:` deploy naming the machine to install onto — `host: local` (or absent) is the machine charly runs on, `host: <user@machine>` is an SSH target |
 | **deploy** | a named placement of a box on a substrate. When running, its candybox is the live thing |
-| **fleet** | the set of deploys charly manages on this machine — the boxes deployed together, the way `docker compose` brings up a set of services. `charly fleet add` puts a deploy in it; `charly fleet del` reverses it |
+| **deploy** | the set of deploys charly manages on this machine — the boxes deployed together, the way `docker compose` brings up a set of services. `charly deploy add` puts a deploy in it; `charly deploy del` reverses it |
 | **plugin** | a candy that teaches charly a new word — it carries a `plugin:` block registering the words it provides, each of which is a **provider**. A plugin lives in the layer shape, but its role is extending charly |
 | **provider** | a word a plugin registers, which routes to that plugin when charly sees it — a **kind**, **verb**, **command**, **step**, **builder**, or **substrate** |
 | **kind** | the class of a top-level name in a `charly.yml` — the entity keywords |
@@ -358,7 +358,7 @@ code the way a hand-maintained copy in this file would.
 | to build your first thing | [Quickstart](https://opencharly.ai/start/quickstart/) → [Authoring a candy](https://opencharly.ai/guides/authoring-a-candy/) |
 | the vocabulary | [The words](https://opencharly.ai/concepts/00-vocabulary/) |
 | the ideas, in order, with runnable examples | [The concepts tour](https://opencharly.ai/concepts/01-the-box-is-the-boundary/) — twelve short pages |
-| every command and flag | [CLI reference](https://opencharly.ai/reference/cli/fleet/) + [The charly CLI](https://opencharly.ai/guides/the-cli/) |
+| every command and flag | [CLI reference](https://opencharly.ai/reference/cli/deploy/) + [The charly CLI](https://opencharly.ai/guides/the-cli/) |
 | every candy and box | [Candy reference](https://opencharly.ai/reference/candy/github.com/opencharly/pod-sshd:v2026.239.1637/sshd/) · [Box reference](https://opencharly.ai/reference/box/fedora/tutorial-shell/) |
 | "what implements `cdp:`?" | [Provider index](https://opencharly.ai/reference/providers/) |
 | something is broken | [Troubleshooting](https://opencharly.ai/guides/troubleshooting/) |

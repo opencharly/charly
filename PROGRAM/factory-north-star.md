@@ -41,7 +41,7 @@ never in git.
 | **spike flavor** | which PROD deployment style the spike reproduces — `native`, `kustomize`, or `helm` (below) |
 | **spike bed** | the spike's check bed. `disposable: true` carries the full `charly check run` cycle — build → check → deploy → steady → check live → destroy → rebuild → check → teardown — for free **[proven upstream]** |
 | **regression bed** | the accumulated `plan:` of every closed incident: ADE's "the spec is the test," grown one incident at a time — `incident close --as-check` appends the incident's committed `check:` (proven on the disposable spike bed) to the regression bed's `plan:`, so the bed fails without the fix and passes with it (R10) |
-| **Forgemaster** | the only Factory Worker holding the host's disposable-LIFECYCLE surface (Verifier also runs on the host, but only to drive bed runs — it forges and destroys nothing): forge (fleet add of pre-authored `disposable: true` templates), `check run`, `update`, `del`, status/logs. Today `charly mcp serve` exposes every verb, so this scoping is a stated gap: the `--disposable-only` tool filter is a gap to close in charly (unit 7), not a prompt-level promise **[HOW — spike it]** |
+| **Forgemaster** | the only Factory Worker holding the host's disposable-LIFECYCLE surface (Verifier also runs on the host, but only to drive bed runs — it forges and destroys nothing): forge (deploy add of pre-authored `disposable: true` templates), `check run`, `update`, `del`, status/logs. Today `charly mcp serve` exposes every verb, so this scoping is a stated gap: the `--disposable-only` tool filter is a gap to close in charly (unit 7), not a prompt-level promise **[HOW — spike it]** |
 | **the six** | Sentinel (triage; R1/root-cause-analyzer is its job description; PROD read-only), Forgemaster (forge-host, disposable-lifecycle surface only), Replicator and Fixer (**run INSIDE the spike** — candyboxing applied to the Factory's own agents: the spike's nested charly is their whole, unrestricted candy store, and the boundary is the security model), Verifier (the existing `check-bed-runner`/`deploy-verifier` executor pattern; pastes verbatim proof), Archivist (ships verified fixes as Skills; git surface only) |
 
 ## The containment model: candyboxing all the way down
@@ -124,14 +124,14 @@ it is handed decides the containment story:
   of PROD, because members share a lifecycle and a spike's teardown must never be
   coupled to PROD's.
 
-**What `charly fleet` is here — and is not.** The fleet is simply the set of deploys
+**What `charly deploy` is here — and is not.** The deploy is simply the set of deploys
 charly manages on the forge host **[proven upstream]**; it is not a grouping or
-placement mechanism and nothing is ever "placed into PROD's fleet". Concretely:
-`charly fleet add` registers a spike as its own top-level disposable deploy on the host
+placement mechanism and nothing is ever "placed into PROD's deploy". Concretely:
+`charly deploy add` registers a spike as its own top-level disposable deploy on the host
 where Forgemaster's charly runs (which may or may not be PROD's host); `charly
-start|stop|status|logs|shell|cp` operate it; `charly fleet del` removes it; unattended
+start|stop|status|logs|shell|cp` operate it; `charly deploy del` removes it; unattended
 `charly update`/destroy on it is authorized by the `disposable: true` flag alone —
-never inferred from its name. PROD is a long-lived deploy in some host's fleet
+never inferred from its name. PROD is a long-lived deploy in some host's deploy
 (`pod:` realised as user-level quadlets on podman+systemd hosts, or `vm:`) and is never
 disposable.
 
@@ -205,7 +205,7 @@ MinIO, which every flavor exposes identically — the venue is below them.
   `agentteams:` verb shape. SDD without exception: schema first, `task cue:gen`,
   generated wire types only; an uncertain shape gets a schema spike.
 - `candy/helm-chart` — **[landed]** the `check-helm-vm` bed's install leg, carrying a
-  law the unit surfaced: a bed's own plan runs verify-only and `charly fleet add`
+  law the unit surfaced: a bed's own plan runs verify-only and `charly deploy add`
   lowers only CANDY plans' `run:` steps — so any mutating install (the
   `step:helm-release` invocation, the in-venue node-ready `kubectl wait`) must live in
   a candy's `run:` steps, never in the bed's plan. Own ADE `check:` asserts the
