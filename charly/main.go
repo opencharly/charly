@@ -194,6 +194,14 @@ func main() {
 	cli.Box.Plugins = nestedCmds["box"]
 	cmdPlugins = append(cmdPlugins, topCmds...)
 	cli.Plugins = cmdPlugins
+
+	// CC-2 cutover: the retired `fleet` CLI word hard-errors BEFORE kong.Parse with a
+	// pointed message (R5 — no alias; the word is gone from the grammar, command:deploy
+	// registers only `deploy`). Same exit-80 usage-error convention as the bundle→fleet
+	// cutover's `charly bundle`.
+	if word, ok := firstCommandWord(os.Args[1:]); ok && word == "fleet" {
+		retireCommandWord(word)
+	}
 	ctx := kong.Parse(&cli,
 		kong.Name("charly"),
 		kong.Description("OpenCharly — the open infrastructure compiler for you and your agents"),
