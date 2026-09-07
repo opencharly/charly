@@ -243,8 +243,14 @@ github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026250.542 h1:wD3qUFYHibrZi7
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026250.542/go.mod h1:c928FYEmTDs7rvFibYc7+mpijKbMogaYyA/BZF01Kgw=
 github.com/opencharly/sdk v0.2026250.758 h1:nmIon4zR4GHN90na9J3e5Otg6NQeQO1PImpqGdIQ0k0=
 github.com/opencharly/sdk v0.2026250.758/go.mod h1:qhXB1t3GnIgaFhk6u9b2gCDuhhPx00fz7HSX6Qk10OQ=
+github.com/opencharly/sdk v0.2026250.948 h1:m2v6/HIoO8lIokuacMWUZNLVAaoUnhDzOUFF8MJpX+8=
+github.com/opencharly/sdk v0.2026250.948/go.mod h1:7QxCspRXdA8vrrQl7p7SV0Y8XnSGZ/AAflF3ln6zsDY=
 github.com/opencharly/spec v0.2026250.709 h1:Fv2dspCPit2L7lwwwn29yXuWArFfyrMle65cH7A4SeU=
 github.com/opencharly/spec v0.2026250.709/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
+github.com/opencharly/spec v0.2026250.948 h1:68fDUK7pSM0JZAlUipOz+TP5ib+PAXfinQ4uN8y8o/M=
+github.com/opencharly/spec v0.2026250.948/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
+github.com/opencharly/spec v0.2026250.957 h1:gcOujwZPiRHhCiybIJFbH27zilEmtZdY7nIgEO9+nQ4=
+github.com/opencharly/spec v0.2026250.957/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
