@@ -9,22 +9,22 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// testProjectFleetConfig is a thin local port of sdk/deploykit.ProjectFleetConfig — an
-// ASSERTION-TAIL projection over spec.UnifiedFile's already-loaded fields (Fleet/Provides/
+// testProjectDeployConfig is a thin local port of sdk/deploykit.ProjectDeployConfig — an
+// ASSERTION-TAIL projection over spec.UnifiedFile's already-loaded fields (Deploy/Provides/
 // PluginKinds["sidecar"]), not a re-derivation of the loader itself. What this test asserts is
-// the SELECTION (does the sidecar survive into the fleet-config projection), which this ~10
+// the SELECTION (does the sidecar survive into the deploy-config projection), which this ~10
 // line reader re-expresses directly over spec types with zero sdk import.
-func testProjectFleetConfig(uf *spec.UnifiedFile) *spec.FleetConfig {
+func testProjectDeployConfig(uf *spec.UnifiedFile) *spec.DeployConfig {
 	if uf == nil {
 		return nil
 	}
 	sidecars := uf.PluginKinds["sidecar"]
-	if len(uf.Fleet) == 0 && uf.Provides == nil && len(sidecars) == 0 {
+	if len(uf.Deploy) == 0 && uf.Provides == nil && len(sidecars) == 0 {
 		return nil
 	}
-	return &spec.FleetConfig{
+	return &spec.DeployConfig{
 		Provides: uf.Provides,
-		Fleet:    uf.Fleet,
+		Deploy:   uf.Deploy,
 		Sidecar:  sidecars,
 	}
 }
@@ -45,7 +45,7 @@ func sidecarBodyImage(t *testing.T, body json.RawMessage) string {
 // TestLoadUnified_SidecarPluginKind proves the sidecar kind→plugin extraction
 // end-to-end through the REAL loader: a project `sidecar:` node lands in
 // uf.PluginKinds["sidecar"] as an OPAQUE body, and the Config.Sidecar /
-// FleetConfig.Sidecar projections carry the same opaque library — so every
+// DeployConfig.Sidecar projections carry the same opaque library — so every
 // downstream deploy/quadlet consumer is untouched. The embedded `tailscale` default
 // no longer rides in via applyEmbeddedDefaults (it moved to candy/plugin-deploy-pod's
 // own go:embed, K-wave 2 cone R3).
@@ -81,13 +81,13 @@ mysidecar:
 	}
 
 	// (2) The projections carry the same opaque library — the shape every deploy
-	// consumer reads (Config.Sidecar / FleetConfig.Sidecar).
+	// consumer reads (Config.Sidecar / DeployConfig.Sidecar).
 	cfg := uf.ProjectConfig()
 	if cfg == nil || sidecarBodyImage(t, cfg.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
 		t.Fatalf("ProjectConfig().Sidecar projection lost the sidecar; got %#v", cfg)
 	}
-	bc := testProjectFleetConfig(uf)
+	bc := testProjectDeployConfig(uf)
 	if bc == nil || sidecarBodyImage(t, bc.Sidecar["mysidecar"]) != "example.com/mysidecar:1" {
-		t.Fatalf("ProjectFleetConfig().Sidecar projection lost the sidecar; got %#v", bc)
+		t.Fatalf("ProjectDeployConfig().Sidecar projection lost the sidecar; got %#v", bc)
 	}
 }

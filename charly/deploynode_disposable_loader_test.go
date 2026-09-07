@@ -7,17 +7,17 @@ import (
 	"testing"
 )
 
-// fleetnode_disposable_loader_test.go — the STAY (charly-loader) half of
-// charly/deploy_save_test.go's former TestFleetNode_DisposableFalseRoundTrip (#55 final-tail
+// deploynode_disposable_loader_test.go — the STAY (charly-loader) half of
+// charly/deploy_save_test.go's former TestDeployNode_DisposableFalseRoundTrip (#55 final-tail
 // split-by-assertion round, team-lead directive 2026-08-03): does LoadUnified correctly parse
 // the *bool Disposable field — nil for an absent `disposable:` key, &false for an explicit
 // `disposable: false`, &true for an explicit `disposable: true`. The fixture below is a literal,
 // hand-authored YAML string — the on-disk node-form shape is a spec contract charly's loader
 // must parse regardless of who produced the bytes; no sdk writer runs here, so this file needs
-// no sdk import. The WRITE-side companion (SaveFleetConfig correctly RE-EMITS an explicit
+// no sdk import. The WRITE-side companion (SaveDeployConfig correctly RE-EMITS an explicit
 // false/true rather than dropping it as indistinguishable-from-omitempty) moved to
-// candy/plugin-fleet/deploy_state_writer_test.go's TestFleetNode_DisposableFalseRoundTrip_Writer.
-func TestFleetNode_DisposableFalseRoundTrip_Loader(t *testing.T) {
+// candy/plugin-fleet/deploy_state_writer_test.go's TestDeployNode_DisposableFalseRoundTrip_Writer.
+func TestDeployNode_DisposableFalseRoundTrip_Loader(t *testing.T) {
 	dir := t.TempDir()
 	src := `version: "` + latestSchemaVersion.String() + `"
 locked-pod:
@@ -43,12 +43,12 @@ bare-pod:
 	if !ok || uf == nil {
 		t.Fatal("LoadUnified returned no project")
 	}
-	dc := testProjectFleetConfig(uf)
+	dc := testProjectDeployConfig(uf)
 	if dc == nil {
-		t.Fatal("testProjectFleetConfig returned nil")
+		t.Fatal("testProjectDeployConfig returned nil")
 	}
 
-	locked := dc.Fleet["locked-pod"]
+	locked := dc.Deploy["locked-pod"]
 	if locked.Disposable == nil {
 		t.Fatal("locked-pod: explicit `disposable: false` parsed as nil; should be &false")
 	}
@@ -59,7 +59,7 @@ bare-pod:
 		t.Error("locked-pod.IsDisposable() returned true despite explicit disposable: false")
 	}
 
-	open := dc.Fleet["open-pod"]
+	open := dc.Deploy["open-pod"]
 	if open.Disposable == nil || !*open.Disposable {
 		t.Errorf("open-pod: disposable = %v, want &true", open.Disposable)
 	}
@@ -67,7 +67,7 @@ bare-pod:
 		t.Error("open-pod.IsDisposable() returned false despite explicit disposable: true")
 	}
 
-	bare := dc.Fleet["bare-pod"]
+	bare := dc.Deploy["bare-pod"]
 	if bare.Disposable != nil {
 		t.Errorf("bare-pod: disposable = %v, want nil (field absent in source)", bare.Disposable)
 	}

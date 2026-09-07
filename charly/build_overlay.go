@@ -73,7 +73,7 @@ const overlayBuilderKind = "overlay"
 type overlayBuildInputs struct {
 	plans      []*spec.InstallPlan
 	parentExec spec.DeployExecutor
-	parentNode *spec.FleetNode
+	parentNode *spec.DeployNode
 }
 
 type overlayBuildInputsKey struct{}
@@ -116,7 +116,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// translateHostPathToVenue maps host paths → venue paths for the nested podman build.
 	var plans []*spec.InstallPlan
 	var parentExec spec.DeployExecutor
-	var parentNode *spec.FleetNode
+	var parentNode *spec.DeployNode
 	if in := overlayBuildInputsFrom(ctx); in != nil {
 		plans = in.plans
 		parentExec = in.parentExec

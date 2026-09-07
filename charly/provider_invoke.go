@@ -27,7 +27,7 @@ import (
 // defaultPluginInvokeTimeout bounds a host→plugin call when the caller did not
 // provide a deadline. A hung out-of-process plugin must fail fast with a clear
 // error (context deadline exceeded), never deadlock the host forever — the
-// fleet-del VM-member hang (the fleet del + its plugins sat in futex_wait for
+// deploy-del VM-member hang (the deploy del + its plugins sat in futex_wait for
 // hours, 0% CPU).
 // defaultPluginInvokeTimeout is a package var (not a const) so a test can
 // override it to a short value.

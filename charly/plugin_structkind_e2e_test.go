@@ -38,11 +38,11 @@ const authoredMemberTree = `    web:
 // TestExternalStructKind_StructuralDecode proves F5 authored-member INPUT-threading END-TO-END: a
 // STRUCTURAL external kind (candy/plugin-example-structkind, NOT compiled in) is recognized +
 // connected by the prescan; the host PRE-DECODES the node's AUTHORED resource-member children (via
-// the core buildFleetNode recursion — the single member-decode source of truth) and threads them
+// the core buildDeployNode recursion — the single member-decode source of truth) and threads them
 // to the plugin's ops.OpLoad via op.Env; the plugin ATTACHES them to its spec.Deploy reply — so the host
-// folds a COMPLETE Fleet (with the AUTHORED members) into uf.Fleet. The proof is BYTE-EQUIVALENCE
+// folds a COMPLETE Deploy (with the AUTHORED members) into uf.Deploy. The proof is BYTE-EQUIVALENCE
 // to the builtin `group:` path: the SAME authored member tree under `examplestructkind:` and under
-// `group:` must produce an IDENTICAL uf.Fleet entry (same peer/nested members, same hoisted
+// `group:` must produce an IDENTICAL uf.Deploy entry (same peer/nested members, same hoisted
 // cross-member plan, same deploy-config). This is the HIGHEST-risk F5 assumption (a plugin
 // reconstructs the AUTHORED member tree, not a synthesized stand-in); it is the foundation for
 // externalizing the seven builtin structural kind decoders (group first). Builds the real plugin
@@ -124,17 +124,17 @@ check-structkind-e2e:
 		t.Fatalf("LoadUnified post-migrate baseline: %v", err)
 	}
 
-	// F5: a STRUCTURAL kind folds into uf.Fleet (NOT uf.PluginKinds).
-	dn, ok := pluginUF.Fleet["check-structkind-e2e"]
+	// F5: a STRUCTURAL kind folds into uf.Deploy (NOT uf.PluginKinds).
+	dn, ok := pluginUF.Deploy["check-structkind-e2e"]
 	if !ok {
-		t.Fatalf("structural plugin kind not folded into uf.Fleet; have fleet keys %v", fleetKeysFor(pluginUF))
+		t.Fatalf("structural plugin kind not folded into uf.Deploy; have deploy keys %v", deployKeysFor(pluginUF))
 	}
 	if _, dup := pluginUF.PluginKinds["examplestructkind"]; dup {
-		t.Fatal("structural kind also landed in uf.PluginKinds — it must be uf.Fleet ONLY")
+		t.Fatal("structural kind also landed in uf.PluginKinds — it must be uf.Deploy ONLY")
 	}
-	base, ok := baseUF.Fleet["check-structkind-e2e"]
+	base, ok := baseUF.Deploy["check-structkind-e2e"]
 	if !ok {
-		t.Fatalf("post-migrate baseline not folded into uf.Fleet; have %v", fleetKeysFor(baseUF))
+		t.Fatalf("post-migrate baseline not folded into uf.Deploy; have %v", deployKeysFor(baseUF))
 	}
 	// The baseline's post-migrate shape: the FIRST member (web) is the PRIMARY (the
 	// entity's own substrate node), cache the remaining deploy-level sibling.
@@ -201,9 +201,9 @@ func mustJSON(t *testing.T, v any) string {
 	return string(b)
 }
 
-func fleetKeysFor(uf *spec.UnifiedFile) []string {
-	out := make([]string, 0, len(uf.Fleet))
-	for k := range uf.Fleet {
+func deployKeysFor(uf *spec.UnifiedFile) []string {
+	out := make([]string, 0, len(uf.Deploy))
+	for k := range uf.Deploy {
 		out = append(out, k)
 	}
 	return out

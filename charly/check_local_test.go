@@ -21,10 +21,10 @@ import (
 // (via charly's own deployTraitsFor registry lookup + spec.StampDescent directly — #55 K4 cone3:
 // moved here, its only remaining charly caller, when the duplicate charly/deploy_chain_test.go was
 // deleted in favor of the already-relocated candy/plugin-fleet/deploy_chain_test.go twin), so a
-// FleetNode literal built directly in a test (bypassing the loader) runs against a
+// DeployNode literal built directly in a test (bypassing the loader) runs against a
 // realistically-stamped node instead of tripping the nil-descent guard.
-func stampTestDescents(roots map[string]spec.FleetNode) map[string]spec.FleetNode {
-	out := make(map[string]spec.FleetNode, len(roots))
+func stampTestDescents(roots map[string]spec.DeployNode) map[string]spec.DeployNode {
+	out := make(map[string]spec.DeployNode, len(roots))
 	for k, v := range roots {
 		n := v
 		spec.StampDescent(&n, deployTraitsFor)
@@ -43,7 +43,7 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 
 	// host: "" and host: "local" → host shell.
 	for _, host := range []string{"", "local"} {
-		e, err := exec.RootExecutorForDeployNode(&spec.FleetNode{Target: "local", Host: host})
+		e, err := exec.RootExecutorForDeployNode(&spec.DeployNode{Target: "local", Host: host})
 		if err != nil {
 			t.Fatalf("host=%q: %v", host, err)
 		}
@@ -53,7 +53,7 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 	}
 
 	// host: "user@box" → SSH with the inline user.
-	e, err := exec.RootExecutorForDeployNode(&spec.FleetNode{Target: "local", Host: "alice@box"})
+	e, err := exec.RootExecutorForDeployNode(&spec.DeployNode{Target: "local", Host: "alice@box"})
 	if err != nil {
 		t.Fatalf("user@box: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 	}
 
 	// host: "box" + user: "u" → SSH with the node.User (Ansible-style override).
-	e, err = exec.RootExecutorForDeployNode(&spec.FleetNode{Target: "local", Host: "box", User: "u"})
+	e, err = exec.RootExecutorForDeployNode(&spec.DeployNode{Target: "local", Host: "box", User: "u"})
 	if err != nil {
 		t.Fatalf("box+user: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestRootExecutorForDeployNode(t *testing.T) {
 // (no error) and add NO hop — the chain stays at the passed-in root executor.
 // Pre-cutover, AppendHopForFlatPath had no `local` case → "unknown target".
 func TestResolveDeployChain_LocalNoHop(t *testing.T) {
-	roots := map[string]spec.FleetNode{
+	roots := map[string]spec.DeployNode{
 		"workstation": {Target: "local"},
 	}
 	node, chain, err := exec.ResolveDeployChain(stampTestDescents(roots), "workstation", exec.ShellExecutor{})

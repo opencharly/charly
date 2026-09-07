@@ -8,7 +8,7 @@ not to prose scattered through config comments.
 ## Symptom
 
 charly's every podman-backed operation — `charly box build`, `charly check box`,
-`charly check live`, `charly fleet add`, deploy, fresh `charly update` — works in
+`charly check live`, `charly deploy add`, deploy, fresh `charly update` — works in
 a normal operator terminal but fails when driven by a reasonix agent, with one or
 both of:
 

@@ -8,9 +8,9 @@ import (
 
 // IsPreemptible is independent of disposable/ephemeral: a node may be both, and
 // neither derives from the other.
-func TestFleetNode_PreemptibleOrthogonal(t *testing.T) {
+func TestDeployNode_PreemptibleOrthogonal(t *testing.T) {
 	tru := true
-	both := spec.FleetNode{
+	both := spec.DeployNode{
 		Disposable:  &tru,
 		Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}},
 	}
@@ -22,32 +22,32 @@ func TestFleetNode_PreemptibleOrthogonal(t *testing.T) {
 	}
 
 	// Preemptible does NOT make a node disposable.
-	holderOnly := spec.FleetNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}}}
+	holderOnly := spec.DeployNode{Preemptible: &spec.PreemptibleConfig{Holds: []string{"gpu"}}}
 	if holderOnly.IsDisposable() {
 		t.Error("preemptible must not imply disposable")
 	}
 
 	// Disposable does NOT make a node preemptible.
-	dispOnly := spec.FleetNode{Disposable: &tru}
+	dispOnly := spec.DeployNode{Disposable: &tru}
 	if dispOnly.IsPreemptible() {
 		t.Error("disposable must not imply preemptible")
 	}
 
 	// Empty holds → not preemptible.
-	empty := spec.FleetNode{Preemptible: &spec.PreemptibleConfig{}}
+	empty := spec.DeployNode{Preemptible: &spec.PreemptibleConfig{}}
 	if empty.IsPreemptible() {
 		t.Error("preemptible with no holds must not count as preemptible")
 	}
 
 	// nil → not preemptible.
-	if (spec.FleetNode{}).IsPreemptible() {
+	if (spec.DeployNode{}).IsPreemptible() {
 		t.Error("absent preemptible must not be preemptible")
 	}
 }
 
 func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	// List shorthand → Holds, default stop/restore.
-	var listForm spec.FleetNode
+	var listForm spec.DeployNode
 	if err := decodeViaCUEForTest(t, "preemptible: [gpu, tpu]\n", &listForm); err != nil {
 		t.Fatalf("list-shorthand unmarshal: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	}
 
 	// Block form.
-	var blockForm spec.FleetNode
+	var blockForm spec.DeployNode
 	blockYAML := "preemptible:\n  holds: [gpu]\n  stop: shutdown\n  restore: on-success\n"
 	if err := decodeViaCUEForTest(t, blockYAML, &blockForm); err != nil {
 		t.Fatalf("block unmarshal: %v", err)
@@ -77,7 +77,7 @@ func TestPreemptibleConfig_UnmarshalYAML(t *testing.T) {
 	// Scalar (e.g. `preemptible: true`) is rejected — a holder must name what
 	// it holds. The normalizer leaves a scalar unchanged, so CUE Decode of a
 	// scalar into the PreemptibleConfig struct fails.
-	var scalarForm spec.FleetNode
+	var scalarForm spec.DeployNode
 	if err := decodeViaCUEForTest(t, "preemptible: true\n", &scalarForm); err == nil {
 		t.Fatal("scalar preemptible should be rejected")
 	}

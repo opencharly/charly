@@ -15,7 +15,7 @@ import (
 // (externalizedDeploySubstrates) — ALL FIVE substrates externalize today; there is no
 // in-proc DeployTargetProvider concept left (the former interface + its ResolveTarget
 // type-assertion branch in unified_targets.go were confirmed dead — zero implementers,
-// `git grep 'func.*ResolveTarget(node \*spec.FleetNode'` matches only the package-level
+// `git grep 'func.*ResolveTarget(node \*spec.DeployNode'` matches only the package-level
 // dispatcher itself — and deleted).
 var deployTargetWords = append([]string(nil), spec.ResourceKinds...)
 

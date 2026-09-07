@@ -23,6 +23,12 @@ func writeFixture(t *testing.T, root, rel, body string) {
 
 func TestLoadUnified_AbsentFileReturnsNotPresent(t *testing.T) {
 	root := t.TempDir()
+	// Isolate the USER config-stack layer (spec.DefaultDeployConfigPath →
+	// XDG_CONFIG_HOME/charly/charly.yml): since the sdk v0.2026250.702+ LoadUnified
+	// merges the system → user → in-dir stack, a sibling test's deploy-state write
+	// into the shared TestMain XDG_CONFIG_HOME would otherwise surface here as an
+	// existing user layer and flip present to true (R1 2026-09-07, the CC-2 sdk 702 pin).
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	uf, present, err := LoadUnified(root)
 	if err != nil {
 		t.Fatalf("LoadUnified: %v", err)
@@ -165,9 +171,9 @@ import: [a.yml]
 func TestLoadUnified_MultiDocumentNodeForm(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-import: [fleet.yml]
+import: [deploy.yml]
 `)
-	writeFixture(t, root, "fleet.yml", `chrome:
+	writeFixture(t, root, "deploy.yml", `chrome:
   candy:
     package: [chromium]
 ---
@@ -205,9 +211,9 @@ browsers:
 func TestLoadUnified_LegacyKindKeyedRejected(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-import: [fleet.yml]
+import: [deploy.yml]
 `)
-	writeFixture(t, root, "fleet.yml", `candy:
+	writeFixture(t, root, "deploy.yml", `candy:
   name: broken
 box:
   name: broken-too

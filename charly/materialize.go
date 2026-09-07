@@ -148,7 +148,7 @@ func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) er
 // materializeNodeInto folds ONE parsed node into uf via the registered spec.Materializer plugin
 // (K1 unit 1, #46) — the not-found DISPATCH POLICY lives in candy/plugin-loader
 // (loaderkit.Materialize), reached through requireMaterializer(); the actual registry resolve +
-// provider dispatch stays host-side behind the DecodeEntity/BuildFleetEntity seam callbacks
+// provider dispatch stays host-side behind the DecodeEntity/BuildDeployEntity seam callbacks
 // (hostMaterializeSeams, loader_threaded.go) — clause M never leaves charly core.
 //
 // Pre-seeds the spec.MaterializedProject accumulator from uf's CURRENT maps (so repeated calls
@@ -161,12 +161,12 @@ func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) er
 // bridge it merely happened to share a file with.
 func materializeNodeInto(pn spec.ParsedNode, uf *spec.UnifiedFile) error {
 	acc := spec.MaterializedProject{
-		Box: uf.Box, Candy: uf.Candy, Fleet: uf.Fleet, PluginKinds: uf.PluginKinds,
+		Box: uf.Box, Candy: uf.Candy, Deploy: uf.Deploy, PluginKinds: uf.PluginKinds,
 	}
 	if err := requireMaterializer().MaterializeNode(pn, loaderThreaded(), hostMaterializeSeams(), &acc); err != nil {
 		return err
 	}
-	uf.Box, uf.Candy, uf.Fleet, uf.PluginKinds = acc.Box, acc.Candy, acc.Fleet, acc.PluginKinds
+	uf.Box, uf.Candy, uf.Deploy, uf.PluginKinds = acc.Box, acc.Candy, acc.Deploy, acc.PluginKinds
 	return nil
 }
 

@@ -1,7 +1,7 @@
 package main
 
-// fleet_add_cmd.go — the host-side M residue of `charly fleet add`/`del` after the K4-C SHAPE-2
-// cutover. The CLI grammar + tree walk + per-node compile live in the command:fleet plugin; the
+// deploy_add_cmd.go — the host-side M residue of `charly deploy add`/`del` after the K4-C SHAPE-2
+// cutover. The CLI grammar + tree walk + per-node compile live in the command:deploy plugin; the
 // DEL resolution moved to candy/plugin-fleet/del_resolve.go (K-wave 2 cone R2 bank C — the
 // deployDelCmd struct, resolveDelNode, podDeploymentArtifactExists, and the "deploy-del-resolve"
 // HostBuild seam are all DELETED). What stays here is floor-M host-only machinery a plugin (a

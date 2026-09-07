@@ -7,7 +7,7 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// deploy_node_test.go — tests for FleetNode tree walking and
+// deploy_node_test.go — tests for DeployNode tree walking and
 // dotted-path resolution. TestWalkPreOrder_RootThenChildren / TestWalkPostOrder_ChildrenThenRoot
 // / TestResolveNodePath_* / TestSortedChildKeys_Deterministic /
 // TestMergeDeployConfigsLocalCutoverFields / TestMergeDeployConfigsPreservesAllFields relocated
@@ -15,7 +15,7 @@ import (
 // functions directly, zero charly dep.
 
 func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
-	deploy := map[string]spec.FleetNode{
+	deploy := map[string]spec.DeployNode{
 		"bad.name": {Target: "host"},
 	}
 	err := spec.ValidateDeploymentTree(deploy)
@@ -28,11 +28,11 @@ func TestValidateDeploymentTree_RejectsDotInName(t *testing.T) {
 }
 
 func TestHasMembers(t *testing.T) {
-	empty := &spec.FleetNode{}
+	empty := &spec.DeployNode{}
 	if empty.HasMembers() {
 		t.Error("empty node should not report HasMembers")
 	}
-	withKids := &spec.FleetNode{Member: []spec.Member{{Name: "k", Position: spec.PositionInSubstrate, Node: &spec.FleetNode{}}}}
+	withKids := &spec.DeployNode{Member: []spec.Member{{Name: "k", Position: spec.PositionInSubstrate, Node: &spec.DeployNode{}}}}
 	if !withKids.HasMembers() {
 		t.Error("node with members should report HasMembers")
 	}

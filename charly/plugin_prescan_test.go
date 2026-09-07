@@ -8,7 +8,7 @@ import (
 
 // TestPrescanExternalDeploySubstrate proves the loader pre-load (plugin_prescan.go):
 // a project whose candy declares `plugin: providers: [deploy:<word>]` parses a
-// `<bed>: { <word>: {…} }` node into FleetNode{Target: <word>} at LOAD time —
+// `<bed>: { <word>: {…} }` node into DeployNode{Target: <word>} at LOAD time —
 // WITHOUT the out-of-process provider being built/connected. The word is recognized
 // purely from the declaration pre-scan; the real provider would connect later at
 // loadProjectPlugins. Uses a UNIQUE word so it can never collide with another test's
@@ -68,12 +68,12 @@ check-prescan:
 	if err != nil {
 		t.Fatalf("LoadUnified must parse the external-deploy-substrate bed via the pre-scan: %v", err)
 	}
-	node, ok := uf.Fleet["check-prescan"]
+	node, ok := uf.Deploy["check-prescan"]
 	if !ok {
-		t.Fatalf("bed check-prescan not parsed into uf.Fleet (have %d entries)", len(uf.Fleet))
+		t.Fatalf("bed check-prescan not parsed into uf.Deploy (have %d entries)", len(uf.Deploy))
 	}
 	if node.Target != word {
-		t.Fatalf("bed Target = %q, want %q (external substrate routed to the fleet builder)", node.Target, word)
+		t.Fatalf("bed Target = %q, want %q (external substrate routed to the deploy builder)", node.Target, word)
 	}
 	// The parse succeeded purely from the declaration pre-scan — the word is still
 	// NOT a connected provider.

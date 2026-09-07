@@ -14,7 +14,7 @@
 #
 # PRUNED: only deploy:local + examplestep build in-guest (2 out-of-tree Go plugins whose
 # go.mods resolve the sdk + spec contract modules from the module proxy at the pinned
-# require versions), never the full superproject plugin fleet (which OOM'd a 3.8G
+# require versions), never the full superproject plugin deploy (which OOM'd a 3.8G
 # guest). No `import:` of the distro submodules — check-local-app is a kind:local template
 # with no base image, so no distro closure is needed.
 #
@@ -47,7 +47,7 @@ check-local:
             to an ExternalPluginStep and Invokes the plugin's OpExecute over the E3b
             ExecutorService reverse channel — the plugin writes /tmp/charly-examplestep/
             examplestep-deploy/{applied,probe} on the GUEST venue and returns a plugin-script
-            reverse op the host records; teardown (charly fleet del) replays it so the markers
+            reverse op the host records; teardown (charly deploy del) replays it so the markers
             are gone. Every side effect is confined to the disposable guest.
         add_candy:
             - '@github.com/opencharly/plugin-example-step/candy/plugin-example-step:v2026.239.1643'

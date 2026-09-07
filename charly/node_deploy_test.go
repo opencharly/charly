@@ -6,11 +6,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// fleetNodeForm is the COMPACT node-form (the only authoring surface): each
+// deployNodeForm is the COMPACT node-form (the only authoring surface): each
 // member's inline checks live in the member's own `plan:` list INSIDE the kind
 // value, and the deeply-nested pod-in-pod is a sub-ENTITY child. `image: coder`
 // is a scalar cross-ref and stays in the value.
-const fleetNodeForm = `
+const deployNodeForm = `
 shop:
   pod:
     disposable: true
@@ -29,15 +29,15 @@ shop:
             command: "test -f /done"
 `
 
-// TestBuildFleetNode_Structure proves the fleet builder turns the unified
-// node-form into the correct FleetNode tree: a disposable pod PRIMARY (the
+// TestBuildDeployNode_Structure proves the deploy builder turns the unified
+// node-form into the correct DeployNode tree: a disposable pod PRIMARY (the
 // post-migrate member-tree spelling — the former group bed's first member
 // promoted, Cutover C task 1) with an inline cross-member check in its own
 // Plan, one deploy-level pod sibling (Peer), and a deeply-nested pod-in-pod
 // (Nested) with its own inline check.
-func TestBuildFleetNode_Structure(t *testing.T) {
+func TestBuildDeployNode_Structure(t *testing.T) {
 	var doc yaml.Node
-	if err := yaml.Unmarshal([]byte(fleetNodeForm), &doc); err != nil {
+	if err := yaml.Unmarshal([]byte(deployNodeForm), &doc); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	nodes, err := genericNodesFromDoc(&doc)
@@ -51,18 +51,18 @@ func TestBuildFleetNode_Structure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("genericToParsedNode: %v", err)
 	}
-	dn, err := requireProjectLoader().BuildFleetNode(pn, loaderThreaded())
+	dn, err := requireProjectLoader().BuildDeployNode(pn, loaderThreaded())
 	if err != nil {
-		t.Fatalf("BuildFleetNode: %v", err)
+		t.Fatalf("BuildDeployNode: %v", err)
 	}
 	if dn.Target != "pod" {
-		t.Errorf("fleet primary Target = %q, want pod", dn.Target)
+		t.Errorf("deploy primary Target = %q, want pod", dn.Target)
 	}
 	if dn.Image != "coder" {
-		t.Errorf("fleet primary image = %q, want coder (the promoted first member's body)", dn.Image)
+		t.Errorf("deploy primary image = %q, want coder (the promoted first member's body)", dn.Image)
 	}
 	if dn.Disposable == nil || !*dn.Disposable {
-		t.Errorf("fleet disposable = %v, want true", dn.Disposable)
+		t.Errorf("deploy disposable = %v, want true", dn.Disposable)
 	}
 	if len(dn.Plan) != 1 || dn.Plan[0].Check == "" {
 		t.Fatalf("primary inline check missing: %+v", dn.Plan)
