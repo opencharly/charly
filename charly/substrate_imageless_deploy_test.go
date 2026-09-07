@@ -6,13 +6,16 @@ package main
 // resolved-project envelope's Deploy map — every build:project consumer saw "no entity".
 //
 // Root cause: foldSubstrateKind's deploy-vs-template classification
-// (pl.IsDeployShape(pn) || len(pl.ResourceChildren(pn)) > 0) recognizes only from:/image:
+// (pl.IsDeployShape(pn) || len(pl.ResourceChildren(pn)) > 0) recognized only from:/image:
 // bodies and resource-member children. The imageless agent_provisioned spelling — the
 // shape spec.ValidateDeploymentTree → ValidateDeployRequiresBox EXEMPTS from the pod
 // box requirement — matched neither arm, so the node folded as a standalone TEMPLATE
 // (acc.PluginKinds["pod"][name]) and never entered acc.Deploy. The plugin-build #9
 // in-repo tests missed it because every test doc carries a watcher: sibling whose pod:
-// disc feeds the ResourceChildren fallback arm.
+// disc feeds the ResourceChildren fallback arm. The fix folded BOTH extra arms into the
+// ONE loaderkit.IsDeployShape classifier (parser consolidation F1.2/F1.4) — the member
+// channel (any resource-member child — the ONE memberDisc/IsResourceDisc predicate) and
+// the agent_provisioned body probe now live beside the from:/image: scan.
 //
 // The contract: the shape classifier predicate MUST match the Deploy gate's
 // agent_provisioned exemption exactly — an agent_provisioned body IS a deploy shape.
@@ -103,7 +106,8 @@ func TestSubstrateKind_PlainImagelessPodStaysTemplate(t *testing.T) {
 
 // TestSubstrateKind_ImagelessAgentProvisionedWithSiblingStillFolds locks the plugin-build
 // #9 shape (the watcher-sibling doc) against regression: the deploy-level sibling keeps
-// feeding the ResourceChildren arm, and the parent still folds to acc.Deploy.
+// feeding the member channel of the ONE IsDeployShape classifier, and the parent still
+// folds to acc.Deploy.
 func TestSubstrateKind_ImagelessAgentProvisionedWithSiblingStillFolds(t *testing.T) {
 	const doc = `check-agent-live:
     pod:
