@@ -116,7 +116,15 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 // they are excluded from the forbidden-word universe. Currently only "venue": the generic
 // ExecutorService.Venue RPC (return the venue identifier) coincides with the #Op `venue` config
 // field. Extend ONLY with a justification — never to silence a real per-plugin leak.
-var genericConceptCollisions = map[string]bool{"venue": true}
+var genericConceptCollisions = map[string]bool{
+	"venue": true,
+	// "validate": the generic OpValidate wire selector (the plugin↔kernel op contract's
+	// validate phase — class-generic, any class's validate op) coincides with the NEW
+	// authored-config `validate:` op modifier (config-verb wave, spec #117). Same shape
+	// as "venue": config vocabulary naming a generic reverse-channel API element, not a
+	// per-plugin lease.
+	"validate": true,
+}
 
 // buildProviderWordUniverse is the set of words that must NOT appear in the plugin↔kernel API
 // surface — the UNION of every CUE-derived authored-config word slice (spec.OpVerbs act-verbs ∪
