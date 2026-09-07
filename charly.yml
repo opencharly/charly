@@ -4375,6 +4375,11 @@ check-r10-stage:
                   id: r10-stage-b-asserts
                   stage: assert
                   command:
+                    in_container: false
+                    command: "ssh charly-check-r10-stage 'test -f /home/fedora/stage-marker && cat /home/fedora/stage-marker'"
+                  stdout:
+                    - contains: marker-from-A
+                  context: [runtime]
 # =============================================================================
 # CASE 3 NEGATIVE CONTROL — deterministic designed failure, proven live 2026-09-07.
 # R1: the original "race" twin (assertor as a deploy-level member after the writer)
