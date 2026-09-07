@@ -113,14 +113,18 @@ func TestNoSinglePluginAPISurface(t *testing.T) {
 
 // genericConceptCollisions are words that appear in the authored-config vocabulary AND legitimately
 // name a GENERIC reverse-channel API element (a shared deploy concept, not a plugin identity), so
-// they are excluded from the forbidden-word universe. "venue": the generic
+// they are excluded from the forbidden-word universe. Currently only "venue": the generic
 // ExecutorService.Venue RPC (return the venue identifier) coincides with the #Op `venue` config
-// field. "validate": the generic ops.OpValidate action selector (the provider VALIDATE operation,
-// class-generic since the egress era) coincides with the config: verb's "validate" modifier (the
-// vendor-egress-schema name a rendered config is validated against — a generic concept, not a
-// plugin identity; the config: verb is a kernel verb, its modifier is not a provider word).
-// Extend ONLY with a justification — never to silence a real per-plugin leak.
-var genericConceptCollisions = map[string]bool{"venue": true, "validate": true}
+// field. Extend ONLY with a justification — never to silence a real per-plugin leak.
+var genericConceptCollisions = map[string]bool{
+	"venue": true,
+	// "validate": the generic OpValidate wire selector (the plugin↔kernel op contract's
+	// validate phase — class-generic, any class's validate op) coincides with the NEW
+	// authored-config `validate:` op modifier (config-verb wave, spec #117). Same shape
+	// as "venue": config vocabulary naming a generic reverse-channel API element, not a
+	// per-plugin lease.
+	"validate": true,
+}
 
 // buildProviderWordUniverse is the set of words that must NOT appear in the plugin↔kernel API
 // surface — the UNION of every CUE-derived authored-config word slice (spec.OpVerbs act-verbs ∪
