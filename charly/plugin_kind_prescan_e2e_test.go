@@ -15,7 +15,7 @@ import (
 // kind word), the plugin is CONNECTED by the depth-0 pre-pass (connectDeclaredKindPlugins,
 // re-entrancy-guarded), and runPluginKind decodes the body into uf.PluginKinds — ALL during a
 // single LoadUnified, with NO infinite recursion (the connect re-loads the SAME project root that
-// contains the kind node; the guard + the normalizeNodeInto defer break the cycle). The test
+// contains the kind node; the guard + the Materialize dispatch's defer break the cycle). The test
 // COMPLETING is the re-entrancy proof. Builds the real candy/plugin-example-kind OOP, so it is
 // -short-gated like the other reverse-channel e2es.
 func TestExternalKind_PrescanConnectDecode(t *testing.T) {
@@ -51,7 +51,7 @@ my-example-kind:
 		t.Fatal(err)
 	}
 	// The whole F4 path: prescan recognizes examplekind → connectDeclaredKindPlugins builds +
-	// connects it (re-entrancy-guarded) → normalizeNodeInto/runPluginKind decodes the body.
+	// connects it (re-entrancy-guarded) → the Materialize dispatch/runPluginKind decodes the body.
 	uf, _, err := LoadUnified(dir)
 	if err != nil {
 		t.Fatalf("LoadUnified must parse+decode a kind:examplekind entity via the F4 prescan+connect: %v", err)

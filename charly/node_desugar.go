@@ -11,7 +11,10 @@ package main
 // It stays kernel on two clauses, not one: the table is kind-recognition DATA consulted by word
 // (clause D — loaderThreaded() projects it into spec.Threaded.Primaries before every parse), and
 // registerPluginPrimary MUTATES it from the provider registry at capability-registration time
-// (clause M — plugin loading). Neither half can move without moving the registry.
+// (clause M — plugin loading) — the compiled-in units seed it AT INIT from their declared
+// capability primaries (the ONE seeding source, parser consolidation F2.6; the frozen 11-entry
+// shorthand table is deleted, its expectation pinned by a parity-assertion test). Neither half
+// can move without moving the registry.
 //
 // The scalar sugar it serves: `file: /usr/bin/xterm` desugars to plugin_input: {file: …} via the
 // word's declared PRIMARY field; a map value passes through verbatim. Authoring
@@ -30,21 +33,37 @@ import (
 
 // pluginPrimaries maps a plugin verb word to its declared PRIMARY input field —
 // the target of the scalar sugar shorthand (`file: /usr/bin/xterm` →
-// plugin_input: {file: …}). Compiled-in plugins seed it at init via
-// registerPluginPrimary (their capability manifest); the byte-gated prescan
-// registers an external plugin's declared primary before parse.
-var pluginPrimaries = map[string]string{
-	// The 11 live-container verbs' scalar shorthand (`cdp: status`) must desugar
-	// at PARSE time — before any out-of-process provider can connect and serve
-	// its ProvidedCapability.Primary — so their shared `method` primary is a
-	// FROZEN CONVENTION seeded here (the same determinism rationale as the
-	// migrate hook's frozen table). A connected plugin's declared primary
-	// re-registers the same value; a NEW external verb declares its primary in
-	// its candy manifest's plugin.primary map (prescanned pre-parse) instead of
-	// extending this table.
-	"cdp": "method", "wl": "method", "dbus": "method", "vnc": "method",
-	"mcp": "method", "record": "method", "spice": "method", "libvirt": "method",
-	"kube": "method", "adb": "method", "appium": "method",
+// plugin_input: {file: …}). Seeded at init from the COMPILED-IN units' declared
+// capability primaries (RegisterBuiltinPluginUnit/RegisterBuiltinProvider →
+// register()'s primaryCarrier hook — the ONE compiled-in seeding path, parser
+// consolidation F2.6); the byte-gated prescan registers an external plugin's
+// declared primary before parse, and a connected out-of-process provider's
+// served ProvidedCapability.Primary re-registers the same value at connect.
+// The former FROZEN 11-entry table (the live-container verbs' shared `method`
+// shorthand) is DELETED — it was a hard-coded duplicate of the declared-primary
+// universe the same registration hook serves; the expected set is now a PARITY
+// ASSERTION in node_desugar_test.go, so a drift between the served primaries and
+// the parse-time expectation fails a test, never silently desugars wrong.
+var pluginPrimaries = map[string]string{}
+
+// init seeds the parse-time desugar table from the COMPILED-IN declared capability primaries
+// (parser consolidation F2.6): the platform live-container verbs' `method` primary is carried
+// by the embedded charly.yml's `verb_primaries:` directive (the binary's OWN compiled-in
+// declaration — their serving plugins are out-of-process, so their served
+// ProvidedCapability.Primary cannot be read at init). The register() primaryCarrier hook then
+// adds every compiled-in verb candy's declared primary at its registration, and the byte-gated
+// prescan + connected external providers mutate the same table — ONE table, seeded from DATA,
+// never a hard-coded literal.
+func init() {
+	var doc struct {
+		VerbPrimaries map[string]string `yaml:"verb_primaries"`
+	}
+	unmarshalEmbeddedDefaults(&doc)
+	for w, f := range doc.VerbPrimaries {
+		if f != "" {
+			pluginPrimaries[w] = f
+		}
+	}
 }
 
 // registerPluginPrimary declares word's primary input field. A verb word that

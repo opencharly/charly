@@ -4,60 +4,34 @@ import (
 	"testing"
 
 	"github.com/opencharly/spec/spec"
-
-	"gopkg.in/yaml.v3"
 )
 
-// candyNodeFromYAML parses a single-entity node-form doc and returns its top-level genericNode
-// (for the C2-candy byte-equivalence proof).
-func candyNodeFromYAML(t *testing.T, doc string) *genericNode {
-	t.Helper()
-	var ydoc yaml.Node
-	if err := yaml.Unmarshal([]byte(doc), &ydoc); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	nodes, err := genericNodesFromDoc(&ydoc)
-	if err != nil {
-		t.Fatalf("genericNodesFromDoc: %v", err)
-	}
-	if len(nodes) != 1 {
-		t.Fatalf("want 1 node, got %d", len(nodes))
-	}
-	return nodes[0]
-}
-
 // TestCandyKind_BothShapesByteEquivalent is the C2-candy acceptance proof: the COMPILED-IN
-// candy/plugin-candy-kind seam (foldCandyKind → host pre-decode candyIsImage+buildCandy → plugin
-// ECHO → fold) produces a result BYTE-EQUIVALENT to a DIRECT core decode of the same node, for BOTH
-// candy shapes:
+// candy/plugin-candy-kind seam (foldCandyKind → host pre-decode CandyIsImage+BuildCandy → plugin
+// ECHO → fold) produces a result BYTE-EQUIVALENT to a DIRECT core decode of the same node, for
+// BOTH candy shapes:
 //
-//   - a full IMAGE (base:) folds into uf.Box, byte-identical to decodeNodeValue(gn, &BoxConfig)
+//   - a full IMAGE (base:) folds into uf.Box, byte-identical to pl.DecodeNodeValue(pn, &BoxConfig)
 //     (the former in-proc candyKind image path); and
-//   - a LAYER fragment folds into uf.Candy, byte-identical to buildCandy(gn) (the former in-proc
-//     candyKind layer path).
+//   - a LAYER fragment folds into uf.Candy, byte-identical to pl.BuildCandy(pn) (the former
+//     in-proc candyKind layer path).
 //
-// RDD proved a canonical spec.Box / spec.Candy round-trips through JSON byte-faithfully; this locks
-// it through the REAL compiled-in plugin provider (providerRegistry.ResolveKind). candy is THE core
-// entity, so this + box validate across all repos are the acceptance gate. Compiled-in, so NOT
-// -short-gated (no external build).
+// Both baselines run on the PARSED node through the loader seam (parser consolidation F2.1: the
+// genericNode bridge + its yaml-scan baselines are gone). RDD proved a canonical spec.Box /
+// spec.Candy round-trips through JSON byte-faithfully; this locks it through the REAL compiled-in
+// plugin provider (providerRegistry.ResolveKind). candy is THE core entity, so this + box validate
+// across all repos are the acceptance gate. Compiled-in, so NOT -short-gated (no external build).
 func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
 	prov, ok := providerRegistry.ResolveKind("candy")
 	if !ok {
 		t.Fatal("candy kind must resolve to the compiled-in candy/plugin-candy-kind provider")
 	}
+	pl := requireProjectLoader()
 
 	// --- IMAGE shape (base: → uf.Box) ---
-	imgDoc := `my-image:
-    candy:
-        base: fedora
-        version: "2026.150.0000"
-        candy:
-            - redis
-`
-	imgGn := candyNodeFromYAML(t, imgDoc)
-	imgPn, err := genericToParsedNode(imgGn)
-	if err != nil {
-		t.Fatalf("genericToParsedNode: %v", err)
+	imgPn := singleParsedNode(t, IMG_DOC)
+	if !pl.CandyIsImage(imgPn) {
+		t.Fatal("CandyIsImage must report the base:-carrying node as an image")
 	}
 	var accImg spec.MaterializedProject
 	if err := foldCandyKind(prov, imgPn, &accImg); err != nil {
@@ -71,31 +45,17 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
 		t.Fatal("image shape also landed in acc.Candy — must be acc.Box ONLY")
 	}
 	var baseBox spec.BoxConfig
-	if err := decodeNodeValue(imgGn, &baseBox); err != nil {
-		t.Fatalf("baseline decodeNodeValue (image): %v", err)
+	if err := pl.DecodeNodeValue(imgPn, &baseBox); err != nil {
+		t.Fatalf("baseline DecodeNodeValue (image): %v", err)
 	}
 	if got, want := mustJSON(t, bc), mustJSON(t, baseBox); got != want {
 		t.Fatalf("IMAGE-shape plugin fold != direct core decode\n plugin: %s\n core:   %s", got, want)
 	}
 
 	// --- LAYER shape (no base/from → uf.Candy) ---
-	layerDoc := `my-layer:
-    candy:
-        version: "2026.150.0000"
-        description: a layer
-        package:
-            - git
-        plan:
-            - run: install a marker
-              command: "true"
-              run_as: root
-            - check: the marker exists
-              command: "true"
-`
-	layerGn := candyNodeFromYAML(t, layerDoc)
-	layerPn, err := genericToParsedNode(layerGn)
-	if err != nil {
-		t.Fatalf("genericToParsedNode: %v", err)
+	layerPn := singleParsedNode(t, LAYER_DOC)
+	if pl.CandyIsImage(layerPn) {
+		t.Fatal("CandyIsImage must report the base/from-less node as a layer")
 	}
 	var accLayer spec.MaterializedProject
 	if err := foldCandyKind(prov, layerPn, &accLayer); err != nil {
@@ -108,11 +68,31 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
 	if _, dup := accLayer.Box["my-layer"]; dup {
 		t.Fatal("layer shape also landed in acc.Box — must be acc.Candy ONLY")
 	}
-	_, baseIc, err := buildCandy(layerGn)
+	_, baseIc, err := pl.BuildCandy(layerPn)
 	if err != nil {
-		t.Fatalf("baseline buildCandy (layer): %v", err)
+		t.Fatalf("baseline BuildCandy (layer): %v", err)
 	}
 	if got, want := mustJSON(t, ic), mustJSON(t, baseIc); got != want {
 		t.Fatalf("LAYER-shape plugin fold != direct core decode\n plugin: %s\n core:   %s", got, want)
 	}
 }
+
+const IMG_DOC = "my-image:\n" +
+	"    candy:\n" +
+	"        base: fedora\n" +
+	"        version: \"2026.150.0000\"\n" +
+	"        candy:\n" +
+	"            - redis\n"
+
+const LAYER_DOC = "my-layer:\n" +
+	"    candy:\n" +
+	"        version: \"2026.150.0000\"\n" +
+	"        description: a layer\n" +
+	"        package:\n" +
+	"            - git\n" +
+	"        plan:\n" +
+	"            - run: install a marker\n" +
+	"              command: \"true\"\n" +
+	"              run_as: root\n" +
+	"            - check: the marker exists\n" +
+	"              command: \"true\"\n"

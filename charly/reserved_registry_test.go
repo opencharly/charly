@@ -7,31 +7,6 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// TestReservedWordRegistry_KindBijection proves every CUE kind (spec.KindWords)
-// has a registered in-proc KindProvider (the init() gate enforces this at process
-// start; this re-runs it as a test) AND that the completeness check FAILS for a
-// spec kind with no provider. The decode behaviour itself is covered by the
-// *_RoundTrip tests (which now route through normalizeNodeInto → the registry).
-func TestReservedWordRegistry_KindBijection(t *testing.T) {
-	// Positive: every spec.KindWord resolves to a registered KindProvider.
-	if err := checkKindProviderBijection(spec.KindWords); err != nil {
-		t.Fatalf("live kind registry is not complete: %v", err)
-	}
-
-	// Negative — a CUE kind with NO provider: add a ghost kind word; the
-	// completeness check must report it as missing. (Extra ClassKind providers —
-	// out-of-tree plugin kinds — are intentionally allowed, so there is no
-	// extra-provider failure case.)
-	kindsPlusGhost := append(append([]string{}, spec.KindWords...), "ghostkind")
-	err := checkKindProviderBijection(kindsPlusGhost)
-	if err == nil {
-		t.Fatal("expected kind bijection to FAIL for a spec kind with no provider, got nil")
-	}
-	if !strings.Contains(err.Error(), "ghostkind") {
-		t.Errorf("missing-provider error must name the unhandled kind; got: %v", err)
-	}
-}
-
 // TestReservedWordRegistry_VerbBijection proves VerbCatalog ⇄ spec.OpVerbs is a
 // bijection and that every verb is an authorable Op field, plus the failure paths.
 func TestReservedWordRegistry_VerbBijection(t *testing.T) {
@@ -56,20 +31,28 @@ func TestReservedWordRegistry_VerbBijection(t *testing.T) {
 	}
 }
 
-// TestReservedWordRegistry_KindsDispatchable proves every registered authoring
-// kind is ACTUALLY handled by the loader's normalizeNodeInto dispatch — so the
-// registry can never claim a handler that the dispatch switch lacks (the
-// anti-drift link between the registry and the real code path).
+// TestReservedWordRegistry_KindsDispatchable proves every registered ClassKind provider is
+// ACTUALLY handled by the loader's materializeNodeInto dispatch — so the registry can never
+// claim a handler that the kind-blind dispatch lacks (the anti-drift link between the registry
+// and the real code path; rewritten from the former spec.KindWords loop + genericNode probes —
+// spec.KindWords is EMPTY and the KindProvider interface died with the genericNode bridge,
+// parser consolidation F2.1).
 func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
-	for _, kind := range spec.KindWords {
-		gn := &genericNode{name: "probe-" + kind, disc: kind, discClass: "entity"}
+	words := make([]string, 0, 8)
+	for _, p := range providerRegistry.allProviders() {
+		if p.Class() == ClassKind {
+			words = append(words, p.Reserved())
+		}
+	}
+	for _, disc := range words {
+		pn := spec.ParsedNode{Name: "probe-" + disc, Disc: disc}
 		uf := &spec.UnifiedFile{}
-		err := normalizeNodeInto(gn, uf)
+		err := materializeNodeInto(pn, uf)
 		// A real handler arm may return a decode error on the empty probe node,
 		// but it must NEVER return the "unsupported discriminator" sentinel — that
 		// is the no-handler signal.
 		if err != nil && strings.Contains(err.Error(), "unsupported discriminator") {
-			t.Errorf("kind %q is registered but normalizeNodeInto has no handler: %v", kind, err)
+			t.Errorf("kind %q is registered but materializeNodeInto has no handler: %v", disc, err)
 		}
 	}
 }

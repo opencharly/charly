@@ -5,26 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencharly/spec/spec"
-	"gopkg.in/yaml.v3"
 )
-
-// substrateNodeFromYAML parses a single-entity node-form doc and returns its top-level
-// genericNode (for the C2-substrate byte-equivalence proof).
-func substrateNodeFromYAML(t *testing.T, doc string) *genericNode {
-	t.Helper()
-	var ydoc yaml.Node
-	if err := yaml.Unmarshal([]byte(doc), &ydoc); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	nodes, err := genericNodesFromDoc(&ydoc)
-	if err != nil {
-		t.Fatalf("genericNodesFromDoc: %v", err)
-	}
-	if len(nodes) != 1 {
-		t.Fatalf("want 1 node, got %d", len(nodes))
-	}
-	return nodes[0]
-}
 
 // TestSubstrateKind_BothShapesByteEquivalent is the C2-substrate acceptance proof: the
 // COMPILED-IN candy/plugin-substrate structural-kind seam (foldSubstrateKind → host pre-decode
@@ -33,38 +14,19 @@ func substrateNodeFromYAML(t *testing.T, doc string) *genericNode {
 // member-plan hoisting:
 //
 //   - a DEPLOY-shape node (`pod:` with image + nested children) folds into uf.Deploy,
-//     byte-identical to buildDeployNode(gn) (the former in-proc standaloneKind →
+//     byte-identical to pl.BuildDeployNode(pn) (the former in-proc standaloneKind →
 //     buildDeployNodeInto path); and
 //   - a standalone TEMPLATE-shape node (a bare `vm:` — the PRIMARY VM authoring form) folds
-//     into uf.VM, byte-identical to decodeNodeValue(gn, &vmshared.VmSpec) (the former
-//     buildStandaloneResource path) — the C2-substrate TEMPLATE fold arm that extends F5's
-//     deploy-only fold.
+//     into uf.VM, byte-identical to pl.EntityBodyJSON(pn) (the former buildStandaloneResource
+//     path) — the C2-substrate TEMPLATE fold arm that extends F5's deploy-only fold.
 //
-// RDD proved a canonical spec.Deploy / spec.Vm round-trips through JSON byte-faithfully; this
-// locks it through the REAL compiled-in plugin provider (providerRegistry.ResolveKind). Compiled-in,
-// so NOT -short-gated (no external build).
+// Fixtures are PARSED nodes throughout (parser consolidation F2.1: the genericNode bridge and
+// its pn→gn→pn round trips are gone). RDD proved a canonical spec.Deploy / spec.Vm round-trips
+// through JSON byte-faithfully; this locks it through the REAL compiled-in plugin provider
+// (providerRegistry.ResolveKind). Compiled-in, so NOT -short-gated (no external build).
 func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	// --- DEPLOY shape (folds uf.Deploy) ---
-	depDoc := `substrate-dep:
-    pod:
-        image: coder
-        disposable: true
-        tunnel: tailscale
-    web:
-        pod:
-            image: web
-    cache:
-        pod:
-            image: cache
-        migrate:
-            pod:
-                image: migrator
-`
-	depGn := substrateNodeFromYAML(t, depDoc)
-	depPn, err := genericToParsedNode(depGn)
-	if err != nil {
-		t.Fatalf("genericToParsedNode: %v", err)
-	}
+	depPn := singleParsedNode(t, DEP_DOC)
 	prov, ok := providerRegistry.ResolveKind("pod")
 	if !ok {
 		t.Fatal("pod kind must resolve to the compiled-in candy/plugin-substrate provider")
@@ -89,23 +51,7 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	}
 
 	// --- TEMPLATE shape (folds uf.VM) — the PRIMARY VM authoring form ---
-	tmplDoc := `substrate-tmpl:
-    vm:
-        source:
-            kind: cloud_image
-            distro: fedora
-            url: https://example.invalid/img.qcow2
-            base_user: arch
-        disk_size: 20 GiB
-        ram: 4G
-        cpu: 2
-        firmware: uefi-insecure
-`
-	tmplGn := substrateNodeFromYAML(t, tmplDoc)
-	tmplPn, err := genericToParsedNode(tmplGn)
-	if err != nil {
-		t.Fatalf("genericToParsedNode: %v", err)
-	}
+	tmplPn := singleParsedNode(t, TMPL_DOC)
 	vprov, ok := providerRegistry.ResolveKind("vm")
 	if !ok {
 		t.Fatal("vm kind must resolve to the compiled-in candy/plugin-substrate provider")
@@ -121,7 +67,7 @@ func TestSubstrateKind_BothShapesByteEquivalent(t *testing.T) {
 	if _, dup := acc2.Deploy["substrate-tmpl"]; dup {
 		t.Fatal("template shape also landed in acc.Deploy — must be acc.PluginKinds[\"vm\"] ONLY")
 	}
-	// The template canonicalizes GENERICALLY (entityBodyJSON — no concrete-kind type,
+	// The template canonicalizes GENERICALLY (EntityBodyJSON — no concrete-kind type,
 	// Cutover N); the plugin echoes it byte-faithfully. Baseline against the same generic
 	// pre-decode, and cross-check that both decode to the SAME ResolvedVm (the byte form
 	// differs from the old typed decode only by non-omitempty empties + key order — the
@@ -154,3 +100,30 @@ func deployKeysForAcc(acc *spec.MaterializedProject) []string {
 	}
 	return out
 }
+
+const DEP_DOC = "substrate-dep:\n" +
+	"    pod:\n" +
+	"        image: coder\n" +
+	"        disposable: true\n" +
+	"        tunnel: tailscale\n" +
+	"    web:\n" +
+	"        pod:\n" +
+	"            image: web\n" +
+	"    cache:\n" +
+	"        pod:\n" +
+	"            image: cache\n" +
+	"        migrate:\n" +
+	"            pod:\n" +
+	"                image: migrator\n"
+
+const TMPL_DOC = "substrate-tmpl:\n" +
+	"    vm:\n" +
+	"        source:\n" +
+	"            kind: cloud_image\n" +
+	"            distro: fedora\n" +
+	"            url: https://example.invalid/img.qcow2\n" +
+	"            base_user: arch\n" +
+	"        disk_size: 20 GiB\n" +
+	"        ram: 4G\n" +
+	"        cpu: 2\n" +
+	"        firmware: uefi-insecure\n"

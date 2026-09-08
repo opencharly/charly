@@ -40,18 +40,11 @@ func TestBuildDeployNode_Structure(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(deployNodeForm), &doc); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	nodes, err := genericNodesFromDoc(&doc)
-	if err != nil {
-		t.Fatalf("genericNodesFromDoc: %v", err)
-	}
+	nodes := parsedNodesFromDoc(t, &doc)
 	if len(nodes) != 1 {
 		t.Fatalf("want 1 top node, got %d", len(nodes))
 	}
-	pn, err := genericToParsedNode(nodes[0])
-	if err != nil {
-		t.Fatalf("genericToParsedNode: %v", err)
-	}
-	dn, err := requireProjectLoader().BuildDeployNode(pn, loaderThreaded())
+	dn, err := requireProjectLoader().BuildDeployNode(nodes[0], loaderThreaded())
 	if err != nil {
 		t.Fatalf("BuildDeployNode: %v", err)
 	}

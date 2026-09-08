@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"path/filepath"
 
@@ -18,7 +17,8 @@ import (
 // the loaderkit orchestration calls back through (hostMaterializeProjectSeams): the per-document
 // registry kind-decode (materializeProject → the registered spec.Materializer), the bootstrap-candy-
 // routed discovered-manifest fold (foldDiscoveredManifests / materializeDiscoveredNode — the
-// candyIsImage box⊻layer routing STAYS core, clause B; shared with ApplyDiscover, R3), and the
+// parsed-node box⊻layer routing (CandyIsImage, parser consolidation F2.1) shared with
+// ApplyDiscover, R3), and the
 // binary-embedded default vocabulary (applyEmbeddedDefaults / materializeDocStream).
 //
 // CLASSIFICATION (K1 unit 1 / #48). The ACTUAL registry resolve + live Provider dispatch stays core
@@ -63,17 +63,12 @@ func foldDiscoveredManifests(dms []spec.DiscoveredManifest, uf *spec.UnifiedFile
 // materializeDiscoveredNode folds ONE discovered manifest node into uf — the SINGLE per-node
 // handler foldDiscoveredManifests drives. A LAYER candy registers a lazy `From:` directory
 // reference (scanCandy parses it later; explicit entry wins); every other kind materializes via the
-// registered spec.Materializer (materializeNodeInto, K1 unit 1). The candyIsImage pre-check stays
-// core (bootstrap-critical box⊻layer routing) — it reconstructs the genericNode from pn itself
-// (parsedNodeToGeneric is pure; pn.Disc already carries the discriminator candyIsImage's caller
-// needs, so callers no longer pre-compute gn, R3).
+// registered spec.Materializer (materializeNodeInto, K1 unit 1). The box⊻layer pre-check is the
+// PARSED-NODE routing (sdk/loaderkit CandyIsImage, reached through the loader seam — parser
+// consolidation F2.1; the former genericNode reconstruction is deleted).
 func materializeDiscoveredNode(pn spec.ParsedNode, dir, rootDir, manifest string, uf *spec.UnifiedFile) error {
 	if pn.Disc == "candy" {
-		gn, err := parsedNodeToGeneric(pn)
-		if err != nil {
-			return err
-		}
-		if !candyIsImage(gn) {
+		if !requireProjectLoader().CandyIsImage(pn) {
 			name := filepath.Base(dir)
 			if _, exists := uf.Candy[name]; exists {
 				return nil // explicit entry wins
@@ -91,52 +86,34 @@ func materializeDiscoveredNode(pn spec.ParsedNode, dir, rootDir, manifest string
 
 // materializeDocStream parses an in-memory node-form YAML document STREAM (the binary-embedded
 // default vocabulary — no imports, no discover, no namespaces) and materializes every document into
-// uf: the SAME classify → #NodeDoc gate → parse → decode-directives → materialize → merge the walk
-// path runs per document, minus the file walk. Replaces the former embeddedDefaults()
-// mergeUnifiedDocs call (K1 deleted mergeUnifiedDocs). The embedded vocab has no reserved
-// directives (import/discover) to consume, so this stays a plain host parse — it does not touch the
-// walk. srcLabel labels diagnostics.
+// uf. The per-document pipeline is the ONE loaderkit doc-stream composer
+// (spec.ProjectLoader.ParseDocStream → loaderkit.ParseDocStream, parser consolidation F2.5) — the
+// SAME classify → #NodeDoc gate → registered parser → directive serialization loop the file walk
+// drives, minus the file walk; the host replays the two host-coupled leaf legs over the returned
+// docs: per-document registry kind-decode (materializeProject) + root-wins merge. The embedded
+// vocab has no reserved directives (import/discover) to consume. srcLabel labels diagnostics.
 func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) error {
-	parser := requireLoaderParser()
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	for docIdx := 0; ; docIdx++ {
-		var node yaml.Node
-		if err := decoder.Decode(&node); err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			return fmt.Errorf("%s:doc%d: %w", srcLabel, docIdx, err)
-		}
-		shape, err := spec.ClassifyDoc(&node)
-		if err != nil {
-			return fmt.Errorf("%s:doc%d: %w", srcLabel, docIdx, err)
-		}
-		if shape != spec.DocShapeNode {
-			continue
-		}
-		label := fmt.Sprintf("%s:doc%d", srcLabel, docIdx)
-		raw, err := yaml.Marshal(&node)
-		if err != nil {
-			return fmt.Errorf("%s: re-marshal node-form doc: %w", label, err)
-		}
-		if err := requireProjectLoader().ValidateNodeDocCUE(label, raw); err != nil {
-			return err
-		}
-		directives, pp, err := parser.ParseDoc(&node, loaderThreaded())
-		if err != nil {
-			return fmt.Errorf("%s: %w", label, err)
-		}
+	docs, imports, scanSpecs, err := requireProjectLoader().ParseDocStream(data, srcLabel, "", hostWalkSeams())
+	if err != nil {
+		return err
+	}
+	// An embedded stream cannot declare imports/discover (the embedded vocabulary is a fixed
+	// build-time asset) — reject the impossible loudly instead of silently ignoring it.
+	if len(imports) > 0 || len(scanSpecs) > 0 {
+		return fmt.Errorf("%s: embedded defaults declare imports/discover — not allowed in the binary vocabulary", srcLabel)
+	}
+	for i := range docs {
+		label := docs[i].SrcLabel
 		var sub spec.UnifiedFile
-		if len(directives) > 0 {
-			dirMap := &yaml.Node{Kind: yaml.MappingNode}
-			for k, v := range directives {
-				dirMap.Content = append(dirMap.Content, spec.ScalarNode(k), v)
-			}
-			if derr := dirMap.Decode(&sub); derr != nil {
+		if len(docs[i].Directives) > 0 {
+			// Decode the RAW reserved-directive mapping (YAML) into a sub spec.UnifiedFile — the
+			// SAME decode the walk envelope's MaterializeLoadedProject performs (honoring the
+			// custom YAML unmarshalers on import/discover).
+			if derr := yaml.Unmarshal(docs[i].Directives, &sub); derr != nil {
 				return fmt.Errorf("%s: decoding directives: %w", label, derr)
 			}
 		}
-		if err := materializeProject(&pp, &sub); err != nil {
+		if err := materializeProject(&docs[i].Project, &sub); err != nil {
 			return fmt.Errorf("%s: %w", label, err)
 		}
 		sub.Import = nil
@@ -155,10 +132,10 @@ func materializeDocStream(data []byte, srcLabel string, uf *spec.UnifiedFile) er
 // across a document's node list ACCUMULATE rather than reset — maps are reference types, so this is
 // a cheap map-header copy, not a deep copy) and copies the result back after.
 //
-// Colocated here from node_parsed.go (K-wave 2 cone R1 unit C): this file owns every other
+// (K-wave 2 cone R1 unit C): this file owns every other
 // host-coupled materialize leg AND hostMaterializeProjectSeams, the seam these two are reached
-// through, so the accumulator plumbing belongs beside them rather than beside the genericNode
-// bridge it merely happened to share a file with.
+// through, so the accumulator plumbing belongs beside them rather than beside the deleted
+// genericNode bridge it used to share a file with (parser consolidation F2.1).
 func materializeNodeInto(pn spec.ParsedNode, uf *spec.UnifiedFile) error {
 	acc := spec.MaterializedProject{
 		Box: uf.Box, Candy: uf.Candy, Deploy: uf.Deploy, PluginKinds: uf.PluginKinds,
