@@ -43,14 +43,10 @@ func TestRunPluginKind_DecodesViaEnvelope(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(doc), &ydoc); err != nil {
 		t.Fatal(err)
 	}
-	nodes, err := genericNodesFromDoc(&ydoc)
-	if err != nil {
-		t.Fatalf("parse rejected the plugin kind (loader-recognition gap): %v", err)
-	}
 	uf := &spec.UnifiedFile{}
-	for _, gn := range nodes {
-		if err := normalizeNodeInto(gn, uf); err != nil {
-			t.Fatalf("normalizeNodeInto: %v", err)
+	for _, pn := range parsedNodesFromDoc(t, &ydoc) {
+		if err := materializeNodeInto(pn, uf); err != nil {
+			t.Fatalf("materializeNodeInto: %v", err)
 		}
 	}
 	// Name-keyed storage: the entity is stored under its node name ("myk").

@@ -12,7 +12,7 @@ import (
 
 // TestLoadUnified_NodeForm proves the loader parses a unified node-form charly.yml
 // end-to-end: kit.ClassifyDoc → kit.DocShapeNode → validate-before-execute (#NodeDoc) →
-// normalizeNodeInto → the projected spec.UnifiedFile maps. Candy + box + a deploy bed in
+// materializeNodeInto → the projected spec.UnifiedFile maps. Candy + box + a deploy bed in
 // the POST-MIGRATE primary-substrate spelling (the former group bed unrolled — Cutover C
 // task 1): a pod primary + one deploy-level pod member with an inline member check (the
 // flattenVenuesByPosition venue-hoist witness).

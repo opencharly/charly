@@ -10,7 +10,6 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/errors"
 	"github.com/opencharly/spec/spec"
-	"gopkg.in/yaml.v3"
 )
 
 // runPluginKind decodes an EXTERNAL kind node out-of-process via its Provider's
@@ -33,10 +32,11 @@ import (
 // Import/Discover/Namespaces/etc, so the retype carries no behavior change.
 //
 // Takes pn spec.ParsedNode (K1 unit 3b) rather than charly's *genericNode: every tree-assembly
-// helper this dispatch calls (entityBodyJSON/buildResourceMemberChildren/…) is now the relocated
-// sdk/loaderkit mechanism, reached through the ProjectLoader seam directly on pn — no genericNode
-// reconstruction anywhere in this function. genericNode survives ONLY where foldCandyKind needs it
-// for the bootstrap-critical candyIsImage/buildCandy routing (clause B, permanently core).
+// helper this dispatch calls (entityBodyJSON/buildResourceMemberChildren/…) is the relocated
+// sdk/loaderkit mechanism, reached through the ProjectLoader seam directly on pn — and since
+// parser consolidation F2.1 the candy box⊻layer routing (foldCandyKind → CandyIsImage/BuildCandy)
+// is restated on the parsed node too: NO genericNode reconstruction exists anywhere in the
+// dispatch.
 func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
 	// C2-substrate: a substrate structural kind (pod/vm/kubernetes/local/android) is decoded
 	// HOST-SIDE (its rich core-referencing value cannot ride op.Params nor a self-contained
@@ -44,7 +44,7 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	// template map (template). It does NOT use the op.Params + plugin-schema validation the
 	// group-style / flat kinds below take — its value is validated host-side against the KEPT
 	// #<Kind>Value def.
-	if isStandaloneResourceKind(pn.Disc) {
+	if requireProjectLoader().IsStandaloneResourceKind(pn.Disc, loaderThreaded()) {
 		return foldSubstrateKind(prov, pn, acc)
 	}
 	// C2-candy: the `candy` box⊻layer factory kind is decoded HOST-SIDE by the
@@ -265,7 +265,10 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 		acc.Deploy[pn.Name] = dn
 		return nil
 	}
-	return foldStandaloneTemplateReply(pn.Disc, pn.Name, out.JSON, acc)
+	// The C2-substrate TEMPLATE fold arm — now sdk/loaderkit.FoldStandaloneTemplateReply,
+	// reached through the loader seam directly (the R3 one-line core wrapper is inlined here,
+	// parser consolidation F2.2).
+	return requireProjectLoader().FoldStandaloneTemplateReply(pn.Disc, pn.Name, out.JSON, acc)
 }
 
 // foldCandyKind decodes a `candy` box⊻layer node HOST-SIDE and folds candy/plugin-candy's echo
@@ -273,36 +276,29 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 // value is rich + core-referencing (#Candy/#Box with host-canonicalized shorthand), so — like
 // substrate — it can neither ride op.Params nor be validated by a self-contained plugin schema.
 // So the host: (1) validates the authored value against the KEPT #CandyValue def; (2) runs the
-// BOOTSTRAP-CRITICAL core box⊻layer routing candyIsImage + buildCandy (which STAY core — the
-// discovered-candy pre-check in unified.go calls them DIRECTLY, so this is the SAME decode source,
-// R3; the "bootstrap cycle" that blocked an EXTERNAL candy plugin does NOT exist for the
-// COMPILED-IN plugin-candy, registered at init before any LoadUnified); (3) threads the canonical
-// spec.Box (image) / spec.Candy (layer) to the plugin's ops.OpLoad via op.Env; (4) folds the plugin's
-// ECHO into acc.Box / acc.Candy. RDD proved a canonical spec.Box / spec.Candy round-trips through
-// JSON byte-faithfully, so this is byte-equivalent to the former in-proc candyKind decode.
-// gn is reconstructed LOCALLY from pn (parsedNodeToGeneric) solely to reach candyIsImage/
-// buildCandy — the ONE remaining genericNode use in this dispatch, because those two are
-// BOOTSTRAP-CRITICAL (clause B: the discovered-candy pre-check in unified.go calls them directly,
-// so they cannot themselves move or be reformulated without breaking that pre-load-time call).
-// Every OTHER call here (validateKindValueCUE, DecodeNodeValue) threads pn straight through.
+// box⊻layer routing CandyIsImage + BuildCandy — restated on the PARSED node in sdk/loaderkit
+// (parser consolidation F2.1), reached through the loader seam; the discovered-candy pre-check
+// (materializeDiscoveredNode) calls the SAME seam funcs, so this is the ONE decode source (R3);
+// (3) threads the canonical spec.Box (image) / spec.Candy (layer) to the plugin's ops.OpLoad via
+// op.Env; (4) folds the plugin's ECHO into acc.Box / acc.Candy via the SHARED spec set-body folds
+// (spec.SetBoxInto/SetCandyInto — the SAME folds spec.UnifiedFile.SetBox/SetCandy perform,
+// F2.4). RDD proved a canonical spec.Box / spec.Candy round-trips through JSON byte-faithfully,
+// so this is byte-equivalent to the former in-proc candyKind decode.
 func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
 	if err := validateKindValueCUE(pn); err != nil {
 		return fmt.Errorf("node %q: %w", pn.Name, err)
 	}
-	gn, err := parsedNodeToGeneric(pn)
-	if err != nil {
-		return fmt.Errorf("node %q: %w", pn.Name, err)
-	}
-	image := candyIsImage(gn)
+	pl := requireProjectLoader()
+	image := pl.CandyIsImage(pn)
 	var env spec.StructuralKindLoadEnv
 	if image {
 		var b spec.BoxConfig
-		if err := requireProjectLoader().DecodeNodeValue(pn, &b); err != nil {
+		if err := pl.DecodeNodeValue(pn, &b); err != nil {
 			return fmt.Errorf("node %q: decode image: %w", pn.Name, err)
 		}
 		env.Standalone = &spec.StandaloneLoad{Shape: "candy-image", Box: &b}
 	} else {
-		_, ic, berr := buildCandy(gn)
+		_, ic, berr := pl.BuildCandy(pn)
 		if berr != nil {
 			return fmt.Errorf("node %q: decode layer: %w", pn.Name, berr)
 		}
@@ -321,21 +317,18 @@ func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 		if err := json.Unmarshal(out.JSON, &b); err != nil {
 			return fmt.Errorf("node %q: candy image reply decode: %w", pn.Name, err)
 		}
-		// The acc.Box[name]=EncodeBox(b) inline write below is exactly what spec.UnifiedFile.SetBox
-		// does (uf_box_generic.go) — that method lives on *spec.UnifiedFile, which acc (a
-		// spec.MaterializedProject) is not, so this dispatch inlines the SAME spec.EncodeBox call.
-		ensureMap(&acc.Box)
-		acc.Box[pn.Name] = spec.EncodeBox(b)
+		// The SHARED set-body fold (parser consolidation F2.4) — the SAME fold spec.UnifiedFile.SetBox
+		// performs; the former inline EncodeBox write is deleted.
+		acc.Box = spec.SetBoxInto(acc.Box, pn.Name, b)
 		return nil
 	}
 	var c spec.CandyYAML
 	if err := json.Unmarshal(out.JSON, &c); err != nil {
 		return fmt.Errorf("node %q: candy layer reply decode: %w", pn.Name, err)
 	}
-	// Mirrors spec.UnifiedFile.SetCandy (uf_candy_generic.go) — spec.EncodeInlineCandy(*spec.InlineCandy) stays
-	// core-private (spec.InlineCandy embeds spec.CandyYAML), reused verbatim.
-	ensureMap(&acc.Candy)
-	acc.Candy[pn.Name] = spec.EncodeInlineCandy(&spec.InlineCandy{CandyYAML: c})
+	// The SHARED set-body fold (parser consolidation F2.4) — the SAME fold spec.UnifiedFile.SetCandy
+	// performs; the former inline EncodeInlineCandy write is deleted.
+	acc.Candy = spec.SetCandyInto(acc.Candy, pn.Name, &spec.InlineCandy{CandyYAML: c})
 	return nil
 }
 
@@ -347,25 +340,18 @@ func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 // (shorthand intact) since #<Kind>Value accepts the same shorthand the arm did. Covers the 5
 // substrate kinds (#<Kind>Value) AND candy (#CandyValue).
 //
-// entityBodyJSON (the generic body→wire mechanism BOTH the op.Params plugin-kind path and the
-// substrate TEMPLATE thread used) is now sdk/loaderkit.EntityBodyJSON (K1 unit 3b, F1.5 —
-// returning pn.Body directly), reached
-// directly through requireProjectLoader() at each call site — no core wrapper survives it (its
-// former callers here are all pn-based now).
-//
-// gn is reconstructed LOCALLY from pn (parsedNodeToGeneric, node_parsed.go) for the RAW discValue
-// shape check below (a scalar cross-ref carries no authored fields to typo-check) — the SAME
-// reconstruction idiom foldCandyKind uses, kept local rather than adding a dedicated seam method
-// for a single small consumer.
+// The shape check + the CUE ingest read the CANONICAL JSON body (pn.Body, the F1.5
+// canonicalisation) directly: the deleted genericNode discValue walk and the
+// gn→yaml.Marshal→CueDocFromYAML round trip are gone — CueDocFromJSON ingests the same raw
+// authored value over JSON (parser consolidation F2.1/F2.3).
 func validateKindValueCUE(pn spec.ParsedNode) error {
-	gn, err := parsedNodeToGeneric(pn)
-	if err != nil {
-		return err
-	}
-	if gn.discValue == nil || gn.discValue.Kind != yaml.MappingNode {
+	// Only a MAPPING value is gated: a scalar cross-ref (or an empty node) carries no authored
+	// fields to typo-check — decoded straight off the canonical JSON body.
+	var body map[string]json.RawMessage
+	if len(pn.Body) == 0 || json.Unmarshal([]byte(pn.Body), &body) != nil {
 		return nil
 	}
-	defPath, ok := spec.KindValueDefs[gn.disc]
+	defPath, ok := spec.KindValueDefs[pn.Disc]
 	if !ok {
 		return nil
 	}
@@ -373,11 +359,7 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	if def.Err() != nil {
 		return fmt.Errorf("kind value def %s not found: %w", defPath, def.Err())
 	}
-	b, err := yaml.Marshal(gn.discValue)
-	if err != nil {
-		return fmt.Errorf("%s value: marshal: %w", gn.disc, err)
-	}
-	entity, err := requireProjectLoader().CueDocFromYAML("node "+gn.name, b)
+	entity, err := requireProjectLoader().CueDocFromJSON("node "+pn.Name, pn.Body)
 	if err != nil {
 		return err
 	}
@@ -405,9 +387,18 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	// stays closedness-only, unchanged, forever — concreteness lives in the plugin.
 	merged := entity.Unify(def)
 	if verr := merged.Validate(); verr != nil {
-		return fmt.Errorf("%s: %s", gn.disc, errors.Details(verr, nil))
+		return fmt.Errorf("%s: %s", pn.Disc, errors.Details(verr, nil))
 	}
 	return nil
+}
+
+// ensureMap allocates a nil map[string]V in place — the generic allocator the dispatch's fold
+// arms use before writing into a typed accumulator field (relocated here from the deleted
+// node_normalize.go, parser consolidation F2.2).
+func ensureMap[V any](m *map[string]V) {
+	if *m == nil {
+		*m = map[string]V{}
+	}
 }
 
 // formatKindDiagnostics renders the error-severity items of an ops.OpValidate reply into one

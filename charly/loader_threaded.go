@@ -106,9 +106,11 @@ func RegisterBuildVocabulary(dc *spec.DistroConfig) { candyVocab = spec.NewCandy
 // as parameters — the registry-derived kind-recognition snapshot and the build vocabulary above.
 //
 // Clause B is NOT what keeps this here, and the distinction matters: an RDD spike over the whole
-// 324-manifest corpus proved the pre-move node-form branch's pn->genericNode->buildCandy->pn round
+// 324-manifest corpus proved the pre-move node-form branch's pn->buildCandy->pn decode
 // trip was an IDENTITY (321 node-form manifests plus all 3 error paths, byte-identical), so the
-// bootstrap-critical factory was never on this path. buildCandy/candyIsImage stay core for their
+// bootstrap-critical factory was never on this path. buildCandy/candyIsImage are the loaderkit
+// parsed-node routing now (parser consolidation F2.1), reached through this seam; their former
+// genericNode reconstructions in the dispatch are deleted.
 // GENUINE clause-B consumers — the discovered-candy pre-check and foldCandyKind.
 func parseCandyYAML(path string) (*spec.CandyYAML, error) {
 	return requireCandyScanner().ParseCandyManifest(path, loaderThreaded(), candyVocab)
@@ -329,7 +331,7 @@ func hostMaterializeSeams() spec.MaterializeSeams {
 
 // decodeEntityViaRegistry implements spec.MaterializeSeams.DecodeEntity: resolves pn's
 // discriminator against the provider registry and, if found, dispatches via the SAME runPluginKind
-// the former in-core normalizeNodeInto called directly (provider_kind_invoke.go — the TRUE
+// the former in-core materialize dispatch called directly (provider_kind_invoke.go — the TRUE
 // clause-M mechanism, unchanged). Threads pn straight into the dispatch (K1 unit 3b) — the former
 // genericNode reconstruction is gone from this path entirely; runPluginKind's own tree-assembly
 // calls (buildDeployNode/assembleEntityBody/…) now route through the ProjectLoader seam on pn
@@ -346,7 +348,7 @@ func decodeEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) 
 
 // buildDeployEntityViaRegistry implements spec.MaterializeSeams.BuildDeployEntity: the fallback for
 // a recognized-but-not-yet-connected external deploy substrate word, mirroring the former in-core
-// normalizeNodeInto's recognizedDeploySubstrate branch — now the relocated
+// the materialize dispatch's recognizedDeploySubstrate branch — now the relocated
 // sdk/loaderkit.BuildDeployNodeInto (K1 unit 3b), reached through the ProjectLoader seam with pn
 // threaded straight through (no genericNode reconstruction).
 func buildDeployEntityViaRegistry(pn spec.ParsedNode, acc *spec.MaterializedProject) error {

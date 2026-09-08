@@ -16,7 +16,7 @@ package main
 // as recognized substrate discriminators. This needs only the WORD + its class — no
 // provider instance, no build, no connect (the real provider still connects later at
 // loadProjectPlugins and dispatches the actual Add). The parse hooks
-// (classifyDisc / isResourceDisc / normalizeNodeInto / validateCheckBeds) consult
+// (classifyDisc / isResourceDisc / validateCheckBeds) consult
 // recognizedDeploySubstrate, which is satisfied by EITHER a connected provider OR a
 // pre-scanned declaration.
 //
@@ -80,7 +80,7 @@ var (
 	// RECOGNIZE a `kind: <plugin-word>` discriminator at PARSE time (classifyDisc) before the
 	// serving plugin connects — the kind analogue of declaredDeploySubstrate. The serving
 	// plugin is connected by a depth-0 pre-pass (connectDeclaredKindPlugins) so
-	// normalizeNodeInto's runPluginKind can decode the body. Shares declaredDeployMu (the one
+	// the materialize dispatch (runPluginKind) can decode the body. Shares declaredDeployMu (the one
 	// lock); empty for a project with no external kind plugins.
 	declaredKind = map[string]bool{}
 )
@@ -124,7 +124,7 @@ func externalKindMayNestMembers(word string) bool {
 	// yet — inside the connect pre-pass (provider not built), AND outside it when the
 	// provider FAILED to build/connect (a degraded environment: a fetched remote repo
 	// loaded in a minimal container with no Go toolchain). Both cases defer the
-	// member-nesting decision to normalizeNodeInto, which decodes via the connected
+	// member-nesting decision to the materialize dispatch, which decodes via the connected
 	// provider or gracefully warn-skips when it never connected. Gating this on
 	// inKindConnectPass would hard-error the member-nesting parse (node_parse.go) before
 	// the normalizer's graceful skip could run — the box.list.boxes-on-a-fetched-repo
@@ -158,7 +158,7 @@ func declaredKindWords() []string {
 // inKindConnectPassFlag guards connectDeclaredKindPlugins against re-entrancy: connecting an
 // external kind plugin must load the project (LoadConfig / ScanAllCandy → LoadUnified), which
 // re-loads the SAME root that CONTAINS the `kind: <plugin-word>` node. When set, the nested load's
-// connect pre-pass is a no-op AND normalizeNodeInto DEFERS (skips) an unconnected kind node, so the
+// connect pre-pass is a no-op AND the materialize dispatch DEFERS (skips) an unconnected kind node, so the
 // nested load succeeds and the OUTER pass then has the providers registered. The loader is
 // single-threaded per load; the flag rides declaredDeployMu for safety.
 var inKindConnectPassFlag bool
@@ -219,10 +219,10 @@ func finalizeDeclaredKindConnections(need map[string]struct{}) {
 // The connect re-loads the project (LoadConfig +
 // ScanAllCandyWithConfigOpts → LoadUnified, which fetches @github kind candies too), so it is
 // GUARDED by inKindConnectPass — the nested load skips this pre-pass and DEFERS its kind nodes
-// (normalizeNodeInto), so the scan succeeds; this OUTER pass then has the providers registered.
+// (the materialize dispatch), so the scan succeeds; this OUTER pass then has the providers registered.
 // Best-effort + idempotent: a project with no external kind plugins (or one whose kinds are
 // already connected — compiled-in / prior-loaded) does zero work; a connect FAILURE leaves the
-// kind unconnected, and normalizeNodeInto then WARN-SKIPS its nodes (a loud stderr warning + a
+// kind unconnected, and the materialize dispatch then WARN-SKIPS its nodes (a loud stderr warning + a
 // drop, never a silent drop nor a hard load error — so read-only commands still work in a
 // degraded environment; a command that USES the kind fails loudly at that point).
 func connectDeclaredKindPlugins(dir string) {
@@ -243,7 +243,7 @@ func connectDeclaredKindPlugins(dir string) {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
 		recordDeclaredKindConnectError(need, fmt.Errorf("load project configuration: %w", err))
-		return // config load failure → kinds stay unconnected → normalizeNodeInto warn-skips them
+		return // config load failure → kinds stay unconnected → the materialize dispatch warn-skips them
 	}
 	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{})
 	if err != nil {

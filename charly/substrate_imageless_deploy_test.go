@@ -43,11 +43,7 @@ const imagelessAgentProvisionedMinimalDoc = `agent-live:
 // the minimal imageless agent_provisioned pod must fold into acc.Deploy (the deploy arm),
 // never into the pod template map.
 func TestSubstrateKind_ImagelessAgentProvisionedPodFoldsToDeploy(t *testing.T) {
-	gn := substrateNodeFromYAML(t, imagelessAgentProvisionedMinimalDoc)
-	pn, err := genericToParsedNode(gn)
-	if err != nil {
-		t.Fatalf("genericToParsedNode: %v", err)
-	}
+	pn := singleParsedNode(t, imagelessAgentProvisionedMinimalDoc)
 	prov, ok := providerRegistry.ResolveKind("pod")
 	if !ok {
 		t.Fatal("pod kind must resolve to the compiled-in candy/plugin-substrate provider")
@@ -82,11 +78,7 @@ func TestSubstrateKind_PlainImagelessPodStaysTemplate(t *testing.T) {
         iterate:
             sandbox: agent-sandbox
 `
-	gn := substrateNodeFromYAML(t, doc)
-	pn, err := genericToParsedNode(gn)
-	if err != nil {
-		t.Fatalf("genericToParsedNode: %v", err)
-	}
+	pn := singleParsedNode(t, doc)
 	prov, ok := providerRegistry.ResolveKind("pod")
 	if !ok {
 		t.Fatal("pod kind must resolve to the compiled-in candy/plugin-substrate provider")
@@ -123,11 +115,7 @@ func TestSubstrateKind_ImagelessAgentProvisionedWithSiblingStillFolds(t *testing
         pod:
             image: watcher-img
 `
-	gn := substrateNodeFromYAML(t, doc)
-	pn, err := genericToParsedNode(gn)
-	if err != nil {
-		t.Fatalf("genericToParsedNode: %v", err)
-	}
+	pn := singleParsedNode(t, doc)
 	prov, ok := providerRegistry.ResolveKind("pod")
 	if !ok {
 		t.Fatal("pod kind must resolve to the compiled-in candy/plugin-substrate provider")

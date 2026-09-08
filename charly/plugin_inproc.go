@@ -131,7 +131,7 @@ func registerCompiledPlugin(srv pb.ProviderServer, meta pb.PluginMetaServer) {
 	// The SAME compiled-in loader plugin (#46 unit 1, K1) ALSO exposes the typed per-node kind-decode
 	// DISPATCH POLICY via spec.Materializer — wire it as the active materializer so
 	// materializeNodeInto/materializeDiscoveredNode dispatch through it (no wire envelope), instead of
-	// charly core holding the not-found fallback policy itself (the former normalizeNodeInto).
+	// charly core holding the not-found fallback policy itself (the relocated Materialize dispatch).
 	if mz, ok := srv.(spec.Materializer); ok {
 		activeMaterializer = mz
 	}

@@ -28,8 +28,9 @@ import (
 // COMPILED-IN, host-decoding into the typed core maps (substrates → uf.Deploy/uf.Pod/uf.VM/…; candy
 // → uf.Box/uf.Candy via the bootstrap-critical candyIsImage + buildCandy that STAY core) and
 // validating their rich value host-side against the KEPT #<Kind>Value / #CandyValue def
-// (validateKindValueCUE). So spec.KindWords is now EMPTY and checkKindProviderBijection over it is a
-// no-op. See candy/plugin-deploy-local, plugin_command_ssh.go, candy/plugin-candy-kind.
+// (validateKindValueCUE). So spec.KindWords is now EMPTY and the former
+// checkKindProviderBijection gate was a no-op — it died with the KindProvider interface and the
+// genericNode type it named (parser consolidation F2.1). See candy/plugin-deploy-local, plugin_command_ssh.go, candy/plugin-candy-kind.
 var builtinProviderInstances = []Provider{
 	// verbs (ClassVerb) — none of the extracted verbs are here: each is a dedicated plugin
 	// UNIT that self-registers via RegisterBuiltinPluginUnit, absent from both this slice and
@@ -55,8 +56,9 @@ var builtinProviderInstances = []Provider{
 	// (candy/plugin-group, C2-group) + the 5 substrate kinds pod/vm/kubernetes/local/android
 	// (candy/plugin-substrate, C2-substrate) + the LAST one, the candy box⊻layer factory
 	// (candy/plugin-candy-kind, C2-candy — candyIsImage + buildCandy → uf.Box/uf.Candy, the
-	// bootstrap-critical routing that STAYS core) are all COMPILED-IN plugins. So spec.KindWords is
-	// EMPTY and checkKindProviderBijection over it is a no-op (every kind resolves via its ClassKind
+	// bootstrap-critical routing) are all COMPILED-IN plugins. So spec.KindWords is
+	// EMPTY and checkKindProviderBijection (deleted with the genericNode bridge, F2.1) was a no-op
+	// (every kind resolves via its ClassKind
 	// provider — providerRegistry.ResolveKind, threaded to the loader plugin's Materializer seam as
 	// the spec.Threaded.Kinds snapshot — not a #Node arm nor an in-proc KindProvider).
 	// deploy targets (ClassDeployTarget) — ALL self-register from their dedicated
@@ -166,7 +168,6 @@ func init() {
 	}
 	for _, gate := range []func() error{
 		func() error { return checkVerbProviderBijection(spec.OpVerbs) },
-		func() error { return checkKindProviderBijection(spec.KindWords) },
 		checkDeployProviderBijection,
 		checkStepProviderBijection,
 	} {

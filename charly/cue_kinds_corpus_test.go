@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -18,29 +19,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// hasMappingKey reports whether the yaml mapping node m has an entry named key —
-// the same "base"/"from" image-vs-layer discriminator check production's
-// ValidateEntityNodeRec (sdk/loaderkit/node_validate.go) runs, inlined here (test-only, single use).
-func hasMappingKey(m *yaml.Node, key string) bool {
-	if m == nil || m.Kind != yaml.MappingNode {
-		return false
-	}
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
-			return true
-		}
-	}
-	return false
-}
-
 // parseCorpusDocs decodes a corpus file's YAML multi-document stream and runs
 // each document through the SAME parse the loader uses (activeLoaderParser.ParseDoc) — which desugars
 // every plan step's `<word>: <input>` plugin sugar IN PLACE, so the CUE value
 // gates below see the internal plugin/plugin_input form exactly as the loader's
 // validate-before-execute gate does.
-func parseCorpusDocs(t *testing.T, f string, data []byte) []*genericNode {
+func parseCorpusDocs(t *testing.T, f string, data []byte) []spec.ParsedNode {
 	t.Helper()
-	var all []*genericNode
+	var all []spec.ParsedNode
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	for {
 		var doc yaml.Node
@@ -51,12 +37,7 @@ func parseCorpusDocs(t *testing.T, f string, data []byte) []*genericNode {
 			t.Errorf("%s: yaml: %v", f, err)
 			break
 		}
-		nodes, err := genericNodesFromDoc(&doc)
-		if err != nil {
-			t.Errorf("FAIL %s: parse: %v", f, err)
-			continue
-		}
-		all = append(all, nodes...)
+		all = append(all, parsedNodesFromDoc(t, &doc)...)
 	}
 	return all
 }
@@ -112,21 +93,25 @@ func TestCueBox_Corpus(t *testing.T) {
 		// value against #Box (still the image def; `box`→#Box is registered as an
 		// internal validation key). A candy carrying neither base: nor from: is a
 		// LAYER fragment, not an image, so it is not validated here.
-		for _, gn := range parseCorpusDocs(t, f, data) {
-			if gn.disc != "candy" || gn.discValue == nil || gn.discValue.Kind != yaml.MappingNode {
+		for _, pn := range parseCorpusDocs(t, f, data) {
+			if pn.Disc != "candy" {
 				continue
 			}
-			if !hasMappingKey(gn.discValue, "base") && !hasMappingKey(gn.discValue, "from") {
-				continue // a layer fragment, not an image — validated as #Candy elsewhere
-			}
-			b, merr := yaml.Marshal(gn.discValue)
-			if merr != nil {
-				t.Errorf("%s: marshal %q: %v", f, gn.name, merr)
+			// The parsed-node box⊻layer routing (parser consolidation F2.1): the base/from
+			// marker scan reads the canonical JSON body — the deleted genericNode discValue
+			// walk is gone.
+			var body map[string]json.RawMessage
+			if len(pn.Body) == 0 || json.Unmarshal([]byte(pn.Body), &body) != nil {
 				continue
 			}
-			candy, cerr := requireProjectLoader().CueDocFromYAML(f, b)
+			if _, hasBase := body["base"]; !hasBase {
+				if _, hasFrom := body["from"]; !hasFrom {
+					continue // a layer fragment, not an image — validated as #Candy elsewhere
+				}
+			}
+			candy, cerr := requireProjectLoader().CueDocFromJSON(f, pn.Body)
 			if cerr != nil {
-				t.Errorf("%s: ingest %q: %v", f, gn.name, cerr)
+				t.Errorf("%s: ingest %q: %v", f, pn.Name, cerr)
 				continue
 			}
 			if verr := requireProjectLoader().ValidateEntityClosedCUE("box", f, candy); verr != nil {
@@ -192,7 +177,7 @@ func TestCueKinds_Corpus(t *testing.T) {
 		// test covers (the same exemption plugin KIND nodes get).
 		prescanDeclaredPluginWords(data, filepath.Dir(f))
 		for _, gn := range parseCorpusDocs(t, f, data) {
-			if _, hasDef := spec.KindValueDefs[gn.disc]; !hasDef {
+			if _, hasDef := spec.KindValueDefs[gn.Disc]; !hasDef {
 				// A PLUGIN kind (agent/module/package-group/group/…) or an external
 				// deploy substrate — validated by the plugin's served schema at
 				// runPluginKind / the loader path, not by a kept core value def, so
@@ -204,16 +189,12 @@ func TestCueKinds_Corpus(t *testing.T) {
 			// KEPT value def (#CandyValue / #<Kind>Value) — the SAME host-side
 			// closedness gate the loader runs (validateKindValueCUE) over the real
 			// corpus.
-			pn, perr := genericToParsedNode(gn)
-			if perr != nil {
-				t.Errorf("FAIL %s:%s.%s: genericToParsedNode: %v", f, gn.disc, gn.name, perr)
-				continue
-			}
+			pn := gn
 			if verr := validateKindValueCUE(pn); verr != nil {
-				t.Errorf("FAIL %s:%s.%s: %v", f, gn.disc, gn.name, verr)
+				t.Errorf("FAIL %s:%s.%s: %v", f, gn.Disc, gn.Name, verr)
 				continue
 			}
-			counts[gn.disc]++
+			counts[gn.Disc]++
 			total++
 		}
 	}

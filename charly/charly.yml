@@ -19,6 +19,28 @@ providers:
     deploy: []
     step: []
     builder: []
+# verb_primaries — the compiled-in PLATFORM-verb scalar-sugar primaries (verb word ->
+# PRIMARY input field), the DATA replacement for the deleted frozen 11-entry table
+# (parser consolidation F2.6). The 11 live-container verbs are served OUT-OF-PROCESS, so
+# their served ProvidedCapability.Primary cannot be read from a compiled-in unit at init —
+# THIS embedded declaration carries them, and init() seeds the parse-time desugar table
+# from it (parse-time determinism preserved BY DATA; node_desugar_test.go asserts the
+# parity). A connected plugin re-registers the same value; a NEW external verb declares its
+# primary in its candy manifest's plugin.primary map (prescanned pre-parse) instead.
+verb_primaries:
+    cdp: method
+    wl: method
+    dbus: method
+    vnc: method
+    mcp: method
+    record: method
+    spice: method
+    libvirt: method
+    kube: method
+    adb: method
+    appium: method
+
+
 # compiled_plugins — the plugin CANDIES compiled INTO this charly binary (in-proc
 # placement). Read by the pluginsgen generator (charly/internal/pluginsgen, run by
 # `task build:binary` before `go build`) to emit charly/plugins_generated.go (one

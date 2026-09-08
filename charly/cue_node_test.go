@@ -32,13 +32,9 @@ func normalizeAgentDoc(t *testing.T, doc string) error {
 	if err := yaml.Unmarshal([]byte(doc), &d); err != nil {
 		t.Fatalf("yaml: %v", err)
 	}
-	nodes, err := genericNodesFromDoc(&d)
-	if err != nil {
-		return err
-	}
 	uf := &spec.UnifiedFile{}
-	for _, gn := range nodes {
-		if err := normalizeNodeInto(gn, uf); err != nil {
+	for _, pn := range parsedNodesFromDoc(t, &d) {
+		if err := materializeNodeInto(pn, uf); err != nil {
 			return err
 		}
 	}
@@ -65,7 +61,7 @@ func TestNodeFormSteps_RejectsStepTypo(t *testing.T) {
 // reserved-key closedness) OR the Go parser (a typo'd discriminator, a wrong-kind /
 // childless-kind child, a two-discriminator node). Both are hard load errors before
 // any execution; together they are the "CUE-strict, no loosening" guarantee.
-func nodeFormRejected(doc string) bool {
+func nodeFormRejected(t *testing.T, doc string) bool {
 	if requireProjectLoader().ValidateNodeDocCUE("t", []byte(doc)) != nil {
 		return true
 	}
@@ -73,17 +69,17 @@ func nodeFormRejected(doc string) bool {
 	if yaml.Unmarshal([]byte(doc), &d) != nil {
 		return true
 	}
-	nodes, err := genericNodesFromDoc(&d)
+	_, pp, err := activeLoaderParser.ParseDoc(&d, loaderThreaded())
 	if err != nil {
-		return true
+		return true // a parser-level rejection (typo'd discriminator / old-shape child) is a rejection
 	}
 	// C2-group/C2-substrate/C2-candy: per-kind VALUE closedness moved from the #Node arms
 	// (now an open struct) to the HOST-SIDE loader (runPluginKind → foldCandyKind /
 	// foldSubstrateKind → validateKindValueCUE). Exercise the full node decode so a candy /
 	// substrate value typo (an unknown inline field) is still caught by this "rejected?" helper.
 	uf := &spec.UnifiedFile{}
-	for _, gn := range nodes {
-		if normalizeNodeInto(gn, uf) != nil {
+	for i := range pp.Nodes {
+		if materializeNodeInto(pp.Nodes[i], uf) != nil {
 			return true
 		}
 	}
@@ -192,7 +188,7 @@ db:
 `,
 	}
 	for name, doc := range bad {
-		if !nodeFormRejected(doc) {
+		if !nodeFormRejected(t, doc) {
 			t.Errorf("%s: expected a strictness rejection (CUE gate or parser), but the document was accepted", name)
 		}
 	}

@@ -39,8 +39,10 @@ func TestNoSubstrateWordSwitchInDeployConsult(t *testing.T) {
 	allowExact := map[string]bool{
 		// Loader / classifier: these PRODUCE the substrate word (dispatch classification,
 		// kind-recognition Data), they do not branch on how the substrate behaves.
-		"unified.go":         true,
-		"node_normalize.go":  true,
+		// (node_normalize.go's classify wrapper was inlined into provider_kind_invoke.go and the
+		// file deleted with the genericNode bridge, parser consolidation F2.2 — the classifier it
+		// wrapped is the loaderkit IsStandaloneResourceKind reached through the loader seam, a
+		// data consult, not a behaviour branch.)
 		"deploy_nodeform.go": true,
 		"deploy_add_cmd.go":  true, // `target` string dispatch (not `.Target`); classifyNodeTarget itself moved to deploykit.ClassifyNodeTarget (W4)
 		"plugin_prescan.go":  true, // recognizedDeploySubstrate registry gate

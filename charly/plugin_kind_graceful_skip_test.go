@@ -8,8 +8,10 @@ import (
 
 // A declared external kind whose out-of-process provider FAILED to build/connect (a minimal
 // container with no Go toolchain, a broken plugin) must NOT hard-error the whole load — read-only
-// commands (box list, validate) still need to work in that degraded environment. normalizeNodeInto
-// gracefully warn-SKIPS the node instead. Without the fix it returned a hard error.
+// commands (box list, validate) still need to work in that degraded environment.
+// materializeNodeInto (via the spec.Materializer's not-found policy) gracefully warn-SKIPS the
+// node instead. Without the fix it returned a hard error. (The former genericNode bridge fixture
+// is a parsed node now — parser consolidation F2.1.)
 func TestExternalKind_UnconnectedProviderWarnSkips(t *testing.T) {
 	const kind = "brokentestkind-graceful-skip-fixture"
 
@@ -31,11 +33,11 @@ func TestExternalKind_UnconnectedProviderWarnSkips(t *testing.T) {
 		t.Fatalf("test precondition: %q must have NO connected provider", kind)
 	}
 
-	// normalizeNodeInto on such a node WARN+SKIPS (nil), never a hard error. (A node with no
+	// materializeNodeInto on such a node WARN+SKIPS (nil), never a hard error. (A node with no
 	// member children never reaches the member-nesting parse gate, so the graceful skip is the
 	// operative path for the common flat-declared-kind case — proven live via `box list boxes`.)
-	gn := &genericNode{name: "my-broken-entity", disc: kind, discClass: "entity"}
-	if err := normalizeNodeInto(gn, &spec.UnifiedFile{}); err != nil {
-		t.Fatalf("normalizeNodeInto for an unconnected declared kind = %v; want nil (graceful warn+skip so read-only commands work)", err)
+	pn := spec.ParsedNode{Name: "my-broken-entity", Disc: kind}
+	if err := materializeNodeInto(pn, &spec.UnifiedFile{}); err != nil {
+		t.Fatalf("materializeNodeInto for an unconnected declared kind = %v; want nil (graceful warn+skip so read-only commands work)", err)
 	}
 }

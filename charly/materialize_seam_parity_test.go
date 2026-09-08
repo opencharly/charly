@@ -8,7 +8,7 @@ import (
 )
 
 // materialize_seam_parity_test.go — the K1-unit-1 byte-equivalence gate: proves the
-// spec.Materializer-routed materialize pipeline (materialize.go/node_parsed.go/loader_threaded.go
+// spec.Materializer-routed materialize pipeline (materialize.go/loader_threaded.go
 // dispatching per node into candy/plugin-loader, which calls back through the DecodeEntity/
 // BuildDeployEntity seam into the UNCHANGED clause-M dispatch, provider_kind_invoke.go) produces a
 // project structurally and byte-identical to itself across independent loads of the SAME real,
@@ -19,7 +19,7 @@ import (
 // diff between two otherwise-identical loads.
 //
 // This is the R10-adjacent differential proof for the move: since R5 hard-cutover replaced
-// normalizeNodeInto in place (no dual-mode old/new code retained to diff against directly), the
+// materializeNodeInto in place (no dual-mode old/new code retained to diff against directly), the
 // proof is TWO independent real loads producing byte-identical entity maps — the strongest
 // available evidence the new seam-routed dispatch is deterministic and correct on a real,
 // non-trivial fixture. TestCandyKind_BothShapesByteEquivalent / TestSubstrateKind_BothShapesByteEquivalent
@@ -69,7 +69,7 @@ func TestMaterializeSeam_RealFixtureDeterministic(t *testing.T) {
 	// Byte-equivalence across the two independent loads, field by field, for every map the
 	// Materializer/dispatch chain writes: Box/Candy/Deploy (dedicated fields) + PluginKinds (which
 	// ALSO now carries the 5 standalone-substrate-TEMPLATE kinds vm/pod/kubernetes/local/android — K1
-	// unit-1 follow-up, foldStandaloneTemplateReply's generic fold, node_normalize.go). PluginKinds
+	// unit-1 follow-up, the standalone-template fold reached through the loader seam). PluginKinds
 	// is json:"-" on spec.UnifiedFile so it's compared explicitly, not via a whole-struct marshal which
 	// would silently skip it.
 	fields := []struct {
