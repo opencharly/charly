@@ -83,6 +83,13 @@ func (m capMeta) IsStructuralKind() bool { return m.structural }
 // ops.OpValidate check the host dispatches at load (F7/C8).
 func (m capMeta) IsValidatingKind() bool { return m.validates }
 
+// IsCandyKind implements spec.CandyKindCarrier (F3.1) — the class:kind capability whose word is
+// the candy box⊻layer factory kind. The kind-blind dispatch asks THIS (prov.(spec.CandyKindCarrier))
+// instead of comparing pn.Disc to the "candy" literal — the kernel never names the word; the
+// provider's own declared word answers. The compiled-in candy/plugin-candy-kind (class:kind,
+// word:candy) is the only capability that returns true.
+func (m capMeta) IsCandyKind() bool { return m.class == ClassKind && m.word == "candy" }
+
 // PluginPhase implements spec.PhaseCarrier — the plugin lifecycle phase the kernel loads/invokes
 // this capability in (F9; normalized, never empty).
 func (m capMeta) PluginPhase() string { return m.phase }

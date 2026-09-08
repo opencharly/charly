@@ -67,18 +67,25 @@ func foldDiscoveredManifests(dms []spec.DiscoveredManifest, uf *spec.UnifiedFile
 // PARSED-NODE routing (sdk/loaderkit CandyIsImage, reached through the loader seam — parser
 // consolidation F2.1; the former genericNode reconstruction is deleted).
 func materializeDiscoveredNode(pn spec.ParsedNode, dir, rootDir, manifest string, uf *spec.UnifiedFile) error {
-	if pn.Disc == "candy" {
-		if !requireProjectLoader().CandyIsImage(pn) {
-			name := filepath.Base(dir)
-			if _, exists := uf.Candy[name]; exists {
-				return nil // explicit entry wins
+	// F3.1: ask the PROVIDER via the word-keyed capability carrier — never compare pn.Disc to
+	// the "candy" literal. Resolve the disc's provider through the registry (word-keyed DATA,
+	// the same resolve decodeEntityViaRegistry performs), then ask the carrier: the compiled-in
+	// candy/plugin-candy-kind answers IsCandyKind() true; a non-candy or unknown disc falls
+	// through to materializeNodeInto (its not-found policy).
+	if prov, ok := providerRegistry.ResolveKind(pn.Disc); ok {
+		if ck, isCandy := prov.(spec.CandyKindCarrier); isCandy && ck.IsCandyKind() {
+			if !requireProjectLoader().CandyIsImage(pn) {
+				name := filepath.Base(dir)
+				if _, exists := uf.Candy[name]; exists {
+					return nil // explicit entry wins
+				}
+				rel, relErr := filepath.Rel(rootDir, dir)
+				if relErr != nil {
+					rel = dir
+				}
+				uf.SetCandy(name, &spec.InlineCandy{From: rel, Manifest: manifest})
+				return nil
 			}
-			rel, relErr := filepath.Rel(rootDir, dir)
-			if relErr != nil {
-				rel = dir
-			}
-			uf.SetCandy(name, &spec.InlineCandy{From: rel, Manifest: manifest})
-			return nil
 		}
 	}
 	return materializeNodeInto(pn, uf)
