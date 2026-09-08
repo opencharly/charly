@@ -121,7 +121,7 @@ charly:
             section: admin
             variants:
                 default:
-                    description: The eight everyday welded command plugins.
+                    description: The nine everyday welded command plugins.
                     plugins:
                         - plugin-secrets
                         - plugin-feature
@@ -131,8 +131,9 @@ charly:
                         - plugin-settings
                         - plugin-candy
                         - plugin-mcp
+                        - plugin-review
                 full:
-                    description: All ten welded command plugins.
+                    description: All eleven welded command plugins.
                     plugins:
                         - plugin-secrets
                         - plugin-udev
@@ -144,6 +145,7 @@ charly:
                         - plugin-settings
                         - plugin-candy
                         - plugin-mcp
+                        - plugin-review
                 minimal:
                     description: The doctor/clean/settings core.
                     plugins:
