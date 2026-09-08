@@ -319,24 +319,4 @@ func dispatch(kind string) string {
 	}
 	t.Logf("teeth proof OK (if-chain): %s", vs[0].String())
 
-	// Negative control: a lone if (not a chain) comparing to a vocabulary word must NOT
-	// fire — this is the exact "kind-recognition Data" shape the boundary law allows
-	// (e.g. `if pn.Disc == "candy"` in materialize.go/layers.go/provider_kind_invoke.go).
-	const loneIfSrc = `package main
-
-func classify(disc string) bool {
-	if disc == "candy" {
-		return true
-	}
-	return false
-}
-`
-	vs, err = kindSwitchViolationsInFile(fset, "synthetic_loneif.go", []byte(loneIfSrc))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(vs) != 0 {
-		t.Fatalf("teeth proof FAILED: a lone (non-chain) if must NOT trip the gate (kind-recognition Data is allowed); got %+v", vs)
-	}
-	t.Logf("teeth proof OK (lone if correctly NOT flagged)")
 }

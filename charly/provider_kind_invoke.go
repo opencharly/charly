@@ -47,13 +47,16 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	if requireProjectLoader().IsStandaloneResourceKind(pn.Disc, loaderThreaded()) {
 		return foldSubstrateKind(prov, pn, acc)
 	}
-	// C2-candy: the `candy` box⊻layer factory kind is decoded HOST-SIDE by the
+	// C2-candy: the candy box⊻layer factory kind is decoded HOST-SIDE by the
 	// bootstrap-critical candyIsImage + buildCandy (which STAY core — the discovered-candy
 	// pre-check calls them directly), then folded into acc.Box (IMAGE) or acc.Candy (LAYER).
 	// Like substrate, its rich core-referencing value can neither ride op.Params nor a
 	// self-contained plugin schema, so it is host-validated against the KEPT #CandyValue def
 	// and the plugin (candy/plugin-candy) is a pure ECHO. See foldCandyKind.
-	if pn.Disc == "candy" {
+	// F3.1: the WORD-KEYED CAPABILITY CARRIER (spec.CandyKindCarrier, the same pattern as the
+	// structural/validating carriers above) — the kernel asks the PROVIDER, never compares
+	// pn.Disc to the "candy" literal.
+	if ck, ok := prov.(spec.CandyKindCarrier); ok && ck.IsCandyKind() {
 		return foldCandyKind(prov, pn, acc)
 	}
 	paramsJSON, err := requireProjectLoader().EntityBodyJSON(pn)
