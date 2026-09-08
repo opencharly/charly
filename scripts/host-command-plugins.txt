@@ -38,3 +38,5 @@ plugin-clean@v2026.239.1615
 plugin-settings@v2026.239.1612
 plugin-candy@v2026.239.1617
 plugin-mcp@v2026.250.0721
+
+plugin-review@v2026.251.1928

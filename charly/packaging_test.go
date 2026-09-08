@@ -7,8 +7,8 @@ package main
 // pkg/* files (arch PKGBUILD, fedora spec, debian control) were removed with the
 // nFPM cutover, so this file asserts (a) the section parses into the
 // spec.Packaging type with every entry a plain package name, (b) the variant
-// plugin sets are exactly the 10 welded plugins the release workflow publishes
-// (the 9 + plugin-mcp), and (c) the systemd: unit + config: sections the
+// plugin sets are exactly the welded plugins the release workflow publishes
+// (now 11, incl. plugin-review), and (c) the systemd: unit + config: sections the
 // package ships (the systemd-started charly MCP server's units and its
 // system-wide /etc/charly/charly.yml project).
 
@@ -100,7 +100,7 @@ func checkPlainNames(t *testing.T, what string, names ...string) {
 }
 
 // TestPackagingVariantsCoverWeldedPlugins — every variant plugin must be one of
-// the 10 welded plugins the release workflow publishes, and the union of all
+// the welded plugins the release workflow publishes, and the union of all
 // variant plugin sets must cover every one of them. A variant naming a plugin
 // absent from the release tarball fails loudly at package-build time (the plugin
 // validates the variant's list against the --plugins dir); this test catches the
