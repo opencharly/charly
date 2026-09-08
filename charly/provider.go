@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // Provider is the ONE extension abstraction. Every reserved word — every kind,
@@ -74,10 +76,17 @@ const (
 )
 
 // providerClasses is the closed set, used by the loader to validate a plugin's
-// `provides:` entries and by the bijection gate.
-var providerClasses = map[ProviderClass]bool{
-	ClassKind: true, ClassVerb: true, ClassDeployTarget: true, ClassStep: true, ClassBuilder: true, ClassCommand: true, ClassBuild: true, ClassLoader: true, ClassRefs: true, ClassAgentRuntime: true, ClassTerminal: true,
-}
+// `provides:` entries and by the bijection gate. DERIVED from spec.ProviderClasses — the ONE
+// CUE-owned provider-class vocabulary (#ProviderClassNames, spec/schema/candy.cue) — instead of
+// a hand-maintained map (F4.2 parser consolidation). The typed constants above stay as the
+// kernel's Go API; this membership set is what actually gates.
+var providerClasses = func() map[ProviderClass]bool {
+	m := make(map[ProviderClass]bool, len(spec.ProviderClasses))
+	for _, c := range spec.ProviderClasses {
+		m[ProviderClass(c)] = true
+	}
+	return m
+}()
 
 // splitCapability parses a "<class>:<word>" capability string as authored in a
 // candy's `plugin.providers:` list. The wire form (proto ProvidedCapability) is
