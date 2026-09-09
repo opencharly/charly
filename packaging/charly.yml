@@ -131,6 +131,7 @@ charly:
                         - plugin-settings
                         - plugin-candy
                         - plugin-mcp
+                        - plugin-pipeline
                         - plugin-review
                 full:
                     description: All eleven welded command plugins.
