@@ -1,6 +1,6 @@
 # OpenCharly
 
-**The agentic config orchestrator — everything is a plugin, nothing is mandatory.**
+**The wonky DevOps orchestrator for you and your agents.**
 
 `charly` is a command-line tool that orchestrates one declarative description of a working
 environment onto any of five substrates: a container, a VM guest, a Kubernetes cluster, a host, or
