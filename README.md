@@ -1,6 +1,6 @@
 # OpenCharly
 
-**The wonky DevOps orchestrator for you and your agents.**
+**The wonky DevOps tool for you and your agents.**
 
 `charly` is a command-line tool that orchestrates one declarative description of a working
 environment onto any of five substrates: a container, a VM guest, a Kubernetes cluster, a host, or
@@ -37,6 +37,22 @@ minimal-box:
 Every word `charly` understands is itself a plugin — [every word is a plugin](#every-word-is-a-plugin)
 — so the trim is not a special case: the core is word-blind, and a candy list is the whole
 configuration.
+
+### Bring the pain forward
+
+DevOps' oldest trick is to **bring the pain forward**: take the hard, risky part of shipping — the
+deployment, the integration, the teardown — and do it early and often, on a system built to be
+destroyed, so it stops being hard by the time it matters. `charly` is built around that mantra.
+
+Every candy carries a `plan:` — an acceptance spec that proves what it installs, baked into the
+image as an OCI label. Every deploy marked `disposable: true` is a **check bed**: a test system
+that exists to be destroyed. `charly check run <bed>` chains build, deploy, probe, destroy,
+rebuild, and probe again in one command — the whole pain of shipping, brought forward to the test
+system, on every change, before anything reaches a real target.
+
+The same **install plan** the bed just proved is the one a production deploy realises — so the
+pain you bring forward is the pain you would otherwise meet in production, and by the time it gets
+there, it is routine.
 
 **Heritage.** The design borrows deliberately from LLVM: one intermediate representation, many
 backends — applied to infrastructure deployment instead of code generation, and driven by agents
