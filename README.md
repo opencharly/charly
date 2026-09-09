@@ -1,17 +1,46 @@
 # OpenCharly
 
-**The open infrastructure compiler — for you and your agents.**
+**The agentic config orchestrator — everything is a plugin, nothing is mandatory.**
 
-`charly` is a command-line tool that compiles one declarative description of a working environment
-into what each target actually runs. You write a list of **candies** — each one an installable
-concern — and `charly` realises the same list on any of five substrates: a container, a VM guest, a
-Kubernetes cluster, a host, or an Android device. Every substrate consumes the same intermediate
-form, the **install plan**, so moving a deploy from a container to a VM is a keyword change rather
-than a rewrite.
+`charly` is a command-line tool that orchestrates one declarative description of a working
+environment onto any of five substrates: a container, a VM guest, a Kubernetes cluster, a host, or
+an Android device. You write a list of **candies** — each one an installable concern — and `charly`
+realises the same list everywhere, for you and for the agents you run. Every substrate consumes the
+same intermediate form, the **install plan**, so moving a deploy from a container to a VM is a
+keyword change rather than a rewrite.
 
-The design borrows deliberately from LLVM: one intermediate representation, many backends — applied
-to infrastructure deployment instead of code generation, and driven by agents as readily as by
-people.
+### Everything and nothing
+
+**charly brings everything and nothing.** Everything you might want can be added as a plugin — a
+candy — and nothing is built in that you cannot trim out. If you would rather use a different tool
+for a particular job, remove the candy that provides it and wire yours in; the orchestrator does
+not care what provides a concern, only that the install plan is satisfied.
+
+```yaml
+# everything — compose the kitchen sink
+dev-box:
+    candy:
+        base: fedora
+        candy:
+            - '@github.com/opencharly/charly/candy/ripgrep:v2026.251.1947'
+            - '@github.com/opencharly/charly/candy/sshd:v2026.251.1947'
+            - '@github.com/opencharly/charly/candy/charly:v2026.251.1947'
+
+# nothing — the same box, trimmed to one concern; bring your own tool for the rest
+minimal-box:
+    candy:
+        base: fedora
+        candy:
+            - '@github.com/opencharly/charly/candy/sshd:v2026.251.1947'
+```
+
+Every word `charly` understands is itself a plugin — [every word is a plugin](#every-word-is-a-plugin)
+— so the trim is not a special case: the core is word-blind, and a candy list is the whole
+configuration.
+
+**Heritage.** The design borrows deliberately from LLVM: one intermediate representation, many
+backends — applied to infrastructure deployment instead of code generation, and driven by agents
+as readily as by people. That spine is what makes the orchestration target-neutral.
 
 A **candy** is the atomic unit of configuration; a **box** is a candy that composes others into a
 buildable machine. The names are literal — `candy:` is a real keyword and `candy/` is a real
@@ -80,8 +109,8 @@ tutorial-shell:
             ...
         base: fedora
         candy:
-            - '@github.com/opencharly/charly/candy/ripgrep:v2026.231.0714'
-            - '@github.com/opencharly/charly/candy/sshd:v2026.231.0714'
+            - '@github.com/opencharly/charly/candy/ripgrep:v2026.251.1947'
+            - '@github.com/opencharly/charly/candy/sshd:v2026.251.1947'
         plan:
             - check: composing the service candy next to the init candy wired sshd into the assembled supervisord config — a program block neither candy produces on its own
               id: tutorial-shell-service-wired-into-init
@@ -143,7 +172,7 @@ check-fedora-vm:
         from: fedora-vm
         disposable: true
         add_candy:
-            - '@github.com/opencharly/charly/candy/charly:v2026.231.0714'
+            - '@github.com/opencharly/charly/candy/charly:v2026.251.1947'
 ```
 
 The payloads differ — the pod runs the built `tutorial-shell` image; the VM boots the `fedora-vm`
@@ -205,7 +234,8 @@ and its owning plugin candy, regenerated on every docs build.
 **`candy:` itself is a plugin-provided kind**, registered by `candy/plugin-candy-kind`.
 
 **You extend `charly` by writing candies** — in this project or any other, referenced by git URL —
-and a substrate you invent is the same kind of thing as `pod:`.
+and a substrate you invent is the same kind of thing as `pod:`. This is the everything-and-nothing
+strategy in action: the whole surface is pluggable, and the core ships nothing you cannot replace.
 
 ### The architecture, in one pass
 
@@ -223,7 +253,7 @@ choice — startup cost against isolation — not an API difference. All five su
 `vm:`, `local:`, `kubernetes:`, `android:` — are out-of-process.
 
 **3. Building and deploying share one input.** Building renders a multi-stage Containerfile from
-your candy list. Deploying compiles the *same* list into the **install plan**, which each substrate
+your candy list. Deploying reduces the *same* list to the **install plan**, which each substrate
 backend realises its own way: an SSH session against a VM guest, a Kustomize tree, packages on a
 host, an APK install — and, on `pod:`, the very image the build path produced.
 
@@ -358,7 +388,7 @@ code the way a hand-maintained copy in this file would.
 | to build your first thing | [Quickstart](https://opencharly.ai/start/quickstart/) → [Authoring a candy](https://opencharly.ai/guides/authoring-a-candy/) |
 | the vocabulary | [The words](https://opencharly.ai/concepts/00-vocabulary/) |
 | the ideas, in order, with runnable examples | [The concepts tour](https://opencharly.ai/concepts/01-the-box-is-the-boundary/) — twelve short pages |
-| every command and flag | [CLI reference](https://opencharly.ai/reference/cli/deploy/) + [The charly CLI](https://opencharly.ai/guides/the-cli/) |
+| every command and flag | [CLI reference](https://opencharly.ai/reference/cli/) + [The charly CLI](https://opencharly.ai/guides/the-cli/) |
 | every candy and box | [Candy reference](https://opencharly.ai/reference/candy/github.com/opencharly/pod-sshd:v2026.239.1637/sshd/) · [Box reference](https://opencharly.ai/reference/box/fedora/tutorial-shell/) |
 | "what implements `cdp:`?" | [Provider index](https://opencharly.ai/reference/providers/) |
 | something is broken | [Troubleshooting](https://opencharly.ai/guides/troubleshooting/) |
