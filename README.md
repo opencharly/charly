@@ -1,6 +1,6 @@
 # OpenCharly
 
-**The wonky DevOps orchestrator for you and your agents.**
+**The wonky DevOps tool for you and your agents.**
 
 `charly` is a command-line tool that orchestrates one declarative description of a working
 environment onto any of five substrates: a container, a VM guest, a Kubernetes cluster, a host, or
