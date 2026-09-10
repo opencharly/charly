@@ -99,6 +99,8 @@ github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3
 github.com/nlpodyssey/gopickle v0.3.0/go.mod h1:f070HJ/yR+eLi5WmM1OXJEGaTpuJEUiib19olXgYha0=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026251.1105/go.mod h1:c928FYEmTDs7rvFibYc7+mpijKbMogaYyA/BZF01Kgw=
+github.com/opencharly/sdk v0.2026253.1947 h1:8LRFQ135eupkEFPfFJvQzeax9AiSAONi3tUPYvFym2Q=
+github.com/opencharly/sdk v0.2026253.1947/go.mod h1:bHkz9iCZVrpRQ1GjmsqnnOZYkk6bidLqzmikJivJbrU=
 github.com/opencharly/spec v0.2026250.709 h1:Fv2dspCPit2L7lwwwn29yXuWArFfyrMle65cH7A4SeU=
 github.com/opencharly/spec v0.2026250.709/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/pdevine/tensor v0.0.0-20240510204454-f88f4562727c/go.mod h1:PSojXDXF7TbgQiD6kkd98IHOS0QqTyUEaWRiS8+BLu8=
