@@ -404,7 +404,7 @@ code the way a hand-maintained copy in this file would.
 | to build your first thing | [Quickstart](https://opencharly.ai/start/quickstart/) → [Authoring a candy](https://opencharly.ai/guides/authoring-a-candy/) |
 | the vocabulary | [The words](https://opencharly.ai/concepts/00-vocabulary/) |
 | the ideas, in order, with runnable examples | [The concepts tour](https://opencharly.ai/concepts/01-the-box-is-the-boundary/) — twelve short pages |
-| every command and flag | [CLI reference](https://opencharly.ai/reference/cli/) + [The charly CLI](https://opencharly.ai/guides/the-cli/) |
+| every command and flag | [CLI reference](https://opencharly.ai/reference/providers/) + [The charly CLI](https://opencharly.ai/guides/the-cli/) |
 | every candy and box | [Candy reference](https://opencharly.ai/reference/candy/github.com/opencharly/pod-sshd:v2026.239.1637/sshd/) · [Box reference](https://opencharly.ai/reference/box/fedora/tutorial-shell/) |
 | "what implements `cdp:`?" | [Provider index](https://opencharly.ai/reference/providers/) |
 | something is broken | [Troubleshooting](https://opencharly.ai/guides/troubleshooting/) |
