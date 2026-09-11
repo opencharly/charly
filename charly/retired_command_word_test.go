@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os/exec"
 	"strings"
 	"testing"
@@ -44,8 +45,8 @@ func TestRetiredCommandWord_EndToEnd(t *testing.T) {
 	// The retired word: hard error + exit 80 (kong's usage-error code).
 	cmd := exec.Command(bin, "fleet", "add", "x")
 	out, err := cmd.CombinedOutput()
-	ee, ok := err.(*exec.ExitError)
-	if !ok {
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
 		t.Fatalf("charly fleet exit: %v (want exit 80) — output: %s", err, out)
 	}
 	if code := ee.ExitCode(); code != retiredCommandExit {

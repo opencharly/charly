@@ -61,7 +61,7 @@ func TestNodeFormSteps_RejectsStepTypo(t *testing.T) {
 // reserved-key closedness) OR the Go parser (a typo'd discriminator, a wrong-kind /
 // childless-kind child, a two-discriminator node). Both are hard load errors before
 // any execution; together they are the "CUE-strict, no loosening" guarantee.
-func nodeFormRejected(t *testing.T, doc string) bool {
+func nodeFormRejected(doc string) bool {
 	if requireProjectLoader().ValidateNodeDocCUE("t", []byte(doc)) != nil {
 		return true
 	}
@@ -188,7 +188,7 @@ db:
 `,
 	}
 	for name, doc := range bad {
-		if !nodeFormRejected(t, doc) {
+		if !nodeFormRejected(doc) {
 			t.Errorf("%s: expected a strictness rejection (CUE gate or parser), but the document was accepted", name)
 		}
 	}
