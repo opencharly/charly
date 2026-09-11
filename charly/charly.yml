@@ -2091,7 +2091,7 @@ docs:
             compiled:
                 enabled: true
                 compiled_plugins_path: charly/charly.yml
-                go_mod_path: charly/charly/go.mod
+                go_mod_path: charly/go.mod
             # release_repos — candies documented from the compiled corpus' go.mod
             # require pins (resolve via ITS require, else the latest CalVer tag).
             release_repos: [plugin-review, plugin-pipeline]
