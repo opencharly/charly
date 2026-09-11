@@ -18,6 +18,7 @@ import (
 	"cuelang.org/go/cue"
 
 	"github.com/opencharly/spec/lock"
+	"github.com/opencharly/spec/proc"
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
 )
@@ -565,6 +566,7 @@ func loadBakedPluginBinary(ctx context.Context, bin string) bool {
 		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: register: %v\n", bin, err)
 		return false
 	}
+	reportPluginServed(filepath.Base(bin), "", bin)
 	return true
 }
 
@@ -654,11 +656,112 @@ func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provide
 	return providerRegistry.resolve(class, word)
 }
 
+// localOverrideRootFor reports whether srcDir lies inside a CHARLY_REPO_OVERRIDE target
+// directory, returning that root. This is a DISPLAY-ONLY question: which directory actually
+// serves a ref is loaderkit's repoOverrideDir decision (ONE implementation, in the sdk). What
+// this answers is the different question the run log must answer — "was the source that served
+// this run a local override?" — so an operator can tell a dev-tree run from a published-tag run
+// WITHOUT reading the truth out of the binary afterwards. A malformed entry is skipped here;
+// loaderkit rejects it loudly at resolve time, which is the right place for that verdict.
+func localOverrideRootFor(srcDir string) (string, bool) {
+	raw := strings.TrimSpace(os.Getenv(proc.RepoOverrideEnv))
+	if raw == "" || strings.TrimSpace(srcDir) == "" {
+		return "", false
+	}
+	dir := filepath.Clean(srcDir)
+	for pair := range strings.SplitSeq(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		eq := strings.LastIndex(pair, "=")
+		if eq < 0 {
+			continue
+		}
+		target := strings.TrimSpace(pair[eq+1:])
+		if target == "" {
+			continue
+		}
+		if strings.HasPrefix(target, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				target = filepath.Join(home, target[2:])
+			}
+		}
+		target = filepath.Clean(target)
+		// A PATH-prefix match, not a string-prefix one: "/tmp/tree-sibling" is not inside
+		// "/tmp/tree" even though it starts with it.
+		if dir == target || strings.HasPrefix(dir, target+string(os.PathSeparator)) {
+			return target, true
+		}
+	}
+	return "", false
+}
+
+// pluginArtifactID renders the identity of the bytes at bin: the CONTENT stamp recorded beside
+// a host-built plugin (plugin_build_stamp.go) when one exists, else the file size and mtime — a
+// baked binary carries no stamp. Empty when bin cannot be stat'd.
+func pluginArtifactID(bin string) string {
+	st, err := os.Stat(bin)
+	if err != nil || st.IsDir() {
+		return ""
+	}
+	if data, rerr := os.ReadFile(pluginStampPath(bin)); rerr == nil {
+		if sum := strings.TrimSpace(string(data)); sum != "" {
+			if len(sum) > 16 {
+				sum = sum[:16]
+			}
+			return "stamp " + sum
+		}
+	}
+	return fmt.Sprintf("%dB mtime %s", st.Size(), st.ModTime().UTC().Format("2006-01-02T15:04:05Z"))
+}
+
+// pluginServedLine is THE one place a plugin's SERVED-ARTIFACT identity is rendered — the
+// run-log answer to "which bytes actually executed?" for a plugin the loader connected.
+//
+// The ref-resolution line alone (Resolved @github.com/... -> vTAG) cannot answer it: it names a
+// tag, not the tree or the binary that served the verbs, so a run whose verbs came from a
+// DIFFERENT build looked identical to a correct one. Reading the truth out of the binary
+// afterwards was the only recourse, and by then the run was spent.
+//
+//	baked    — a prebuilt provider binary (bake_plugin:, or $CHARLY_PLUGIN_DIR)
+//	override — the source dir lies inside a CHARLY_REPO_OVERRIDE target
+//	else     — host-built from the plugin candy's own source dir (the cache path keyed by it)
+func pluginServedLine(ref, srcDir, bin string, baked bool) string {
+	id := pluginArtifactID(bin)
+	if id == "" {
+		id = "unknown"
+	}
+	if root, overridden := localOverrideRootFor(srcDir); overridden {
+		return fmt.Sprintf("plugin %s: using LOCAL OVERRIDE %s — serving %s (build %s)", ref, root, bin, id)
+	}
+	if baked {
+		return fmt.Sprintf("plugin %s: served from baked binary %s (build %s)", ref, bin, id)
+	}
+	return fmt.Sprintf("plugin %s: served from %s (build %s); source %s", ref, bin, id, srcDir)
+}
+
+// reportPluginServed prints the provenance line for a plugin the loader is about to connect.
+// srcDir == "" is the source-less case (a baked binary is all there is); otherwise the binary is
+// baked iff it is the baked search's own hit for this ref.
+func reportPluginServed(ref, srcDir, bin string) {
+	fmt.Fprintln(os.Stderr, pluginServedLine(ref, srcDir, bin, srcDir == "" || bin == bakedPluginBinary(ref)))
+}
+
 // resolvePluginBinary returns a plugin's provider binary: a BAKED binary (pre-built,
 // baked into the image for a source/toolchain-less deployed container) if present, else
 // built from the candy source on the host. The baked path is the enabler for running an
 // external plugin INSIDE a deployed container.
+//
+// A LOCAL OVERRIDE (CHARLY_REPO_OVERRIDE matching this plugin's repo) outranks the baked
+// search: the operator explicitly pointed the plugin's repo at a working tree, so the bytes
+// served MUST come from that tree. Letting a prebuilt binary win here is how a run silently
+// executes code nobody is editing — the discarded-bed-run class (a default-pin build served the
+// verbs while the log said nothing about it) this outranks, and reports.
 func resolvePluginBinary(ctx context.Context, srcDir, name string) (string, error) {
+	if root, overridden := localOverrideRootFor(srcDir); overridden {
+		if baked := bakedPluginBinary(name); baked != "" {
+			fmt.Fprintf(os.Stderr, "WARNING: plugin %s: ignoring baked binary %s — CHARLY_REPO_OVERRIDE root %s is authoritative (building from the overridden source)\n", name, baked, root)
+		}
+		return buildPluginBinary(ctx, srcDir, name)
+	}
 	if baked := bakedPluginBinary(name); baked != "" {
 		return baked, nil
 	}
@@ -677,6 +780,7 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 	if err != nil {
 		return fmt.Errorf("plugin %q (source %s): %w", name, source, err)
 	}
+	reportPluginServed(name, srcDir, bin)
 	unit, closer, err := (&LocalTransport{BinPath: bin}).Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("plugin %q: connect: %w", name, err)

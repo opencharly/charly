@@ -46,6 +46,16 @@ func hostBuildRemoteImageResolve(_ context.Context, req spec.RemoteImageResolveR
 	if err != nil {
 		return spec.RemoteImageResolveReply{Error: fmt.Errorf("downloading %s:%s: %w", parsed.RepoPath, version, err).Error()}, nil
 	}
+	// The Resolved line above names the REF; this names the TREE it resolved to, so the run log
+	// says which bytes will serve the build. A local override is called out explicitly —
+	// "Resolved @repo -> vTAG" alone cannot distinguish a published-tag tree from the dev's
+	// working tree, which is exactly how a run came to be trusted while a different tree served
+	// it (the silent-provenance defect).
+	if root, overridden := localOverrideRootFor(cachePath); overridden {
+		fmt.Fprintf(os.Stderr, "Resolved @%s -> %s: using LOCAL OVERRIDE %s (serving from %s)\n", parsed.RepoPath, version, root, cachePath)
+	} else {
+		fmt.Fprintf(os.Stderr, "Resolved @%s -> %s: serving from %s\n", parsed.RepoPath, version, cachePath)
+	}
 	return spec.RemoteImageResolveReply{
 		CacheDir: cachePath,
 		BoxName:  parsed.Name,
