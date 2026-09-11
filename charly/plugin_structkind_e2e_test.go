@@ -136,32 +136,7 @@ check-structkind-e2e:
 	if !ok {
 		t.Fatalf("post-migrate baseline not folded into uf.Deploy; have %v", deployKeysFor(baseUF))
 	}
-	// The baseline's post-migrate shape: the FIRST member (web) is the PRIMARY (the
-	// entity's own substrate node), cache the remaining deploy-level sibling.
-	if base.Target != "pod" || base.Image != "coder" {
-		t.Fatalf("baseline primary wrong: target=%q image=%q", base.Target, base.Image)
-	}
-	if len(base.Member) != 1 || base.MemberByName("cache") == nil {
-		t.Fatalf("baseline members wrong: %+v", base.Member)
-	}
-
-	// The AUTHORED members were reconstructed (not empty, not synthesized): two peers + a nested.
-	if len(dn.Member) != 2 || dn.MemberByName("web") == nil || dn.MemberByName("cache") == nil {
-		t.Fatalf("authored peer members not reconstructed: %+v", dn.Member)
-	}
-	web := dn.MemberByName("web").Node
-	if web.Image != "coder" || web.Target != "pod" {
-		t.Fatalf("web member not reconstructed from authored input: %+v", web)
-	}
-	migrate := dn.MemberByName("cache").Node.MemberByName("migrate")
-	if migrate == nil || migrate.Node == nil || migrate.Node.Image != "migrator" {
-		t.Fatalf("nested authored member cache.migrate not reconstructed: %+v", dn.MemberByName("cache").Node)
-	}
-	// The cross-member ${HOST:cache} check survived input-threading (hoisted to the owner plan
-	// with venue="web" by LoadUnified's generic member-plan hoist, same as the builtin path).
-	if !strings.Contains(mustJSON(t, dn), "${HOST:cache}") {
-		t.Fatalf("cross-member ${HOST:cache} check lost through input-threading: %s", mustJSON(t, dn))
-	}
+	assertMemberReconstruction(t, dn, base)
 
 	// THE FOUNDATION PROOF: the external structural-plugin path and the builtin loader
 	// fold the SAME authored member subtree IDENTICALLY — one member-decode source of
@@ -189,6 +164,43 @@ check-structkind-e2e:
 		if !fields[want] {
 			t.Errorf("examplestructkind declared fields missing %q", want)
 		}
+	}
+}
+
+// assertMemberReconstruction proves the F5 authored-member INPUT-threading at its two
+// boundaries: the post-migrate BASELINE's shape (the FIRST authored member is the primary
+// substrate node — web's body — with cache the remaining deploy-level sibling) and the plugin
+// bed's RECONSTRUCTED authored members (two peers + the nested cache.migrate), including the
+// cross-member ${HOST:cache} plan that must survive the hoist to the owner plan. Split out of the
+// end-to-end test so its member-decode truths stay ONE assertion block (and the test's own
+// cyclomatic complexity stays under the repo lint ceiling).
+func assertMemberReconstruction(t *testing.T, dn, base spec.DeployNode) {
+	t.Helper()
+	// The baseline's post-migrate shape: the FIRST member (web) is the PRIMARY (the
+	// entity's own substrate node), cache the remaining deploy-level sibling.
+	if base.Target != "pod" || base.Image != "coder" {
+		t.Fatalf("baseline primary wrong: target=%q image=%q", base.Target, base.Image)
+	}
+	if len(base.Member) != 1 || base.MemberByName("cache") == nil {
+		t.Fatalf("baseline members wrong: %+v", base.Member)
+	}
+
+	// The AUTHORED members were reconstructed (not empty, not synthesized): two peers + a nested.
+	if len(dn.Member) != 2 || dn.MemberByName("web") == nil || dn.MemberByName("cache") == nil {
+		t.Fatalf("authored peer members not reconstructed: %+v", dn.Member)
+	}
+	web := dn.MemberByName("web").Node
+	if web.Image != "coder" || web.Target != "pod" {
+		t.Fatalf("web member not reconstructed from authored input: %+v", web)
+	}
+	migrate := dn.MemberByName("cache").Node.MemberByName("migrate")
+	if migrate == nil || migrate.Node == nil || migrate.Node.Image != "migrator" {
+		t.Fatalf("nested authored member cache.migrate not reconstructed: %+v", dn.MemberByName("cache").Node)
+	}
+	// The cross-member ${HOST:cache} check survived input-threading (hoisted to the owner plan
+	// with venue="web" by LoadUnified's generic member-plan hoist, same as the builtin path).
+	if !strings.Contains(mustJSON(t, dn), "${HOST:cache}") {
+		t.Fatalf("cross-member ${HOST:cache} check lost through input-threading: %s", mustJSON(t, dn))
 	}
 }
 

@@ -136,7 +136,7 @@ func TestSubstrateKind_ImagelessAgentProvisionedWithSiblingStillFolds(t *testing
 // templateKeysForAcc mirrors deployKeysForAcc for the generic standalone-template map
 // (acc.PluginKinds[disc]).
 func templateKeysForAcc(acc *spec.MaterializedProject, disc string) []string {
-	out := []string{}
+	out := make([]string, 0, len(acc.PluginKinds[disc]))
 	for k := range acc.PluginKinds[disc] {
 		out = append(out, k)
 	}

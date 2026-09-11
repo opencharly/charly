@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -316,6 +317,27 @@ func (m *metaGRPCServer) Describe(_ context.Context, _ *pb.Empty) (*pb.Capabilit
 // describe reads a connected plugin's capability manifest.
 func describe(ctx context.Context, conn *transport.Conn) (*pb.Capabilities, error) {
 	return conn.Meta.Describe(ctx, &pb.Empty{})
+}
+
+// describeBounded is describe with THE readiness bound (charly#588): the caller's context at every
+// connect site is context.Background(), so a plugin child that completes the go-plugin handshake
+// and then never answers leaves this unary call parked forever — the observed indefinite hang
+// (host parked, child alive and idle, no error). The deadline is applied HERE, after the handshake,
+// rather than around the whole connect, so a legitimately slow host `go build` before the
+// connect and go-plugin's own spawn bound (StartTimeout) are left exactly as they were.
+func describeBounded(ctx context.Context, conn *transport.Conn, timeout time.Duration) (*pb.Capabilities, error) {
+	rctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	caps, err := describe(rctx, conn)
+	if err != nil && errors.Is(rctx.Err(), context.DeadlineExceeded) {
+		// gRPC surfaces an expired deadline as a STATUS error, which errors.Is(err,
+		// context.DeadlineExceeded) does NOT match — re-wrap it so the bound stays recognizable to
+		// every caller above (the loader names the plugin and the phase; the test asserts the
+		// deadline). Every other failure — including a caller's own context being cancelled, which
+		// this bound must never claim as its own — is returned untouched.
+		return nil, fmt.Errorf("readiness read timed out after %s: %w", timeout, rctx.Err())
+	}
+	return caps, err
 }
 
 // grpcProvider is a Provider backed by a remote plugin over gRPC — the
