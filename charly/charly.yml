@@ -2073,3 +2073,47 @@ systemd:
         requires_capability:
             - preserve_user
 
+# docs — the docs-site generation CONFIG entity for this repo (the #DocsConfig
+# contract, spec/schema/docs.cue): everything `charly docs generate` needs,
+# declared in the repo's charly.yml. The docs kind word routes on the generic
+# #Node spine — a non-directive top-level key (NO spec.DocDirectives entry,
+# asserted by the spec round-trip tests), surfaced by the candywalk projection
+# exactly like skill:/hook:/marketplace: entities and decoded into the generated
+# spec.DocsConfig type. The compiled corpus (compiled_plugins:) and its go.mod
+# require: pins resolve the release_repos; the output.hand_authored roots are
+# the trees the generated reference pages splice into.
+docs:
+    docs:
+        # sources — where the reference documentation is GENERATED from.
+        sources:
+            # compiled — the plugins compiled INTO this charly binary. The paths
+            # are the schema defaults (this repo's own charly.yml + go.mod).
+            compiled:
+                enabled: true
+                compiled_plugins_path: charly/charly.yml
+                go_mod_path: charly/charly/go.mod
+            # release_repos — candies documented from the compiled corpus' go.mod
+            # require pins (resolve via ITS require, else the latest CalVer tag).
+            release_repos: [plugin-review, plugin-pipeline]
+            # extra_repos — additional repos fetched + documented outside the
+            # corpus, same require-else-tag resolution.
+            extra_repos: [plugin-gh]
+        # marketplace — the marketplace repo layout the reference pages link to
+        # (default path).
+        marketplace:
+            path: marketplace
+        # projections — the reference projections the generator emits (schema
+        # defaults on; a page set is generated only when its toggle is set).
+        projections:
+            recipes: true
+            cli: true
+            providers: true
+            candy: true
+            box: true
+            plugin: true
+            landing: true
+        # output — the hand-authored doc tree the generated pages are spliced
+        # into (the generator leaves non-owned trees untouched).
+        output:
+            hand_authored: [start, concepts, guides]
+
