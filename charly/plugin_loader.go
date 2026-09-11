@@ -569,7 +569,7 @@ func loadBakedPluginBinary(bin string) bool {
 		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: register: %v\n", bin, err)
 		return false
 	}
-	reportPluginServed(filepath.Base(bin), "", bin)
+	reportPluginServed(filepath.Base(bin), "", bin, "")
 	return true
 }
 
@@ -686,19 +686,25 @@ func pluginArtifactID(bin string) string {
 // DIFFERENT build looked identical to a correct one. Reading the truth out of the binary
 // afterwards was the only recourse, and by then the run was spent.
 //
+//	override — the plugin's REPO is served from a local CHARLY_REPO_OVERRIDE tree: the override
+//	           OUTRANKS a baked binary, and overrideRoot names the tree that served the build
 //	baked    — a prebuilt provider binary (bake_plugin:, or $CHARLY_PLUGIN_DIR)
 //	else     — host-built from the plugin candy's own source dir (the cache path keyed by it)
 //
-// There is deliberately NO "local override" arm here: naming a CHARLY_REPO_OVERRIDE root needs
-// the override's own parse, which is loaderkit's single implementation and unreachable from
-// charly core (import_purity_test.go forbids ANY sdk import in the host). The line still
-// answers the RCA question without it — the host-built arm names the SOURCE TREE that served
-// the build, so an overridden run is visible as the dev tree it actually is. The override
-// precedence + label are the named follow-up wave (see resolvePluginBinary).
-func pluginServedLine(ref, srcDir, bin string, baked bool) string {
+// overrideRoot arrives as DATA from the loader seam (spec.ProjectLoader.RepoOverrideDir, asked
+// by resolvePluginBinary through requireProjectLoader) — there is deliberately NO core re-parse
+// of the env var here. loaderkit.RepoOverrideDir is its ONE implementation and charly core may
+// not import the sdk (import_purity_test.go forbids ANY sdk import in the host); #587's first
+// arm re-parsed the env to answer this same question, which is why it was withdrawn and routed
+// to this wave. The seam is the clean replacement, and the override is asked about the plugin's
+// REPO (pluginRepoPath) rather than inferred from a directory-path prefix.
+func pluginServedLine(ref, srcDir, bin, overrideRoot string, baked bool) string {
 	id := pluginArtifactID(bin)
 	if id == "" {
 		id = "unknown"
+	}
+	if overrideRoot != "" {
+		return fmt.Sprintf("plugin %s: using LOCAL OVERRIDE %s — serving %s (build %s); source %s", ref, overrideRoot, bin, id, srcDir)
 	}
 	if baked {
 		return fmt.Sprintf("plugin %s: served from baked binary %s (build %s)", ref, bin, id)
@@ -708,34 +714,90 @@ func pluginServedLine(ref, srcDir, bin string, baked bool) string {
 
 // reportPluginServed prints the provenance line for a plugin the loader is about to connect.
 // srcDir == "" is the source-less case (a baked binary is all there is); otherwise the binary is
-// baked iff it is the baked search's own hit for this ref.
-func reportPluginServed(ref, srcDir, bin string) {
-	fmt.Fprintln(os.Stderr, pluginServedLine(ref, srcDir, bin, srcDir == "" || bin == bakedPluginBinary(ref)))
+// baked iff it is the baked search's own hit for this ref. overrideRoot is the root
+// resolvePluginBinary got back from the seam ("" when no override applied).
+func reportPluginServed(ref, srcDir, bin, overrideRoot string) {
+	fmt.Fprintln(os.Stderr, pluginServedLine(ref, srcDir, bin, overrideRoot, srcDir == "" || bin == bakedPluginBinary(ref)))
 }
 
-// resolvePluginBinary returns a plugin's provider binary: a BAKED binary (pre-built,
-// baked into the image for a source/toolchain-less deployed container) if present, else
-// built from the candy source on the host. The baked path is the enabler for running an
-// external plugin INSIDE a deployed container.
+// pluginRepoPath returns the REMOTE repo a plugin candy's source: declaration names — the
+// repoPath key a CHARLY_REPO_OVERRIDE entry matches on — or "" when the source names no remote
+// repo (a local candy dir, whose plugins no override can apply to). The host-qualified test
+// mirrors the rule loaderkit's repo-path normalization uses in reverse (it prefixes github.com
+// only for a bare owner/repo LHS), so a local path or bare name is never mistaken for a repo key.
+// spec.ParseRemoteRef is the canonical REF parse charly core already uses
+// (host_build_remote_image_resolve.go); it is NOT the env parse R3 forbids duplicating — that
+// stays loaderkit's one copy, reached through the seam below.
+func pluginRepoPath(source string) string {
+	repoPath := spec.ParseRemoteRef(source).RepoPath
+	host, _, ok := strings.Cut(repoPath, "/")
+	if !ok || strings.Trim(host, ".") == "" || !strings.Contains(host, ".") {
+		return ""
+	}
+	return repoPath
+}
+
+// repoOverrideRootFor asks the REGISTERED loader seam whether repoPath is served from a local
+// CHARLY_REPO_OVERRIDE tree, and which one — the ONLY way charly core may answer that question,
+// because the env parse is loaderkit.RepoOverrideDir's single implementation and core is
+// import-purity-bound to the spec module (import_purity_test.go). repoPath == "" short-circuits:
+// a plugin with no remote repo has nothing an override could match, so the seam is never asked.
+// A malformed entry / missing or non-directory target is a HARD error from the seam — the
+// override was set deliberately, so a typo must fail loud rather than silently fall through to a
+// baked binary.
+func repoOverrideRootFor(repoPath string) (string, bool, error) {
+	if repoPath == "" {
+		return "", false, nil
+	}
+	return requireProjectLoader().RepoOverrideDir(repoPath)
+}
+
+// resolvePluginBinary returns a plugin's provider binary AND the CHARLY_REPO_OVERRIDE root that
+// served it ("" when none applied). Precedence: LOCAL OVERRIDE > baked binary > host build.
 //
-// The precedence here is NOT override-aware, deliberately. "Does an override apply to THIS
-// plugin's repo, and to which tree?" is loaderkit's RepoOverrideDir decision — the ONE parse of
-// CHARLY_REPO_OVERRIDE — and charly core may not import the sdk to ask it
-// (import_purity_test.go: the host reaches loader mechanisms only through the compiled-in
-// loader plugin's spec-typed seams). Making an override outrank this baked search is therefore
-// the NAMED FOLLOW-UP WAVE, not a core re-derivation: spec.ProjectLoader gains
-// RepoOverrideDir(repoPath) (string, bool, error), candy/plugin-loader delegates it to
-// loaderkit.RepoOverrideDir, and this function asks requireProjectLoader() for the root before
-// the baked probe below. Until that lands the served-artifact line still names the source tree
-// and the build id, so an overridden run is legible in the log.
-func resolvePluginBinary(ctx context.Context, srcDir, name string) (string, error) {
+// A BAKED binary (pre-built, baked into the image for a source/toolchain-less deployed
+// container) is preferred whenever no override applies, else the candy source is built on the
+// host — the baked path is the enabler for running an external plugin INSIDE a deployed
+// container.
+//
+// A LOCAL OVERRIDE outranks the baked search: the operator pointed this plugin's REPO at a
+// working tree, so the bytes served MUST come from that tree — a prebuilt binary silently
+// serving an overridden repo is how a run executes code nobody is editing (the discarded-bed-run
+// class #587 RCA'd, whose first arm was withdrawn for re-parsing the env in core). "Does an
+// override apply to THIS plugin's repo, and to which tree?" is loaderkit's RepoOverrideDir
+// decision; core asks it through the seam (repoOverrideRootFor →
+// spec.ProjectLoader.RepoOverrideDir) and never re-parses the env itself. The bypass is named
+// LOUDLY, and the served-artifact line then names both the override root and the tree the build
+// actually ran from (pluginServedLine's override arm).
+func resolvePluginBinary(ctx context.Context, srcDir, name, repoPath string) (string, string, error) {
+	overrideRoot, overridden, err := repoOverrideRootFor(repoPath)
+	if err != nil {
+		return "", "", err
+	}
+	if overridden {
+		if baked := bakedPluginBinary(name); baked != "" {
+			fmt.Fprintf(os.Stderr, "WARNING: plugin %s: ignoring baked binary %s — CHARLY_REPO_OVERRIDE root %s is authoritative (building from the overridden source)\n", name, baked, overrideRoot)
+		}
+		if srcDir == "" {
+			return "", "", fmt.Errorf("CHARLY_REPO_OVERRIDE root %s is authoritative for %s and no source dir is available to build from", overrideRoot, repoPath)
+		}
+		built, berr := buildPluginBinary(ctx, srcDir, name)
+		if berr != nil {
+			return "", "", berr
+		}
+		return built, overrideRoot, nil
+	}
 	if baked := bakedPluginBinary(name); baked != "" {
-		return baked, nil
+		return baked, "", nil
 	}
 	if srcDir == "" {
-		return "", fmt.Errorf("no baked binary (%s) and no source dir to build from", filepath.Join(bakedPluginDir, safePluginBinName(name)))
+		return "", "", fmt.Errorf("no baked binary (%s) and no source dir to build from", filepath.Join(bakedPluginDir, safePluginBinName(name)))
 	}
-	return buildPluginBinary(ctx, srcDir, name)
+	built, err := buildPluginBinary(ctx, srcDir, name)
+	if err != nil {
+		return "", "", err
+	}
+	return built, "", nil
 }
 
 // loadPluginUnit loads ONE out-of-tree plugin: resolve its provider binary (baked-in or
@@ -743,14 +805,15 @@ func resolvePluginBinary(ctx context.Context, srcDir, name string) (string, erro
 // register its providers. The schema travels over the Describe channel (gRPC
 // schema_cue) — the host never reads the candy's schema/ dir.
 func loadPluginUnit(ctx context.Context, name string, source string, srcDir string) error {
-	bin, err := resolvePluginBinary(ctx, srcDir, name)
+	bin, overrideRoot, err := resolvePluginBinary(ctx, srcDir, name, pluginRepoPath(source))
 	if err != nil {
 		return fmt.Errorf("plugin %q (source %s): %w", name, source, err)
 	}
 	// The connect — not the build above — is the wait that can never finish (charly#588): bound it
 	// and let the error name the plugin, its source, the phase and the bound. The served-artifact
-	// line (#587) stays FIRST so the provenance of a connect is logged before the wait begins.
-	reportPluginServed(name, srcDir, bin)
+	// line (#587) stays FIRST so the provenance of a connect is logged before the wait begins —
+	// including the override root whenever the seam reported one.
+	reportPluginServed(name, srcDir, bin, overrideRoot)
 	unit, closer, err := connectPluginReady(&LocalTransport{BinPath: bin}, name, source)
 	if err != nil {
 		return err

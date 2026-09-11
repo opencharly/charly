@@ -342,7 +342,10 @@ func externalCommandArgs(d externalCommandDispatch, sub string) []string {
 // discoverBakedPluginWords (run in main) mapped the word to its baked binary from the
 // `.providers` manifest. Otherwise the project is scanned for the candy declaring
 // command:<word> and its binary is resolved the SAME way the loader does (resolvePluginBinary:
-// baked-by-leaf if present, else host-built from source).
+// a local CHARLY_REPO_OVERRIDE for the plugin's repo outranks it, else baked-by-leaf if present,
+// else host-built from source). The baked-only shortcut above cannot ask that question: the
+// `.providers` manifest records class:word, not the plugin's repo, so there is no repoPath to
+// hand the seam — the override applies wherever the candy SOURCE is known.
 func resolveCommandPluginBinary(ctx context.Context, word string) (string, error) {
 	if bin, ok := bakedPluginBinaries[provKey(ClassCommand, word)]; ok {
 		return bin, nil
@@ -363,7 +366,7 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 	if candy == nil {
 		return "", fmt.Errorf("command %q: no plugin candy provides command:%s in the project", word, word)
 	}
-	bin, err := resolvePluginBinary(ctx, candy.GetSourceDir(), name)
+	bin, _, err := resolvePluginBinary(ctx, candy.GetSourceDir(), name, pluginRepoPath(candy.GetPluginSource()))
 	if err != nil {
 		return "", fmt.Errorf("command %q: %w", word, err)
 	}
