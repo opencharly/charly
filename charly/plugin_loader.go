@@ -722,17 +722,39 @@ func reportPluginServed(ref, srcDir, bin, overrideRoot string) {
 
 // pluginRepoPath returns the REMOTE repo a plugin candy's source: declaration names — the
 // repoPath key a CHARLY_REPO_OVERRIDE entry matches on — or "" when the source names no remote
-// repo (a local candy dir, whose plugins no override can apply to). The host-qualified test
-// mirrors the rule loaderkit's repo-path normalization uses in reverse (it prefixes github.com
-// only for a bare owner/repo LHS), so a local path or bare name is never mistaken for a repo key.
+// repo (a local candy dir, whose plugins no override can apply to).
+//
+// The key MUST be the exact string the override LHS is normalized to, or the seam is never asked
+// and a local override silently fails to outrank a baked binary (the bug class this seam exists
+// to close). loaderkit normalizes a bare "owner/repo" LHS by prefixing github.com
+// (normalizeOverrideRepoPath — the same auto-prefix rule as spec.NormalizeRepoSpec), so a candy
+// SOURCE written in that SHORT form (owner/repo, optionally with a candy sub-path) names
+// github.com/owner/repo and not "".
+//
 // spec.ParseRemoteRef is the canonical REF parse charly core already uses
 // (host_build_remote_image_resolve.go); it is NOT the env parse R3 forbids duplicating — that
-// stays loaderkit's one copy, reached through the seam below.
+// stays loaderkit's one copy, reached through the seam below — and spec.NormalizeRepoSpec is the
+// exported implementation of the auto-prefix rule, so the short form is normalized by the rule
+// loaderkit's LHS normalization mirrors rather than by a second, divergent copy of it.
 func pluginRepoPath(source string) string {
 	repoPath := spec.ParseRemoteRef(source).RepoPath
-	host, _, ok := strings.Cut(repoPath, "/")
-	if !ok || strings.Trim(host, ".") == "" || !strings.Contains(host, ".") {
-		return ""
+	host, rest, ok := strings.Cut(repoPath, "/")
+	if !ok || rest == "" {
+		return "" // a bare name / a single path segment names no repo
+	}
+	if strings.Trim(host, ".") == "" {
+		return "" // ".", "..", an absolute or ./-relative path — a local dir, not a repo
+	}
+	if !strings.Contains(host, ".") {
+		// NOT host-qualified — the SHORT form. A DNS host always carries a dot, so the first
+		// segment is the OWNER and the repo is the segment after it: the owner/repo HEAD,
+		// discarding a candy sub-path exactly as spec.ParseRemoteRef discards it for a
+		// host-qualified ref. NormalizeRepoSpec then applies the auto-prefix rule.
+		owner, _, _ := strings.Cut(rest, "/")
+		if owner == "" {
+			return ""
+		}
+		repoPath, _ = spec.NormalizeRepoSpec(host + "/" + owner)
 	}
 	return repoPath
 }
@@ -750,6 +772,25 @@ func repoOverrideRootFor(repoPath string) (string, bool, error) {
 		return "", false, nil
 	}
 	return requireProjectLoader().RepoOverrideDir(repoPath)
+}
+
+// overridePluginBinary is the OVERRIDE arm of the plugin-binary precedence rule (LOCAL OVERRIDE >
+// baked binary > host build), shared by the two call shapes that reach it: the loader
+// (resolvePluginBinary, whose baked candidate is the leaf-name search) and the external COMMAND
+// dispatch (resolveCommandPluginBinary, whose baked candidate is the .providers manifest hit).
+// The operator pointed repoPath at a working tree, so the served bytes MUST come from it — a
+// prebuilt binary silently serving an overridden repo is how a run executes code nobody is
+// editing (#587's discarded-bed-run class, RCA'd in resolvePluginBinary's doc). bypassed names the
+// baked binary this arm outranks ("" when the caller found none), so the bypass is logged LOUDLY
+// in BOTH call shapes rather than only where the loader's own baked probe happens to look.
+func overridePluginBinary(ctx context.Context, name, srcDir, repoPath, overrideRoot, bypassed string) (string, error) {
+	if bypassed != "" {
+		fmt.Fprintf(os.Stderr, "WARNING: plugin %s: ignoring baked binary %s — CHARLY_REPO_OVERRIDE root %s is authoritative (building from the overridden source)\n", name, bypassed, overrideRoot)
+	}
+	if srcDir == "" {
+		return "", fmt.Errorf("CHARLY_REPO_OVERRIDE root %s is authoritative for %s and no source dir is available to build from", overrideRoot, repoPath)
+	}
+	return buildPluginBinary(ctx, srcDir, name)
 }
 
 // resolvePluginBinary returns a plugin's provider binary AND the CHARLY_REPO_OVERRIDE root that
@@ -775,13 +816,7 @@ func resolvePluginBinary(ctx context.Context, srcDir, name, repoPath string) (st
 		return "", "", err
 	}
 	if overridden {
-		if baked := bakedPluginBinary(name); baked != "" {
-			fmt.Fprintf(os.Stderr, "WARNING: plugin %s: ignoring baked binary %s — CHARLY_REPO_OVERRIDE root %s is authoritative (building from the overridden source)\n", name, baked, overrideRoot)
-		}
-		if srcDir == "" {
-			return "", "", fmt.Errorf("CHARLY_REPO_OVERRIDE root %s is authoritative for %s and no source dir is available to build from", overrideRoot, repoPath)
-		}
-		built, berr := buildPluginBinary(ctx, srcDir, name)
+		built, berr := overridePluginBinary(ctx, name, srcDir, repoPath, overrideRoot, bakedPluginBinary(name))
 		if berr != nil {
 			return "", "", berr
 		}

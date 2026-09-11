@@ -51,14 +51,28 @@ func swapProjectLoader(t *testing.T, l spec.ProjectLoader) {
 // TestPluginRepoPath_NamesTheRepoOfAPluginSource: the seam is asked about the plugin's REPO, so
 // the derivation from the candy's source: declaration must yield exactly the key an override
 // entry matches (spec.ParseRemoteRef — the same parse the remote-image resolve path uses). A
-// source that names no remote repo (a local candy dir, a bare name) yields "": nothing for an
-// override to match, and the seam is never asked.
+// source that names no remote repo (a ./-relative or absolute path, a bare single-segment name)
+// yields "": nothing for an override to match, and the seam is never asked.
+//
+// The SHORT form (`owner/repo`, with or without a candy sub-path) is included deliberately: a
+// bare owner/repo LHS is what the seam's OWN normalization prefixes github.com to, so a candy
+// source written that way must name github.com/owner/repo — deriving "" there left the override
+// silently unasked and unapplied (the B14(c) divergence caught on #592). `candy/plugin-local`
+// (a two-segment RELATIVE dir) normalizes the same way, which is consistent: an operator writing
+// that exact LHS into CHARLY_REPO_OVERRIDE gets the same `github.com/candy/plugin-local` key, so
+// the two sides agree instead of diverging.
 func TestPluginRepoPath_NamesTheRepoOfAPluginSource(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
 		{"github.com/opencharly/plugin-h4/candy/plugin-h4", "github.com/opencharly/plugin-h4"},
 		{"@github.com/opencharly/plugin-h4/candy/plugin-h4:v2026.237.1417", "github.com/opencharly/plugin-h4"},
-		{"candy/plugin-local", ""},
+		{"opencharly/plugin-h4", "github.com/opencharly/plugin-h4"},
+		{"@opencharly/plugin-h4", "github.com/opencharly/plugin-h4"},
+		{"opencharly/plugin-h4/candy/plugin-h4", "github.com/opencharly/plugin-h4"},
+		{"opencharly/plugin-h4/candy/plugin-h4:v2026.237.1417", "github.com/opencharly/plugin-h4"},
+		{"candy/plugin-local", "github.com/candy/plugin-local"},
 		{"./candy/plugin-local", ""},
+		{"../candy/plugin-local", ""},
+		{"/abs/candy/plugin-local", ""},
 		{"plugin-local", ""},
 		{"", ""},
 	} {
@@ -223,5 +237,117 @@ func TestRepoOverrideRootFor_SkipsTheSeamForARepolessSource(t *testing.T) {
 	}
 	if len(loader.asked) != 0 {
 		t.Fatalf("the seam must NOT be asked for a repo-less plugin; asked=%v", loader.asked)
+	}
+}
+
+// writeCommandPluginProject writes a MINIMAL real project whose candy declares command:<word> with
+// the given source: ref — the declaration resolveCommandPluginBinary scans for the plugin's repo,
+// and (the candy dir being a buildable Go module) the source the override arm builds.
+func writeCommandPluginProject(t *testing.T, root, name, word, source string) string {
+	t.Helper()
+	srcDir := writeMinimalPluginModule(t, root, name)
+	candyYAML := name + ":\n    candy:\n        version: 2026.175.0001\n        description: a command-plugin fixture candy.\n        plugin:\n            providers:\n                - command:" + word + "\n            source: " + source + "\n        plan:\n            - check: command=true\n              id: " + name + "-check\n              context:\n                  - build\n              command: \"true\"\n"
+	if err := os.WriteFile(filepath.Join(srcDir, "charly.yml"), []byte(candyYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rootYAML := "version: " + LatestSchemaVersion().String() + "\ndiscover:\n    - path: candy\n      recursive: true\n"
+	if err := os.WriteFile(filepath.Join(root, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return srcDir
+}
+
+// TestResolveCommandPluginBinary_OverrideOutranksTheBakedManifest closes the arm the baked-only
+// COMMAND shortcut left open (#592 block 1): `charly <plugin-command>` returned a baked binary for
+// the word BEFORE any override question was asked, so a local CHARLY_REPO_OVERRIDE for that
+// plugin's repo did not outrank it — the PR's own claimed precedence (LOCAL OVERRIDE > baked
+// binary > host build) did not hold on the command path. A command word's repo is in NO manifest
+// (the .providers file records class:word), so the project scan is what names it, and the baked hit
+// is now taken only once the seam has answered "no override" for THAT repo.
+//
+// It drives the REAL seam (the compiled-in loader TestMain loads) with a real env value: the
+// override LHS is the candy's own source: declaration in the SHORT form (owner/repo), so the match
+// itself proves the short form reaches the seam as github.com/owner/repo (#592 block 3).
+func TestResolveCommandPluginBinary_OverrideOutranksTheBakedManifest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("the override arm host-builds a real module")
+	}
+	const word = "zzoverridecmd"
+	const candyName = "plugin-zzoverridecmd"
+	cache := t.TempDir()
+	bakedDir := t.TempDir()
+	isolatePluginSearch(t, bakedDir)
+	t.Setenv("XDG_CACHE_HOME", cache)
+	bakedBin := filepath.Join(bakedDir, candyName)
+	if err := os.WriteFile(bakedBin, []byte("prebuilt"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeProviders(t, bakedDir, candyName, "command:"+word)
+	discoverBakedPluginWords() // the REAL .providers → class:word wiring main runs at startup
+	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
+	if got := bakedPluginBinaries[provKey(ClassCommand, word)]; got != bakedBin {
+		t.Fatalf("the baked manifest hit = %q, want %q", got, bakedBin)
+	}
+
+	project := t.TempDir()
+	writeCommandPluginProject(t, project, candyName, word, "opencharly/"+candyName)
+	t.Chdir(project)
+
+	// The override LHS is the SHORT form of the candy's own source: ref — it can only match if the
+	// derivation normalized it to github.com/opencharly/<candy> the way the seam's parse does.
+	root := t.TempDir()
+	t.Setenv(proc.RepoOverrideEnv, "opencharly/"+candyName+"="+root)
+
+	var bin string
+	var err error
+	stderr := captureStderr(t, func() { bin, err = resolveCommandPluginBinary(context.Background(), word) })
+	if err != nil {
+		t.Fatalf("resolveCommandPluginBinary with an override for the plugin's repo: %v", err)
+	}
+	if bin == bakedBin {
+		t.Fatalf("the BAKED manifest hit %s served an overridden repo — the override must outrank it", bakedBin)
+	}
+	if wantDir := filepath.Join(cache, "charly", "plugins"); filepath.Dir(bin) != wantDir {
+		t.Fatalf("the override arm must host-build into the plugin cache %s; got %s", wantDir, bin)
+	}
+	if !strings.Contains(stderr, "ignoring baked binary "+bakedBin) {
+		t.Fatalf("the bypassed baked binary must be named LOUDLY; stderr:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "using LOCAL OVERRIDE "+root) {
+		t.Fatalf("the command path must log the override provenance (the exec'd plugin IS the process); stderr:\n%s", stderr)
+	}
+
+	// CONTROL: no override → the baked manifest hit serves, unchanged (the deployed-container path
+	// the shortcut exists for) — and this time with the candy DECLARED in the project, so the scan
+	// really did run and the seam really did answer "no".
+	t.Setenv(proc.RepoOverrideEnv, "")
+	bin2, err2 := resolveCommandPluginBinary(context.Background(), word)
+	if err2 != nil || bin2 != bakedBin {
+		t.Fatalf("with no override the baked shortcut must serve unchanged; got (%q,%v), want %q", bin2, err2, bakedBin)
+	}
+}
+
+// TestResolveCommandPluginBinary_BakedServesWithNoProjectHit is the CONTROL for the arm the
+// shortcut exists for — the deployed container: `.providers` maps the word to a baked binary and
+// the cwd is NOT a project, so no repo is derivable, the seam is never asked, and the baked binary
+// serves byte-identically to the pre-fix behavior.
+func TestResolveCommandPluginBinary_BakedServesWithNoProjectHit(t *testing.T) {
+	const word = "zzbakednoproj"
+	bakedDir := t.TempDir()
+	isolatePluginSearch(t, bakedDir)
+	bakedBin := filepath.Join(bakedDir, "plugin-zzbakednoproj")
+	if err := os.WriteFile(bakedBin, []byte("prebuilt"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bakedPluginBinaries[provKey(ClassCommand, word)] = bakedBin
+	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
+
+	// A project-less cwd: NO repo is derivable, so the seam has nothing to be asked about and the
+	// baked shortcut is the whole answer (the deployed-container path).
+	t.Chdir(t.TempDir())
+
+	bin, err := resolveCommandPluginBinary(context.Background(), word)
+	if err != nil || bin != bakedBin {
+		t.Fatalf("a project-less baked command must serve unchanged; got (%q,%v), want %q", bin, err, bakedBin)
 	}
 }

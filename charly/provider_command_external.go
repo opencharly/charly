@@ -337,40 +337,91 @@ func externalCommandArgs(d externalCommandDispatch, sub string) []string {
 	return append([]string{sub}, childArgs...)
 }
 
-// resolveCommandPluginBinary returns the provider binary that serves command:<word>. A BAKED
-// binary is preferred — a deployed container has no candy source and no go toolchain, so
-// discoverBakedPluginWords (run in main) mapped the word to its baked binary from the
-// `.providers` manifest. Otherwise the project is scanned for the candy declaring
-// command:<word> and its binary is resolved the SAME way the loader does (resolvePluginBinary:
-// a local CHARLY_REPO_OVERRIDE for the plugin's repo outranks it, else baked-by-leaf if present,
-// else host-built from source). The baked-only shortcut above cannot ask that question: the
-// `.providers` manifest records class:word, not the plugin's repo, so there is no repoPath to
-// hand the seam — the override applies wherever the candy SOURCE is known.
+// resolveCommandPluginBinary returns the provider binary that serves command:<word>. The
+// precedence is the loader's — LOCAL CHARLY_REPO_OVERRIDE > baked binary > host build.
+//
+// A BAKED binary is the enabler for a deployed container (no candy source, no go toolchain):
+// discoverBakedPluginWords (run in main) mapped the word to its binary from the .providers
+// manifest. But that manifest records class:word ONLY — no repo — so a baked hit alone cannot
+// answer "is this plugin's repo served from a local override tree?". The plugin's REPO is
+// knowable only from the project's own candy declarations (candy.GetPluginSource() →
+// pluginRepoPath), so the project scan runs FIRST and the baked hit is taken only once the seam
+// reports no override for that repo. A source-less container has no project: LoadConfig fails
+// cheap, no repo is derived, the seam is not asked and the baked hit serves exactly as before —
+// the shortcut stays the whole answer for the case it exists for. When the project IS there, the
+// override wins — the same rule, LOUD bypass and provenance lines as the loader path.
 func resolveCommandPluginBinary(ctx context.Context, word string) (string, error) {
-	if bin, ok := bakedPluginBinaries[provKey(ClassCommand, word)]; ok {
-		return bin, nil
+	name, candy, scanErr := projectCommandPluginCandy(word)
+	repoPath, srcDir := "", ""
+	if candy != nil {
+		srcDir = candy.GetSourceDir()
+		repoPath = pluginRepoPath(candy.GetPluginSource())
 	}
-	dir, err := os.Getwd()
+	baked := bakedPluginBinaries[provKey(ClassCommand, word)]
+	overrideRoot, overridden, err := repoOverrideRootFor(repoPath)
 	if err != nil {
-		return "", fmt.Errorf("command %q: resolve cwd: %w", word, err)
+		return "", fmt.Errorf("command %q: %w", word, err)
 	}
-	cfg, err := LoadConfig(dir)
-	if err != nil {
-		return "", fmt.Errorf("command %q: load project: %w", word, err)
+	if overridden {
+		// bypassed = the binary this path would have served absent the override: the .providers
+		// manifest hit (the shortcut), or with none the leaf-name hit resolvePluginBinary's baked
+		// probe takes. reportPluginServed mirrors the loader path so the exec'd plugin's provenance
+		// is logged BEFORE syscall.Exec replaces this process image.
+		bypassed := baked
+		if bypassed == "" {
+			bypassed = bakedPluginBinary(name)
+		}
+		built, berr := overridePluginBinary(ctx, name, srcDir, repoPath, overrideRoot, bypassed)
+		if berr != nil {
+			return "", fmt.Errorf("command %q: %w", word, berr)
+		}
+		reportPluginServed(name, srcDir, built, overrideRoot)
+		return built, nil
 	}
-	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{})
-	if err != nil || candyMap == nil {
-		return "", fmt.Errorf("command %q: scan candies: %w", word, err)
+	if baked != "" {
+		return baked, nil
 	}
-	name, candy := findCommandPluginCandy(candyMap, word)
+	if scanErr != nil {
+		return "", fmt.Errorf("command %q: %w", word, scanErr)
+	}
 	if candy == nil {
 		return "", fmt.Errorf("command %q: no plugin candy provides command:%s in the project", word, word)
 	}
-	bin, _, err := resolvePluginBinary(ctx, candy.GetSourceDir(), name, pluginRepoPath(candy.GetPluginSource()))
+	bin, _, err := resolvePluginBinary(ctx, srcDir, name, repoPath)
 	if err != nil {
 		return "", fmt.Errorf("command %q: %w", word, err)
 	}
 	return bin, nil
+}
+
+// projectCommandPluginCandy scans the CURRENT project for the plugin candy declaring
+// command:<word>: the scanned-set key + the candy, ("", nil) when no candy declares the word, and
+// an error only when the project itself could not be read or scanned.
+//
+// It is the OVERRIDE QUESTION's repo oracle for a command word: the .providers manifest a baked
+// hit comes from carries no repo, so the candy's source: declaration is the only thing that can
+// name the key the seam is asked about. Its error is surfaced only on the arm that has to BUILD
+// from source — a baked hit answers the deployed-container case the shortcut exists for even when
+// a project on disk cannot be loaded (a project pinning a schema this binary predates, a missing
+// ref), and taking the command away there would be a regression, not a diagnostic.
+func projectCommandPluginCandy(word string) (string, spec.CandyReader, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", nil, fmt.Errorf("resolve cwd: %w", err)
+	}
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		return "", nil, fmt.Errorf("load project: %w", err)
+	}
+	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{})
+	if err != nil {
+		return "", nil, fmt.Errorf("scan candies: %w", err)
+	}
+	if candyMap == nil {
+		return "", nil, fmt.Errorf("scan candies: no candy map for %s", dir)
+	}
+	name, candy := findCommandPluginCandy(candyMap, word)
+	return name, candy, nil
 }
 
 // findCommandPluginCandy returns the scanned-set key + candy of the plugin candy whose
