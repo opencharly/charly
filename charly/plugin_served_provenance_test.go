@@ -110,20 +110,33 @@ func TestPluginServedLine_DistinguishesEveryServedArtifact(t *testing.T) {
 	}
 	const ref = "plugin-h4"
 
-	built := pluginServedLine(ref, "/src/plugin-h4", bin, false)
+	built := pluginServedLine(ref, "/src/plugin-h4", bin, "", false)
 	for _, want := range []string{"plugin " + ref + ":", "served from " + bin, "build stamp 0123456789abcdef", "source /src/plugin-h4"} {
 		if !strings.Contains(built, want) {
 			t.Errorf("built-plugin line %q is missing %q", built, want)
 		}
 	}
 
-	baked := pluginServedLine(ref, "", bin, true)
+	baked := pluginServedLine(ref, "", bin, "", true)
 	if !strings.Contains(baked, "served from baked binary "+bin) || !strings.Contains(baked, "build stamp ") {
 		t.Errorf("baked-plugin line = %q, want the baked binary path + a build id", baked)
 	}
 
 	if built == baked {
 		t.Errorf("a host-built plugin and a baked one render the SAME provenance line: %q", built)
+	}
+
+	// The override arm (charly #587's named follow-up wave): it must name the OVERRIDE ROOT — not
+	// just the source dir — and stay distinguishable from BOTH other arms.
+	overridden := pluginServedLine(ref, "/src/plugin-h4", bin, "/src/override-root", false)
+	if want := "plugin " + ref + ": using LOCAL OVERRIDE /src/override-root — serving " + bin; !strings.Contains(overridden, want) {
+		t.Errorf("override line %q is missing %q", overridden, want)
+	}
+	if !strings.Contains(overridden, "source /src/plugin-h4") {
+		t.Errorf("the override arm must still name the tree that served the build: %q", overridden)
+	}
+	if overridden == built || overridden == baked {
+		t.Errorf("the override arm must not render the same line as the baked/built arms: %q", overridden)
 	}
 }
 
@@ -133,7 +146,7 @@ func TestReportPluginServed_WritesTheProvenanceLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	isolatePluginSearch(t, "")
-	got := captureStderr(t, func() { reportPluginServed("plugin-h4", "/src/plugin-h4", bin) })
+	got := captureStderr(t, func() { reportPluginServed("plugin-h4", "/src/plugin-h4", bin, "") })
 	if !strings.Contains(got, "plugin plugin-h4: served from "+bin) {
 		t.Fatalf("reportPluginServed did not print the provenance line; stderr:\n%s", got)
 	}
@@ -154,11 +167,11 @@ func TestResolvePluginBinary_BakedBinaryServesWithoutABuild(t *testing.T) {
 	writeProviders(t, bakedDir, "plugin-h4", "verb:h4")
 	isolatePluginSearch(t, bakedDir)
 
-	got, err := resolvePluginBinary(context.Background(), t.TempDir(), "plugin-h4")
+	got, _, err := resolvePluginBinary(context.Background(), t.TempDir(), "plugin-h4", "")
 	if err != nil || got != bakedBin {
 		t.Fatalf("with no buildable source the baked binary must serve; got (%q, %v), want %q", got, err, bakedBin)
 	}
-	line := captureStderr(t, func() { reportPluginServed("plugin-h4", "", got) })
+	line := captureStderr(t, func() { reportPluginServed("plugin-h4", "", got, "") })
 	if !strings.Contains(line, "served from baked binary "+bakedBin) {
 		t.Fatalf("a baked plugin must be named as baked; stderr:\n%s", line)
 	}
@@ -181,7 +194,7 @@ func TestResolvePluginBinary_HostBuildsFromTheCandySource(t *testing.T) {
 
 	srcDir := writeMinimalPluginModule(t, t.TempDir(), "plugin-h4")
 
-	bin, err := resolvePluginBinary(context.Background(), srcDir, "plugin-h4")
+	bin, _, err := resolvePluginBinary(context.Background(), srcDir, "plugin-h4", "")
 	if err != nil {
 		t.Fatalf("the host build of a real candy module must SUCCEED: %v", err)
 	}
@@ -206,7 +219,7 @@ func TestResolvePluginBinary_HostBuildsFromTheCandySource(t *testing.T) {
 		t.Fatalf("the built plugin binary must execute: %v\n%s", err, out)
 	}
 	// And the run log says exactly which bytes executed and which tree they came from.
-	line := captureStderr(t, func() { reportPluginServed("plugin-h4", srcDir, bin) })
+	line := captureStderr(t, func() { reportPluginServed("plugin-h4", srcDir, bin, "") })
 	for _, want := range []string{"plugin plugin-h4: served from " + bin, "build stamp ", "source " + srcDir} {
 		if !strings.Contains(line, want) {
 			t.Errorf("provenance line %q is missing %q", line, want)

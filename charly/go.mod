@@ -44,7 +44,7 @@ require (
 	github.com/opencharly/plugin-interface/candy/plugin-interface v0.2026237.1424
 	github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026237.1424
 	github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param v0.2026237.1424
-	github.com/opencharly/plugin-loader/candy/plugin-loader v0.2026251.534
+	github.com/opencharly/plugin-loader/candy/plugin-loader v0.2026254.2014
 	github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026237.1425
 	github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026249.2144
 	github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026237.1426
@@ -102,7 +102,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026254.523 // indirect
+	github.com/opencharly/sdk v0.2026254.1740 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
@@ -129,7 +129,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/spec v0.2026254.503
+	github.com/opencharly/spec v0.2026254.1930
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
