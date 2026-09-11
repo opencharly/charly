@@ -18,7 +18,6 @@ import (
 	"cuelang.org/go/cue"
 
 	"github.com/opencharly/spec/lock"
-	"github.com/opencharly/spec/proc"
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
 )
@@ -656,44 +655,6 @@ func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provide
 	return providerRegistry.resolve(class, word)
 }
 
-// localOverrideRootFor reports whether srcDir lies inside a CHARLY_REPO_OVERRIDE target
-// directory, returning that root. This is a DISPLAY-ONLY question: which directory actually
-// serves a ref is loaderkit's repoOverrideDir decision (ONE implementation, in the sdk). What
-// this answers is the different question the run log must answer — "was the source that served
-// this run a local override?" — so an operator can tell a dev-tree run from a published-tag run
-// WITHOUT reading the truth out of the binary afterwards. A malformed entry is skipped here;
-// loaderkit rejects it loudly at resolve time, which is the right place for that verdict.
-func localOverrideRootFor(srcDir string) (string, bool) {
-	raw := strings.TrimSpace(os.Getenv(proc.RepoOverrideEnv))
-	if raw == "" || strings.TrimSpace(srcDir) == "" {
-		return "", false
-	}
-	dir := filepath.Clean(srcDir)
-	for pair := range strings.SplitSeq(raw, ",") {
-		pair = strings.TrimSpace(pair)
-		eq := strings.LastIndex(pair, "=")
-		if eq < 0 {
-			continue
-		}
-		target := strings.TrimSpace(pair[eq+1:])
-		if target == "" {
-			continue
-		}
-		if strings.HasPrefix(target, "~/") {
-			if home, err := os.UserHomeDir(); err == nil {
-				target = filepath.Join(home, target[2:])
-			}
-		}
-		target = filepath.Clean(target)
-		// A PATH-prefix match, not a string-prefix one: "/tmp/tree-sibling" is not inside
-		// "/tmp/tree" even though it starts with it.
-		if dir == target || strings.HasPrefix(dir, target+string(os.PathSeparator)) {
-			return target, true
-		}
-	}
-	return "", false
-}
-
 // pluginArtifactID renders the identity of the bytes at bin: the CONTENT stamp recorded beside
 // a host-built plugin (plugin_build_stamp.go) when one exists, else the file size and mtime — a
 // baked binary carries no stamp. Empty when bin cannot be stat'd.
@@ -722,15 +683,18 @@ func pluginArtifactID(bin string) string {
 // afterwards was the only recourse, and by then the run was spent.
 //
 //	baked    — a prebuilt provider binary (bake_plugin:, or $CHARLY_PLUGIN_DIR)
-//	override — the source dir lies inside a CHARLY_REPO_OVERRIDE target
 //	else     — host-built from the plugin candy's own source dir (the cache path keyed by it)
+//
+// There is deliberately NO "local override" arm here: naming a CHARLY_REPO_OVERRIDE root needs
+// the override's own parse, which is loaderkit's single implementation and unreachable from
+// charly core (import_purity_test.go forbids ANY sdk import in the host). The line still
+// answers the RCA question without it — the host-built arm names the SOURCE TREE that served
+// the build, so an overridden run is visible as the dev tree it actually is. The override
+// precedence + label are the named follow-up wave (see resolvePluginBinary).
 func pluginServedLine(ref, srcDir, bin string, baked bool) string {
 	id := pluginArtifactID(bin)
 	if id == "" {
 		id = "unknown"
-	}
-	if root, overridden := localOverrideRootFor(srcDir); overridden {
-		return fmt.Sprintf("plugin %s: using LOCAL OVERRIDE %s — serving %s (build %s)", ref, root, bin, id)
 	}
 	if baked {
 		return fmt.Sprintf("plugin %s: served from baked binary %s (build %s)", ref, bin, id)
@@ -750,18 +714,17 @@ func reportPluginServed(ref, srcDir, bin string) {
 // built from the candy source on the host. The baked path is the enabler for running an
 // external plugin INSIDE a deployed container.
 //
-// A LOCAL OVERRIDE (CHARLY_REPO_OVERRIDE matching this plugin's repo) outranks the baked
-// search: the operator explicitly pointed the plugin's repo at a working tree, so the bytes
-// served MUST come from that tree. Letting a prebuilt binary win here is how a run silently
-// executes code nobody is editing — the discarded-bed-run class (a default-pin build served the
-// verbs while the log said nothing about it) this outranks, and reports.
+// The precedence here is NOT override-aware, deliberately. "Does an override apply to THIS
+// plugin's repo, and to which tree?" is loaderkit's RepoOverrideDir decision — the ONE parse of
+// CHARLY_REPO_OVERRIDE — and charly core may not import the sdk to ask it
+// (import_purity_test.go: the host reaches loader mechanisms only through the compiled-in
+// loader plugin's spec-typed seams). Making an override outrank this baked search is therefore
+// the NAMED FOLLOW-UP WAVE, not a core re-derivation: spec.ProjectLoader gains
+// RepoOverrideDir(repoPath) (string, bool, error), candy/plugin-loader delegates it to
+// loaderkit.RepoOverrideDir, and this function asks requireProjectLoader() for the root before
+// the baked probe below. Until that lands the served-artifact line still names the source tree
+// and the build id, so an overridden run is legible in the log.
 func resolvePluginBinary(ctx context.Context, srcDir, name string) (string, error) {
-	if root, overridden := localOverrideRootFor(srcDir); overridden {
-		if baked := bakedPluginBinary(name); baked != "" {
-			fmt.Fprintf(os.Stderr, "WARNING: plugin %s: ignoring baked binary %s — CHARLY_REPO_OVERRIDE root %s is authoritative (building from the overridden source)\n", name, baked, root)
-		}
-		return buildPluginBinary(ctx, srcDir, name)
-	}
 	if baked := bakedPluginBinary(name); baked != "" {
 		return baked, nil
 	}
