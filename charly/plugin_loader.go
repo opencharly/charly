@@ -569,6 +569,7 @@ func loadBakedPluginBinary(bin string) bool {
 		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: register: %v\n", bin, err)
 		return false
 	}
+	reportPluginServed(filepath.Base(bin), "", bin)
 	return true
 }
 
@@ -658,10 +659,75 @@ func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provide
 	return providerRegistry.resolve(class, word)
 }
 
+// pluginArtifactID renders the identity of the bytes at bin: the CONTENT stamp recorded beside
+// a host-built plugin (plugin_build_stamp.go) when one exists, else the file size and mtime — a
+// baked binary carries no stamp. Empty when bin cannot be stat'd.
+func pluginArtifactID(bin string) string {
+	st, err := os.Stat(bin)
+	if err != nil || st.IsDir() {
+		return ""
+	}
+	if data, rerr := os.ReadFile(pluginStampPath(bin)); rerr == nil {
+		if sum := strings.TrimSpace(string(data)); sum != "" {
+			if len(sum) > 16 {
+				sum = sum[:16]
+			}
+			return "stamp " + sum
+		}
+	}
+	return fmt.Sprintf("%dB mtime %s", st.Size(), st.ModTime().UTC().Format("2006-01-02T15:04:05Z"))
+}
+
+// pluginServedLine is THE one place a plugin's SERVED-ARTIFACT identity is rendered — the
+// run-log answer to "which bytes actually executed?" for a plugin the loader connected.
+//
+// The ref-resolution line alone (Resolved @github.com/... -> vTAG) cannot answer it: it names a
+// tag, not the tree or the binary that served the verbs, so a run whose verbs came from a
+// DIFFERENT build looked identical to a correct one. Reading the truth out of the binary
+// afterwards was the only recourse, and by then the run was spent.
+//
+//	baked    — a prebuilt provider binary (bake_plugin:, or $CHARLY_PLUGIN_DIR)
+//	else     — host-built from the plugin candy's own source dir (the cache path keyed by it)
+//
+// There is deliberately NO "local override" arm here: naming a CHARLY_REPO_OVERRIDE root needs
+// the override's own parse, which is loaderkit's single implementation and unreachable from
+// charly core (import_purity_test.go forbids ANY sdk import in the host). The line still
+// answers the RCA question without it — the host-built arm names the SOURCE TREE that served
+// the build, so an overridden run is visible as the dev tree it actually is. The override
+// precedence + label are the named follow-up wave (see resolvePluginBinary).
+func pluginServedLine(ref, srcDir, bin string, baked bool) string {
+	id := pluginArtifactID(bin)
+	if id == "" {
+		id = "unknown"
+	}
+	if baked {
+		return fmt.Sprintf("plugin %s: served from baked binary %s (build %s)", ref, bin, id)
+	}
+	return fmt.Sprintf("plugin %s: served from %s (build %s); source %s", ref, bin, id, srcDir)
+}
+
+// reportPluginServed prints the provenance line for a plugin the loader is about to connect.
+// srcDir == "" is the source-less case (a baked binary is all there is); otherwise the binary is
+// baked iff it is the baked search's own hit for this ref.
+func reportPluginServed(ref, srcDir, bin string) {
+	fmt.Fprintln(os.Stderr, pluginServedLine(ref, srcDir, bin, srcDir == "" || bin == bakedPluginBinary(ref)))
+}
+
 // resolvePluginBinary returns a plugin's provider binary: a BAKED binary (pre-built,
 // baked into the image for a source/toolchain-less deployed container) if present, else
 // built from the candy source on the host. The baked path is the enabler for running an
 // external plugin INSIDE a deployed container.
+//
+// The precedence here is NOT override-aware, deliberately. "Does an override apply to THIS
+// plugin's repo, and to which tree?" is loaderkit's RepoOverrideDir decision — the ONE parse of
+// CHARLY_REPO_OVERRIDE — and charly core may not import the sdk to ask it
+// (import_purity_test.go: the host reaches loader mechanisms only through the compiled-in
+// loader plugin's spec-typed seams). Making an override outrank this baked search is therefore
+// the NAMED FOLLOW-UP WAVE, not a core re-derivation: spec.ProjectLoader gains
+// RepoOverrideDir(repoPath) (string, bool, error), candy/plugin-loader delegates it to
+// loaderkit.RepoOverrideDir, and this function asks requireProjectLoader() for the root before
+// the baked probe below. Until that lands the served-artifact line still names the source tree
+// and the build id, so an overridden run is legible in the log.
 func resolvePluginBinary(ctx context.Context, srcDir, name string) (string, error) {
 	if baked := bakedPluginBinary(name); baked != "" {
 		return baked, nil
@@ -682,7 +748,9 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 		return fmt.Errorf("plugin %q (source %s): %w", name, source, err)
 	}
 	// The connect — not the build above — is the wait that can never finish (charly#588): bound it
-	// and let the error name the plugin, its source, the phase and the bound.
+	// and let the error name the plugin, its source, the phase and the bound. The served-artifact
+	// line (#587) stays FIRST so the provenance of a connect is logged before the wait begins.
+	reportPluginServed(name, srcDir, bin)
 	unit, closer, err := connectPluginReady(&LocalTransport{BinPath: bin}, name, source)
 	if err != nil {
 		return err
