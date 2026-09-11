@@ -142,7 +142,7 @@ var (
 func loadBuiltinPluginUnits() error {
 	builtinGateOnce.Do(func() {
 		for i := range builtinPluginUnits {
-			unit, _, err := (&InProcTransport{Unit: &builtinPluginUnits[i]}).Connect(context.Background())
+			unit, _, err := connectPluginReady(&InProcTransport{Unit: &builtinPluginUnits[i]}, builtinUnitName(&builtinPluginUnits[i]), "builtin")
 			if err != nil {
 				builtinGateErr = err
 				return
@@ -549,10 +549,14 @@ func discoverBakedPluginWords() {
 // loadBakedPluginBinary connects a baked plugin binary DIRECTLY (no source build) over
 // LocalTransport, gates its served schema, and registers its providers — the lazy connect
 // connectBakedPlugin pays when a baked command/verb is actually invoked. Returns true on success.
-func loadBakedPluginBinary(ctx context.Context, bin string) bool {
-	unit, closer, err := (&LocalTransport{BinPath: bin}).Connect(ctx)
+//
+// The connect runs under the plugin readiness deadline (connectPluginReady, charly#588): a baked
+// binary that never answers leaves the host parked forever otherwise, and this path has NO user
+// timeout above it — the whole dispatch simply never returns.
+func loadBakedPluginBinary(bin string) bool {
+	unit, closer, err := connectPluginReady(&LocalTransport{BinPath: bin}, filepath.Base(bin), bin)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: connect: %v\n", bin, err)
+		fmt.Fprintf(os.Stderr, "warning: baked plugin: %v\n", err)
 		return false
 	}
 	if err := registerPluginUnitSchema(bin, unit.Schema); err != nil {
@@ -581,7 +585,7 @@ func connectBakedPlugin(class ProviderClass, word string) (Provider, bool) {
 		return p, true
 	}
 	if bin, ok := bakedPluginBinaries[provKey(class, word)]; ok {
-		if loadBakedPluginBinary(context.Background(), bin) {
+		if loadBakedPluginBinary(bin) {
 			if p, ok := providerRegistry.resolve(class, word); ok {
 				return p, true
 			}
@@ -677,9 +681,11 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 	if err != nil {
 		return fmt.Errorf("plugin %q (source %s): %w", name, source, err)
 	}
-	unit, closer, err := (&LocalTransport{BinPath: bin}).Connect(ctx)
+	// The connect — not the build above — is the wait that can never finish (charly#588): bound it
+	// and let the error name the plugin, its source, the phase and the bound.
+	unit, closer, err := connectPluginReady(&LocalTransport{BinPath: bin}, name, source)
 	if err != nil {
-		return fmt.Errorf("plugin %q: connect: %w", name, err)
+		return err
 	}
 	if err := registerPluginUnitSchema(name, unit.Schema); err != nil {
 		_ = closer.Close()
