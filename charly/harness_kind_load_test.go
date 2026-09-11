@@ -79,8 +79,8 @@ postgresql-skill:
 func TestDocsKind_CompiledInStackedNodes(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	dir := t.TempDir()
-	// The docs body mirrors the embedded charly.yml docs node (the #DocsConfig contract
-	// exercised by the spec round-trip tests).
+	// The docs body mirrors the repo's TOP-LEVEL project charly.yml docs node (the
+	// #DocsConfig contract exercised by the spec round-trip tests).
 	rootYAML := `version: ` + LatestSchemaVersion().String() + `
 discover:
     - path: candy
@@ -91,7 +91,7 @@ docs:
             compiled:
                 enabled: true
                 compiled_plugins_path: charly/charly.yml
-                go_mod_path: charly/charly/go.mod
+                go_mod_path: charly/go.mod
             release_repos: [plugin-review, plugin-pipeline]
             extra_repos: [plugin-gh]
         marketplace:
