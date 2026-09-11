@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 	plugin "github.com/hashicorp/go-plugin"
@@ -48,6 +49,19 @@ func (t *InProcTransport) Connect(context.Context) (*PluginUnit, io.Closer, erro
 type LocalTransport struct {
 	BinPath string   // the plugin provider binary
 	Args    []string // serve args; default ["__plugin","serve"]
+	// ReadyTimeout bounds the readiness READ this transport performs after the go-plugin
+	// handshake (describe). Zero → pluginReadyTimeout. A field rather than a bare constant
+	// reference so the charly#588 regression tests can drive the REAL connect path with a short
+	// bound instead of waiting out the production one (plugin_connect_deadline_test.go).
+	ReadyTimeout time.Duration
+}
+
+// readyTimeout is the effective readiness-READ bound: the transport's own, else pluginReadyTimeout.
+func (t *LocalTransport) readyTimeout() time.Duration {
+	if t.ReadyTimeout > 0 {
+		return t.ReadyTimeout
+	}
+	return pluginReadyTimeout
 }
 
 func (t *LocalTransport) Connect(ctx context.Context) (*PluginUnit, io.Closer, error) {
@@ -68,11 +82,11 @@ func (t *LocalTransport) Connect(ctx context.Context) (*PluginUnit, io.Closer, e
 		cmd.Env = append(cmd.Env, "CHARLY_BIN="+exe)
 	}
 	client := plugin.NewClient(localPluginClientConfig(cmd))
-	unit, err := connectAndDescribe(ctx, client)
+	unit, err := connectAndDescribe(ctx, client, t.readyTimeout(), func() { killPluginClient(client, cmd) })
 	if err != nil {
 		return nil, nil, err
 	}
-	return unit, &clientCloser{client}, nil
+	return unit, &clientCloser{c: client, cmd: cmd}, nil
 }
 
 // localPluginClientConfig builds the go-plugin client config for an out-of-process provider spawn.
@@ -113,46 +127,60 @@ func pluginClientLogger(output io.Writer) hclog.Logger {
 }
 
 // connectAndDescribe dispenses the uniform plugin, reads its capability manifest
-// (providers + schema, both over the Describe channel), and builds the unit. On
-// any failure it kills the client so no subprocess leaks.
-func connectAndDescribe(ctx context.Context, client *plugin.Client) (*PluginUnit, error) {
+// (providers + schema, both over the Describe channel), and builds the unit.
+//
+// On any failure it runs teardown — the caller's bounded killPluginClient, NOT a bare
+// client.Kill() (whose graceful Shutdown RPC carries no deadline and can therefore park forever,
+// swallowing the very error it is cleaning up after: charly#588) — and wraps the failure with the
+// PHASE it came from, so a bounded connect can name the wait that never finished.
+//
+// readTimeout bounds ONLY the readiness read (the describe leg), started after the handshake — see
+// pluginReadyTimeout for why the bound belongs to that leg and not to the whole connect.
+func connectAndDescribe(ctx context.Context, client *plugin.Client, readTimeout time.Duration, teardown func()) (*PluginUnit, error) {
 	rpc, err := client.Client()
 	if err != nil {
-		client.Kill()
-		return nil, fmt.Errorf("plugin client: %w", err)
+		teardown()
+		return nil, pluginPhase("start/handshake", fmt.Errorf("plugin client: %w", err))
 	}
 	raw, err := rpc.Dispense(transport.DispenseKey)
 	if err != nil {
-		client.Kill()
-		return nil, fmt.Errorf("plugin dispense: %w", err)
+		teardown()
+		return nil, pluginPhase("dispense", fmt.Errorf("plugin dispense: %w", err))
 	}
 	conn, ok := raw.(*transport.Conn)
 	if !ok {
-		client.Kill()
+		teardown()
 		return nil, fmt.Errorf("plugin: unexpected dispensed type %T", raw)
 	}
-	caps, err := describe(ctx, conn)
+	caps, err := describeBounded(ctx, conn, readTimeout)
 	if err != nil {
-		client.Kill()
-		return nil, fmt.Errorf("plugin describe: %w", err)
+		teardown()
+		return nil, pluginPhase("describe", fmt.Errorf("plugin describe: %w", err))
 	}
 	// buildUnit applies the protocol-version gate (a readable refusal, not a later
 	// wire panic) before lifting caps → unit.
 	unit, err := buildUnit(conn, caps)
 	if err != nil {
-		client.Kill()
-		return nil, err
+		teardown()
+		return nil, pluginPhase("protocol-gate", err)
 	}
 	return unit, nil
 }
 
-// clientCloser adapts a go-plugin client to io.Closer. Kill() sends the gRPC
-// Shutdown control RPC that stops the plugin's server and then terminates the
-// child process — the authoritative reaper (go-plugin's server does NOT self-exit
-// merely because a connection dropped; it must be told to stop). The host runs
-// every closer via providerRegistry.Close on exit / on a shutdown signal; the
-// plugin SDK's parent-death watch is the backstop for the paths where that never
-// runs (crash / SIGKILL / os.Exit).
-type clientCloser struct{ c *plugin.Client }
+// clientCloser adapts a go-plugin client to io.Closer. Close() runs the BOUNDED teardown: it sends
+// the gRPC Shutdown control RPC that stops the plugin's server and then terminates the child
+// process — the authoritative reaper (go-plugin's server does NOT self-exit merely because a
+// connection dropped; it must be told to stop). The host runs every closer via
+// providerRegistry.Close on exit / on a shutdown signal; the plugin SDK's parent-death watch is the
+// backstop for the paths where that never runs (crash / SIGKILL / os.Exit).
+//
+// The teardown is bounded (killPluginClient) rather than a bare client.Kill() so a plugin that
+// never answers the Shutdown RPC cannot make charly hang at EXIT — the same unbounded-RPC character
+// charly#588 fixed on the connect path, on the one teardown path every connected plugin goes
+// through. cmd is the spawned child, the handle the force-reap needs.
+type clientCloser struct {
+	c   *plugin.Client
+	cmd *exec.Cmd
+}
 
-func (cc *clientCloser) Close() error { cc.c.Kill(); return nil }
+func (cc *clientCloser) Close() error { killPluginClient(cc.c, cc.cmd); return nil }
