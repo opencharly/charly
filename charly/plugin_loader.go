@@ -368,13 +368,20 @@ func pluginBuildEnv(base []string, srcDir string) []string {
 	return env
 }
 
-// bakedPluginDir is the FHS system path a candy's `bake_plugin:` step copies a
-// pre-built provider binary to at image-build time, so a DEPLOYED container (which has
-// neither the candy source nor a go toolchain) can run an external plugin its
-// in-container charly needs at runtime — e.g. the charly-mcp service's `charly mcp
-// serve`. `CHARLY_PLUGIN_DIR` PREPENDS a directory ahead of it (tests, non-FHS
-// layouts) — it does NOT replace it, so setting it alone cannot HIDE a plugin baked
-// here. `CHARLY_PLUGIN_ONLY=1` is what drops this path from the search; see
+// bakedPluginDir is the FHS system path the DISTRO PACKAGE owns and lays its baked provider
+// binaries into, and where a DEPLOYED container's in-container charly (which has neither the
+// candy source nor a go toolchain) finds an external plugin it needs at runtime — e.g. the
+// charly-mcp service's `charly mcp serve`.
+//
+// The BUILD-side bake does NOT write here. A build step writing into this package-owned path
+// makes the charly install refuse the image ("exists in filesystem", issue #595), so
+// `deploykit.EmitBakedPlugins` bakes into `/usr/local/lib/charly/plugins` — the FHS location for
+// locally-installed software, which no distro package owns — and registers it through
+// `CHARLY_PLUGIN_DIR`. This path is still SEARCHED, so the package's own plugins keep resolving.
+//
+// `CHARLY_PLUGIN_DIR` PREPENDS a directory ahead of this one (tests, non-FHS layouts, and the
+// image bake above) — it does NOT replace it, so setting it alone cannot HIDE a plugin the
+// package baked here. `CHARLY_PLUGIN_ONLY=1` is what drops this path from the search; see
 // bakedPluginDirs.
 const bakedPluginDir = "/usr/lib/charly/plugins"
 
