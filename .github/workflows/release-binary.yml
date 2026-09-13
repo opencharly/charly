@@ -1,4 +1,4 @@
-# Build the CalVer-stamped `charly` binary + the 9 welded command plugins for
+# Build the CalVer-stamped `charly` binary + the 12 welded command plugins for
 # amd64 AND arm64 and attach them to the GitHub release on a v<CalVer> tag push.
 #
 # tag-on-merge creates release tags via the REST API (git.createRef), which does
@@ -101,7 +101,7 @@ jobs:
         if: env.SKIP != 'true'
         run: |
           cd charly && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-s -w -X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-amd64 .
-      - name: Build the 9 welded plugins for amd64 + .providers
+      - name: Build the 12 welded plugins for amd64 + .providers
         if: env.SKIP != 'true'
         run: |
           mkdir -p bin/plugins .plugin-src
@@ -121,7 +121,7 @@ jobs:
         if: env.SKIP != 'true'
         run: |
           cd charly && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-s -w -X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-arm64 .
-      - name: Build the 9 welded plugins for arm64 (copy amd64 .providers)
+      - name: Build the 12 welded plugins for arm64 (copy amd64 .providers)
         if: env.SKIP != 'true'
         run: |
           mkdir -p bin/plugins-arm64
