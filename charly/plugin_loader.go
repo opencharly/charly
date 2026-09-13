@@ -226,7 +226,8 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	// lock makes the second builder wait for the first, never collide (R4: a synchronization primitive,
 	// not a retry).
 	//
-	// The wait itself is spec/lock's bounded-but-REPORTED one (opencharly/spec #132, pinned below): a
+	// The wait itself is spec/lock's bounded-but-REPORTED one (opencharly/spec #132; the pin is the
+	// `github.com/opencharly/spec` require in charly/go.mod, not anything "below" in this file): a
 	// peer mid-build is a SLOW holder, not a stuck one, so the second builder QUEUES — reporting who
 	// holds the lock while it waits, and only giving up after the bound, naming the holder pid +
 	// command. Two lanes needing the same plugin therefore both succeed; failing hard the instant a
