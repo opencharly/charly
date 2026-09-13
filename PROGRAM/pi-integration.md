@@ -183,7 +183,7 @@ pi.registerTool({
   }),
   async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
     // Parse the dispatcher table from AGENTS.md
-    // This is a generated table with | Trigger | Skill to load |
+    // This is a hand-maintained table with | Trigger | Skill to load |
     // We parse the Markdown table to extract trigger→skill mappings.
 
     const agentsMd = join(ctx.cwd, "AGENTS.md");
@@ -241,7 +241,7 @@ pi.registerTool({
 
 **Trade-off:** Parsing the Markdown table at runtime is fragile. Alternative:
 generate a JSON mapping alongside the dispatcher (see Layer 4). For now, the
-Markdown table is stable and generated, so parsing is reliable.
+Markdown table is stable and hand-maintained, so parsing is reliable.
 
 ### Layer 3: Prompt templates
 
@@ -262,12 +262,14 @@ per the R0 dispatcher) and the standing system-prompt + Attribution-tier discipl
 **What:** Generate a `skill_triggers.json` file alongside the existing
 dispatcher table in AGENTS.md.
 
-**Why this works:** The charly marketplace generate pipeline already produces
-the dispatcher table. Extending it to emit a JSON file is the single source of
-truth approach — the JSON is generated from the same source as the Markdown.
+**Why this works:** The dispatcher table is HAND-MAINTAINED prose in AGENTS.md
+(the `charly marketplace generate` splice was removed); no generator emits it
+today and no `skill_triggers.json` exists. Authoring a generator that emits both
+the Markdown table and a JSON mapping from one source would restore the single
+source of truth.
 
-**How:** Extend the `charly marketplace generate` command (owned by
-`/charly-internals:skills`) to emit:
+**How:** Author a generator for the dispatcher (there is no existing pipeline to
+extend) that emits both the Markdown table and:
 
 ```json
 {
@@ -440,7 +442,7 @@ pi.registerTool({
 | Decision | Choice | Rationale |
 |---|---|---|
 | R0 enforcement | System prompt injection + custom tool (Layer 1 + 2) | Mechanical blocking is fragile and risks false positives. Injection every turn keeps rules in the model's active context. The custom tool provides a reliable way to load skills. |
-| Dispatcher parsing | Generate JSON from the same pipeline (Layer 4) | The Markdown table is already generated. Extending the generator is the single source of truth approach. Until then, the tool parses the Markdown table at runtime. |
+| Dispatcher parsing | Generate JSON from the same pipeline (Layer 4) | The Markdown table is hand-maintained prose, not generated. Layer 4 would require authoring a generator (no existing pipeline emits it). Until then, the tool parses the Markdown table at runtime. |
 | PR body formatting | Pre-push gate (Layer 6) | Catches errors before the validator runs. The gate already exists and runs on every push. Adding a `gh pr view` check is cheap. |
 | Attribution model | `model-agnostic` is correct for pi | Pi is model-agnostic by design. The exact provider/model name is not exposed to extensions. The `AGENTS.md` AI Attribution section already documents this. |
 | Worktree lifecycle | Custom tool (Layer 7) | Pi has no `EnterWorktree` equivalent. A tool with `promptGuidelines` instructs the agent to use it at the start of every cutover. |
@@ -453,7 +455,7 @@ pi.registerTool({
 | 1 | `.pi/extensions/charly-gates.ts` | Add `before_agent_start` handler that injects condensed R0–R10 + PR body rules |
 | 2 | `.pi/extensions/charly-gates.ts` | Add `charly_load_skills` custom tool with `promptGuidelines` |
 | 3 | `.pi/prompts/*.md` | Create 6 prompt templates |
-| 4 | the marketplace's `build` family | Extend marketplace generate to emit `skill_triggers.json` |
+| 4 | a new dispatcher generator (no existing pipeline emits the hand-maintained table) | Emit `skill_triggers.json` |
 | 4 | `.agents/skill_triggers.json` | Generated file (consumed by Layer 2) |
 | 5 | `AGENTS.md` | Add pi-specific sub-agent instructions |
 | 5 | `.pi/subagents/` | Agent definitions for charly roles |
@@ -468,8 +470,7 @@ pi.registerTool({
    config. This is documentation + config, no code.
 3. **Layer 6** (pre-push PR body validation) — extend existing gate script.
 4. **Layer 7** (worktree tool) — extension change, no charly repo code.
-5. **Layer 4** (machine-readable dispatcher) — requires changes to the `charly
-   marketplace generate` pipeline (Go code in the standalone `opencharly/plugin-marketplace`
-   repo since the Phase-4 de-submodule cutover, consumed here at a pinned ref). This is the only
-   item that touches generator source code. All others are pi config + extension
-   changes only.
+5. **Layer 4** (machine-readable dispatcher) — requires authoring a generator for
+   the hand-maintained dispatcher table (Go code; no existing pipeline emits it).
+   This is the only item that touches generator source code. All others are pi
+   config + extension changes only.

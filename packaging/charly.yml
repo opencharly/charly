@@ -493,7 +493,7 @@ charly-skill:
             `println(version)` emitted to stderr; the move to `fmt.Println` landed
             with the MCP server work so the in-process tool-call path — which
             captures `os.Stdout` — returns the CalVer correctly). The candy test at
-            `candy/charly/charly.yml` asserts `stdout:` matches `[0-9]{4}\.[0-9]+`. The
+            `packaging/charly.yml` asserts `stdout:` matches `[0-9]{4}\.[0-9]+`. The
             `charly status` probe uses `CombinedOutput()` so it's agnostic to the
             stream.
             

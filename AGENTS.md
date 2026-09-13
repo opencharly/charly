@@ -49,11 +49,11 @@ match, load ALL their skills before doing anything.
 | Disposable-flag semantics / `disposable: true` authorization / preemptible-flag / `requires_exclusive:` / `charly preempt` / exclusive host-resource arbitration (GPU passthrough contention) | `/charly-core:deploy` |
 | Disposable-flag semantics / `disposable: true` authorization / preemptible-flag / `requires_exclusive:` / `charly preempt` / exclusive host-resource arbitration (GPU passthrough contention) | `/charly-internals:disposable` |
 | Editing `local.yml` / authoring `kind: local` templates | `/charly-local:local-spec` |
-| Editing `sdk/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:go` |
-| Editing `sdk/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:plugin` |
+| Editing `spec/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:go` |
+| Editing `spec/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:plugin` |
 | Editing a box (`box/<name>/charly.yml` — boxes live in the `box/<distro>` submodules; main owns none), box composition | `/charly-image:image` |
 | Editing a candy (`candy/<name>/charly.yml`), candy authoring, candy tasks/services | `/charly-image:layer` |
-| Egress config validation — validating/generating the config files charly WRITES to a system (`candy/plugin-fleet/egress.go`, `ValidateEgress`, the vendored CUE egress schemas in `candy/plugin-egress/egress-schemas/vendor/`, cloud-init/k8s_object/units/ssh_config/libvirt-XML egress) | `/charly-internals:egress` |
+| Egress config validation — validating/generating the config files charly WRITES to a system (`plugin-fleet/candy/plugin-fleet/egress.go`, `ValidateEgress`, the CUE egress schemas at `plugin-egress/candy/plugin-egress/egress-schemas/` (cloud-init, crabbox, k8s, ledger, libvirt-XML, text, traefik)) | `/charly-internals:egress` |
 | Engineering-discipline triggers (failure surfaced / dup pattern / ad-hoc fix tempting / "out of scope" framing) | `/charly-internals:strict-policy` |
 | Evaluate/audit a deployment config (image or deploy, yours) | `/charly-check:check` |
 | Evaluate/audit a deployment config (image or deploy, yours) | `/charly-internals:agents` |
@@ -246,7 +246,7 @@ skills and are mandatory when dispatched.
   with `task build:binary`, invoke it through that worktree's `bin`, verify its
   version and dependency/gitlink consistency, and never install it as a shared
   binary. Runtime OS dependencies belong in the charly candy's `packaging:`
-  section (`candy/charly/charly.yml`).
+  section (`packaging/charly.yml`).
 - **R10 — Fresh disposable proof.** Run the exact gate selected by
   `/charly-check:check` on the final committed tree. Runtime changes require a
   complete fresh rebuild and live execution on every affected explicit
@@ -442,7 +442,7 @@ second copy of them.
 - `README.md` and current subsystem docs: present behavior and user guidance.
 - [opencharly.ai](https://opencharly.ai) (the standalone [opencharly/docs](https://github.com/opencharly/docs) repo): the public site — a small
   hand-authored narrative plus a reference/recipe catalog GENERATED from the sources above by
-  `charly docs generate` at the charly commit the docs repo's `.gitmodules` pins. Never
+  `charly docs generate` at the charly commit the docs repo's deploy workflow pins (CI-time). Never
   hand-edit a generated page; fix the source — regeneration is a docs repo PR that bumps that
   pin, enforced by the docs repo's deploy workflow.
 - `CHANGELOG/`: historical events, retired names, and migration narrative.

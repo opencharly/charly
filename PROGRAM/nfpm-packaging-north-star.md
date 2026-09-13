@@ -49,10 +49,10 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
       Landed as `58483b51`; the main repo has published `v2026.226.2134` with the full
       binary assets (`charly-linux-<arch>`, `charly-plugins-linux-<arch>.tar.gz`,
       `charly-candy-charly.yml`) — the Phase 2 binary-source prerequisite is met.
-- [x] **The `packaging:` section** — the charly candy's `candy/charly/charly.yml` now
-      declares it (the `--candy` metadata input the distro workflows pass to the plugin);
-      the localpkg machinery builds from it via the `charly generate-packages` plugin
-      (sdk/packagekit).
+- [x] **The `packaging:` section** — the charly candy's `packaging/charly.yml` (this repo)
+      / `layer-charly/charly.yml` (its standalone repo) now declares it (the `--candy`
+      metadata input the distro workflows pass to the plugin); the localpkg machinery
+      builds from it via the `charly generate-packages` plugin (sdk/packagekit).
 - [x] **Phase 2 — the 6 distro repos** (each independently; consume the released binary +
       baked plugin + the `packaging:` section). All 6 published their first release
       (`v2026.227.1426`) and their install-tests pass from the live Pages repos; the arch
@@ -71,15 +71,15 @@ Replace the `pkg/` packaging workflow (three `pkg/*` git submodules + the contai
 
 - [x] **Phase 3 — main repo cutover** — LANDED on `main` except the shim (below).
       Verified against `origin/main` rather than a working tree: no `pkg/` entries in
-      `.gitmodules`, `candy/charly/charly.yml` carries `packaging:`, no
+      `.gitmodules`, `packaging/charly.yml` carries `packaging:`, no
       `dispatchPkg`/`pkgGrammar`/`runBoxPkg`, no `pkg:*` taskfile targets,
       `release-packages.yml` gone, all four `download_template` URLs pointing at the distro
       repos, and all five `check-{alpine,arch,fedora,debian,ubuntu}-repo` beds present. The
       R5 sweep is clean — every surviving mention of a removed identifier is prose
       describing the removal, which R5 permits.
-- [x] **Phase 3 remainder — the superproject shim.** `candy/generate-packages/` declares the
+- [x] **Phase 3 remainder — the superproject shim.** `tools/generate-packages/` declares the
       external `charly generate-packages` plugin to the superproject: a thin re-export module
-      (charly.yml + `cmd/serve` + `go.mod` `require` + `replace`) under a discovered candy.
+      (charly.yml + `cmd/serve` + `go.mod` `require`) under a discovered candy.
 
       The prescan walks `discover:` paths only, so the word enters the CLI grammar without any
       fetch, and the host builds the shim directory through its own `go.mod` — `source:` is
