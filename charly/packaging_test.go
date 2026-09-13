@@ -8,7 +8,7 @@ package main
 // nFPM cutover, so this file asserts (a) the section parses into the
 // spec.Packaging type with every entry a plain package name, (b) the variant
 // plugin sets are exactly the welded plugins the release workflow publishes
-// (now 11, incl. plugin-review), and (c) the systemd: unit + config: sections the
+// (now 12, incl. plugin-review + plugin-pipeline), and (c) the systemd: unit + config: sections the
 // package ships (the systemd-started charly MCP server's units and its
 // system-wide /etc/charly/charly.yml project).
 
@@ -121,6 +121,30 @@ func TestPackagingVariantsCoverWeldedPlugins(t *testing.T) {
 	for w := range welded {
 		if !union[w] {
 			t.Errorf("welded plugin %q appears in no packaging variant", w)
+		}
+	}
+}
+
+// TestPackagingFullVariantIsComplete — the `full` variant is described as the
+// complete welded set ("All twelve welded command plugins"), so it must carry
+// every plugin the release publishes. The union check above is satisfied as long
+// as SOME variant names each plugin, so it did not catch plugin-pipeline being
+// added to `default` but omitted from `full`; this asserts the completeness of
+// the variant that claims it.
+func TestPackagingFullVariantIsComplete(t *testing.T) {
+	pkg := loadPackaging(t)
+
+	full, ok := pkg.Variants["full"]
+	if !ok {
+		t.Fatal("no `full` variant")
+	}
+	have := map[string]bool{}
+	for _, p := range full.Plugins {
+		have[p] = true
+	}
+	for w := range readWeldedPlugins(t) {
+		if !have[w] {
+			t.Errorf("full variant is missing welded plugin %q", w)
 		}
 	}
 }
