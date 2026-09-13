@@ -20,6 +20,14 @@
 # `packaging:` section is the SINGLE source of truth for package metadata + the
 # per-variant plugin sets.
 #
+# Every binary is built with `-ldflags "-s -w"`. Go emits DWARF + a full symbol
+# table by default; for `charly` + its welded plugins that is ~47% of each
+# native package's compressed size, so an unstripped set pushes a distro repo
+# artifact over GitHub Pages' 1 GB limit (charly-arch measured 1.19 GB). `-s -w`
+# omits the symbol table + DWARF; Go's own pclntab (what panic tracebacks and
+# `go version -m` read) is unaffected, so `charly version`, stack traces, and
+# the arm64 `go version -m` build-info assertion below all still work.
+#
 # Pure Go cross-compilation (CGO_ENABLED=0), so this runs on a stock
 # ubuntu-latest runner — no distro-native tooling, no self-hosted host. The
 # amd64 binary is built FIRST and used to regenerate each plugin's `.providers`
@@ -92,7 +100,7 @@ jobs:
       - name: Build amd64 charly (native)
         if: env.SKIP != 'true'
         run: |
-          cd charly && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-amd64 .
+          cd charly && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-s -w -X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-amd64 .
       - name: Build the 9 welded plugins for amd64 + .providers
         if: env.SKIP != 'true'
         run: |
@@ -105,14 +113,14 @@ jobs:
             git clone --quiet --depth 1 --branch "$ref" "https://github.com/opencharly/$p.git" ".plugin-src/$p"
             d=".plugin-src/$p/candy/$p"
             t="."; [ -d "$d/cmd/serve" ] && t="./cmd/serve"
-            ( cd "$d" && GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -o "$GITHUB_WORKSPACE/bin/plugins/$p" "$t" )
+            ( cd "$d" && GOWORK=off GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags "-s -w" -o "$GITHUB_WORKSPACE/bin/plugins/$p" "$t" )
             ./bin/charly-linux-amd64 __plugin-providers "$d" > "bin/plugins/$p.providers"
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-amd64.tar.gz -C bin/plugins .
       - name: Build arm64 charly (cross-compile)
         if: env.SKIP != 'true'
         run: |
-          cd charly && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-arm64 .
+          cd charly && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -ldflags "-s -w -X main.BuildCalVer=${CALVER}" -o ../bin/charly-linux-arm64 .
       - name: Build the 9 welded plugins for arm64 (copy amd64 .providers)
         if: env.SKIP != 'true'
         run: |
@@ -123,7 +131,7 @@ jobs:
             # that checkout so both arches build the SAME commit, not two resolutions.
             d=".plugin-src/$p/candy/$p"
             t="."; [ -d "$d/cmd/serve" ] && t="./cmd/serve"
-            ( cd "$d" && GOWORK=off GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -o "$GITHUB_WORKSPACE/bin/plugins-arm64/$p" "$t" )
+            ( cd "$d" && GOWORK=off GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags "-s -w" -o "$GITHUB_WORKSPACE/bin/plugins-arm64/$p" "$t" )
             cp "bin/plugins/$p.providers" "bin/plugins-arm64/$p.providers"
           done < scripts/host-command-plugins.txt
           tar -czf charly-plugins-linux-arm64.tar.gz -C bin/plugins-arm64 .
