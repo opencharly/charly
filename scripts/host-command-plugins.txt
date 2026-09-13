@@ -16,7 +16,14 @@
 # generate-packages` plugin (sdk/packagekit) reads the `packaging:` section of
 # charly's packaging metadata (`packaging/charly.yml`) to select each variant's plugin
 # set, and `charly/packaging_test.go` asserts the variant sets cover exactly
-# these 10 plugins.
+# these plugins.
+#
+# SINGLE-SDK COMPATIBILITY (R1): the shared charly-lib host (charlylib,
+# opencharly/sdk) links ONE SDK/spec across every listed plugin, so this set must
+# be mutually version-compatible — a plugin pinned against a removed SDK/spec
+# symbol (e.g. plugin-vm@v2026.240.2034 / plugin-preempt@v2026.239.1606's removed
+# spec.FleetNode) breaks the WHOLE host, where the old per-plugin binaries each
+# tolerated the skew. Keep the set in lockstep when bumping (opencharly/charly#605).
 #
 # One `<name>@<tag>` per line; blank lines and `#` comments are ignored.
 #
@@ -28,15 +35,15 @@
 # require line.
 #
 # Bump a pin the way any other ref is bumped: to a MERGED tag, never a branch.
-plugin-secrets@v2026.240.0122
-plugin-udev@v2026.239.1644
-plugin-preempt@v2026.239.1606
-plugin-feature@v2026.240.0123
-plugin-vm@v2026.240.2034
-plugin-doctor@v2026.239.1615
-plugin-clean@v2026.239.1615
-plugin-settings@v2026.239.1612
-plugin-candy@v2026.239.1617
+plugin-secrets@v2026.242.0530
+plugin-udev@v2026.242.0532
+plugin-preempt@v2026.250.0552
+plugin-feature@v2026.242.0530
+plugin-vm@v2026.253.1809
+plugin-doctor@v2026.243.1554
+plugin-clean@v2026.242.0526
+plugin-settings@v2026.242.0532
+plugin-candy@v2026.242.0526
 plugin-mcp@v2026.250.0721
 
 plugin-review@v2026.255.1648
