@@ -249,7 +249,7 @@ func dispatchCommand(d externalCommandDispatch, sub string) error {
 // envelope (the ops.OpRun contract), so a command candy behaves identically in either placement.
 func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string) error {
 	// Thread the host spec.HostEnv as DATA on the OpRun envelope (the #200 "threads as DATA, does
-	// not anchor a seam" precedent — hostEnvJSON, KERNEL_MANIFEST.md:39): os.Executable() resolves
+	// not anchor a seam" precedent — hostEnvJSON): os.Executable() resolves
 	// correctly to the charly binary ONLY when called in-core (R10 bed-found bug #5), so every
 	// compiled-in command plugin receives it verbatim. Class-generic, no provider word (F11-safe):
 	// a command that needs it (command:deploy's from-box pod path, which forwards HostEnvJSON into

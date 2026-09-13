@@ -37,12 +37,8 @@ import (
 )
 
 // reverseChannelKindClause is one whitelist row: the registered HostBuild kind string,
-// the file that registers it, and a short clause. Clause is either a direct citation of
-// a KERNEL_MANIFEST.md row (file already documented — quoted verdict) or the literal
-// string "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)" for a file the manifest does
-// not yet cover — TestKernelManifestBidirectional (kernel_manifest_bidirectional_test.go)
-// is the gate that closes that gap file-by-file; this table is never the place to
-// invent a clause for an undocumented file.
+// the file that registers it, and a short descriptor. The descriptor is documentation;
+// this table is never the place to invent one for an undocumented seam.
 type reverseChannelKindClause struct {
 	Kind   string
 	File   string
@@ -57,29 +53,29 @@ type reverseChannelKindClause struct {
 // change — this table only ever shrinks toward the north-star's three-leg end-state,
 // it does not grow.
 var reverseChannelHostBuilderWhitelist = []reverseChannelKindClause{
-	// --- Rows with a direct KERNEL_MANIFEST.md citation ---
-	{"pod-lifecycle", "host_build_pod_lifecycle_dispatch.go", "M — the ONE op-discriminated pod-lifecycle dispatch (A10 consolidation of the former 8 per-verb kinds; KERNEL_MANIFEST.md A10 row)"},
-	{"check-load-plugins", "host_build_check_load_plugins.go", "M — plugin-loading mechanism (KERNEL_MANIFEST.md B5: hostBuildCheckLoadPlugins, confirmed production caller candy/plugin-check/command.go:211)"},
-	{"construct-step", "host_build_construct_step.go", "M — THE kind/verb dispatch mechanism (KERNEL_MANIFEST.md W2: providerRegistry.ResolveVerb/resolve(ClassStep,...))"},
-	{"box-fetch-resolve", "host_build_box_fetch_resolve.go", "B (K1 floor) (KERNEL_MANIFEST.md W2: wraps ResolveProjectRepo->the ProjectLoader EnsureRepoDownloaded seam; the former refs.go core wrapper is deleted, K-wave 2 cone R1)"},
-	{"remote-image-resolve", "host_build_remote_image_resolve.go", "B (K1 floor) (KERNEL_MANIFEST.md W2: EnsureRepoDownloaded only, box-RESOLVE half already plugin-side)"},
-	{"loader-bootstrap", "host_build_loader_floor.go", "M — wire-broker reverse-channel leg, loader-mechanism face (KERNEL_MANIFEST.md W4: forwards to runBootstrapPhase)"},
-	{"loader-walk", "host_build_loader_floor.go", "M — wire-broker reverse-channel leg, loader-mechanism face (KERNEL_MANIFEST.md W4: forwards to hostWalkProject prescan+connect)"},
-	{"loader-threaded", "host_build_loader_floor.go", "M — wire-broker reverse-channel leg, loader-mechanism face (KERNEL_MANIFEST.md W4: forwards to loaderThreaded() D-snapshot)"},
-	{"loader-materialize", "host_build_loader_floor.go", "M — wire-broker reverse-channel leg, loader-mechanism face (KERNEL_MANIFEST.md W4: forwards to hostMaterializeProjectSeams())"},
-	{"validate-word-sets", "validate_project_host.go", "M — the provider registry itself (KERNEL_MANIFEST.md: hostBuildValidateWordSets answers ProviderCapabilities/ActCapableVerbs over the plugin's OWN envelope-derived word inventory; the former validate-project-checks CUE + remote-candy legs folded into candy/plugin-box, K-wave 2 cone R1 unit B)"},
-	{"check-bed-gpu-prereq", "host_build_check_bed_gpu_prereq.go", "M — wire-broker leg, THE ONE seam surviving check-bed's dissolution (KERNEL_MANIFEST.md K5: operator-dropped GPU-hardware exception, gpu_allocate.go DetectVFIO)"},
-	{"step-emit", "step_emit_hostbuild.go", "M — STAY+CONSOLIDATE (KERNEL_MANIFEST.md W4: thin forwarder to the compiled-in \"oci-dispatch\" class:step provider, the host-side half candy/plugin-deploy-pod still needs)"},
-	{"buildengine-connect-plugins", "host_build_buildengine.go", "M — plugin-loading mechanism (KERNEL_MANIFEST.md W2: hostBuildConnectPlugins calls loadProjectPlugins, registers into providerRegistry)"},
-	{"buildengine-context-ignore-baseline", "host_build_buildengine.go", "B — same-module embed boundary (KERNEL_MANIFEST.md W2: hostBuildContextIgnoreBaseline returns baselineContextIgnore, charly's own //go:embed)"},
-	{"retention-defaults", "host_build_retention_defaults.go", "B — reads the project's defaults.keep_images/keep_check_runs directly from charly.yml with NO project walk and NO @github ref resolution (KERNEL_MANIFEST.md: the #423 clean-hang fix — the clean command needs only the two retention tunables, not the candies or the refs)"},
+	// --- Rows with a direct seam-category descriptor ---
+	{"pod-lifecycle", "host_build_pod_lifecycle_dispatch.go", "M — the ONE op-discriminated pod-lifecycle dispatch (A10 consolidation of the former 8 per-verb kinds)"},
+	{"check-load-plugins", "host_build_check_load_plugins.go", "M — plugin-loading mechanism"},
+	{"construct-step", "host_build_construct_step.go", "M — THE kind/verb dispatch mechanism"},
+	{"box-fetch-resolve", "host_build_box_fetch_resolve.go", "B (K1 floor)"},
+	{"remote-image-resolve", "host_build_remote_image_resolve.go", "B (K1 floor)"},
+	{"loader-bootstrap", "host_build_loader_floor.go", "M — wire-broker reverse-channel leg, loader-mechanism face"},
+	{"loader-walk", "host_build_loader_floor.go", "M — wire-broker reverse-channel leg, loader-mechanism face"},
+	{"loader-threaded", "host_build_loader_floor.go", "M — wire-broker reverse-channel leg, loader-mechanism face D-snapshot)"},
+	{"loader-materialize", "host_build_loader_floor.go", "M — wire-broker reverse-channel leg, loader-mechanism face)"},
+	{"validate-word-sets", "validate_project_host.go", "M — the provider registry itself"},
+	{"check-bed-gpu-prereq", "host_build_check_bed_gpu_prereq.go", "M — wire-broker leg, THE ONE seam surviving check-bed's dissolution"},
+	{"step-emit", "step_emit_hostbuild.go", "M — STAY+CONSOLIDATE"},
+	{"buildengine-connect-plugins", "host_build_buildengine.go", "M — plugin-loading mechanism"},
+	{"buildengine-context-ignore-baseline", "host_build_buildengine.go", "B — same-module embed boundary"},
+	{"retention-defaults", "host_build_retention_defaults.go", "B — reads the project's defaults.keep_images/keep_check_runs directly from charly.yml with NO project walk and NO @github ref resolution"},
 
-	// --- Rows NOT yet in KERNEL_MANIFEST.md — undocumented, tracked by gate 3 ---
-	{"overlay", "build_overlay.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"deploy-plugins-connect", "host_build_deploy_plugins_connect.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"deploy-node-del-dispatch", "host_build_deploy_node_del_dispatch.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"cli", "host_build_cli.go", "UNDOCUMENTED (pending KERNEL_MANIFEST.md row)"},
-	{"resolve-target-add", "host_build_resolve_target_add.go", "M — the per-node ResolveTarget+Add terminal (KERNEL_MANIFEST.md bank D row)"},
+	// --- Rows not yet given a seam category ---
+	{"overlay", "build_overlay.go", "UNDOCUMENTED "},
+	{"deploy-plugins-connect", "host_build_deploy_plugins_connect.go", "UNDOCUMENTED "},
+	{"deploy-node-del-dispatch", "host_build_deploy_node_del_dispatch.go", "UNDOCUMENTED "},
+	{"cli", "host_build_cli.go", "UNDOCUMENTED "},
+	{"resolve-target-add", "host_build_resolve_target_add.go", "M — the per-node ResolveTarget+Add terminal"},
 	{"plugin-binary", "plugin_dispatch_reverse.go", "M — leg 3 of the north-star's three legs (plugin-binary build + CLI reentry); see file header hostBuildPluginBinary"},
 }
 
