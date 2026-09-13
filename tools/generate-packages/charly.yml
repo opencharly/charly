@@ -11,7 +11,7 @@ generate-packages:
             `generate-packages` into charly's CLI grammar: the prescan walks the project's
             `discover:` paths, finds this candy's `plugin.providers`, and registers the word;
             a `charly generate-packages …` invocation then host-builds this shim directory
-            (resolved through its OWN go.mod `require` + `replace` — `source:` is identity
+            (resolved through its OWN go.mod `require` — `source:` is identity
             metadata, never a fetch) and fork/execs the result in CLI mode. The distro-repo
             workflows do NOT use this path — they drop a prebuilt plugin binary into
             /usr/lib/charly/plugins/ and resolve project-less via discoverBakedPluginWords.

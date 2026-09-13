@@ -3,7 +3,7 @@ package main
 // The IMPORT-PURITY + ZERO-ALIASES gate (P16, step 7 of #55's import-purity
 // program) — the mechanical enforcement of CLAUDE.md's "Core is a PLUGIN HOST"
 // standing rules, REPLACING the former file-allowlist gate
-// (kernel_manifest_floor_test.go, deleted in this same change): rather than
+// (the former file-allowlist gate, since removed): rather than
 // pinning charly/'s file SET, this gate asserts every file's IMPORT SURFACE
 // directly. charly/ is the plugin HOST — it loads plugins, dispatches to
 // plugins, and brokers the wire; it must never import an sdk MECHANISM KIT
