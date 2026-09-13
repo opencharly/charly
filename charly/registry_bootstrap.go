@@ -22,8 +22,8 @@ import (
 // slice and the `providers:` manifest, yet dispatching identically through providerRegistry. This covers a schema-LESS IR
 // provider (a deploy-target / step / builder — derived from cross-refs or candy-internal, never
 // user-authored, so no authored input to validate). NO KIND provider remains here: EVERY authoring
-// kind is now an externalized plugin candy routed through runPluginKind — group (candy/plugin-group,
-// C2-group), the 5 substrate kinds pod/vm/kubernetes/local/android (candy/plugin-substrate, C2-substrate),
+// kind is now an externalized plugin candy routed through runPluginKind — the 5 substrate kinds
+// pod/vm/kubernetes/local/android (candy/plugin-substrate, C2-substrate),
 // and the LAST one, the candy box⊻layer factory (candy/plugin-candy-kind, C2-candy). All are
 // COMPILED-IN, host-decoding into the typed core maps (substrates → uf.Deploy/uf.Pod/uf.VM/…; candy
 // → uf.Box/uf.Candy via the bootstrap-critical candyIsImage + buildCandy that STAY core) and
@@ -52,8 +52,8 @@ var builtinProviderInstances = []Provider{
 	pluginVerb{},
 	// kinds (ClassKind) — NONE remain here, and NONE are dedicated-builtin KindProviders anymore:
 	// EVERY authoring kind is an externalized plugin candy routed through runPluginKind. The tier-1
-	// kinds (agent/module/sidecar/package-group/distro/builder/init/resource/target) + group
-	// (candy/plugin-group, C2-group) + the 5 substrate kinds pod/vm/kubernetes/local/android
+	// kinds (agent/module/sidecar/package-group/distro/builder/init/resource/target) + the 5 substrate
+	// kinds pod/vm/kubernetes/local/android
 	// (candy/plugin-substrate, C2-substrate) + the LAST one, the candy box⊻layer factory
 	// (candy/plugin-candy-kind, C2-candy — candyIsImage + buildCandy → uf.Box/uf.Candy, the
 	// bootstrap-critical routing) are all COMPILED-IN plugins. So spec.KindWords is
