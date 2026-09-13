@@ -41,12 +41,9 @@ project config.
 The project rulebook (`AGENTS.md` "Hooks") mandates that deterministic
 git-workflow command mechanics — bypass flags, force-push, direct-main push,
 untokenizable commit commands, forbidden alias forms — are enforced by hooks.
-Reasonix wires `.claude/hooks/*.sh` in this repo (`.reasonix/settings.json`), and
-kimi does so from the operator's `~/.kimi-code/config.toml`. Claude Code does NOT:
-the charly repo's `.claude/settings.json` declares no `PreToolUse` hooks, so under
-that harness the scripts fire on nothing. Pi has no built-in hooks system, so this
-extension reproduces that wiring through pi's `tool_call` event, running the exact
-same gate scripts.
+Claude Code, reasonix, and kimi wire `.claude/hooks/*.sh` for this. Pi has no
+built-in hooks system, so this extension reproduces that wiring through pi's
+`tool_call` event, running the exact same gate scripts.
 
 The gates guard mechanics only. Attribution, change class, CHANGELOG coverage,
 architecture, and R0–R10 proof are judged by the fresh `pr-validator` at merge,
