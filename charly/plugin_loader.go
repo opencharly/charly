@@ -225,9 +225,15 @@ func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error)
 	// connect" mid-fan-out because its binary was momentarily half-written. A blocking per-binary file
 	// lock makes the second builder wait for the first, never collide (R4: a synchronization primitive,
 	// not a retry).
+	//
+	// The wait itself is spec/lock's bounded-but-REPORTED one (opencharly/spec #132, pinned below): a
+	// peer mid-build is a SLOW holder, not a stuck one, so the second builder QUEUES — reporting who
+	// holds the lock while it waits, and only giving up after the bound, naming the holder pid +
+	// command. Two lanes needing the same plugin therefore both succeed; failing hard the instant a
+	// peer is building is exactly the class that spec PR removed.
 	release, lockErr := lock.AcquireFileLock(bin+".lock", true)
 	if lockErr != nil {
-		return "", fmt.Errorf("plugin %q: acquire build lock: %w", name, lockErr)
+		return "", fmt.Errorf("plugin %q: acquire build lock %s: %w — another charly process is building this plugin binary; wait for that build to finish and re-run (the kernel releases the lock when that process exits, so there is nothing to clean up)", name, bin+".lock", lockErr)
 	}
 	defer func() { _ = release() }()
 	// Publish ATOMICALLY: build to a sibling temp file, then os.Rename onto `bin` (a same-directory
