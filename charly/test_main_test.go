@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -62,6 +63,20 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("XDG_CONFIG_HOME", configHomeDir); err != nil {
 		_ = os.RemoveAll(configHomeDir)
 		fmt.Fprintf(os.Stderr, "TestMain: set XDG_CONFIG_HOME: %v\n", err)
+		os.Exit(1)
+	}
+
+	// The SYSTEM config layer (loaderkit.SystemConfigEnv, default
+	// /etc/charly/charly.yml) is NOT covered by the XDG_CONFIG_HOME override
+	// above. The shipped native package installs /etc/charly/charly.yml, so on
+	// any host with charly installed the system layer leaks into LoadUnified and
+	// TestLoadUnified_AbsentFileReturnsNotPresent fails (present=true for an
+	// empty dir). Point it at an absent file — the same system-layer isolation
+	// sdk/loaderkit's own TestMain applies. (The env-var name is inline: core
+	// may not import sdk/loaderkit, import purity.)
+	if err := os.Setenv("CHARLY_SYSTEM_CONFIG", filepath.Join(configHomeDir, "absent-system.yml")); err != nil {
+		_ = os.RemoveAll(configHomeDir)
+		fmt.Fprintf(os.Stderr, "TestMain: set CHARLY_SYSTEM_CONFIG: %v\n", err)
 		os.Exit(1)
 	}
 
