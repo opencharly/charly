@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -107,4 +108,69 @@ func TestIdleBoundedContext_TripsOnlyWhenIdle(t *testing.T) {
 	}
 	close(touchStop)
 	stop2()
+}
+
+// TestIdleBoundedContext_PluginLocalCPUIsProgress pins the SECOND progress source: a
+// peer plugin doing its work ENTIRELY LOCALLY (its own child processes — virsh/ssh
+// retries) touches NO host reverse leg, yet must count as progress. Without the
+// /proc CPU signal, the idle guard false-killed a legitimately-booting ISO guest at
+// prepare-venue (measured live).
+func TestIdleBoundedContext_PluginLocalCPUIsProgress(t *testing.T) {
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 300 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
+
+	// A real child that burns CPU for ~2s — the plugin process's OWN work, no host leg.
+	cmd := exec.Command("sh", "-c", "end=$((SECONDS+2)); while [ $SECONDS -lt $end ]; do :; done")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start cpu-burner: %v", err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+
+	// The clock polls the BURNER's pid directly (standing in for the plugin pid: the
+	// plugin's own CPU is what we must observe).
+	a := &pluginActivity{pid: cmd.Process.Pid}
+	// Baseline via procCPUTicks DIRECTLY (not a.cpu()) so this test still exercises the
+	// idle guard's CPU source: with cpu() disabled the guard would idle-kill below and
+	// the test would FAIL, which is the regression it guards.
+	base := uint64(0)
+	for i := 0; i < 50 && base == 0; i++ {
+		time.Sleep(20 * time.Millisecond)
+		base = procCPUTicks(cmd.Process.Pid)
+	}
+	if base == 0 {
+		t.Skip("procCPUTicks unavailable on this platform — the CPU-progress path cannot be exercised")
+	}
+	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+	select {
+	case <-ctx.Done():
+		t.Fatalf("a plugin busy on its OWN children must not be idle-killed, got %v", context.Cause(ctx))
+	case <-time.After(1 * time.Second):
+		// good: outlived 3x the idle window purely on its own CPU
+	}
+	stop()
+}
+
+// TestProcCPUTicks_Monotonic sanity-checks the reader against a live child.
+func TestProcCPUTicks_Monotonic(t *testing.T) {
+	cmd := exec.Command("sh", "-c", "i=0; while [ $i -lt 3000000 ]; do i=$((i+1)); done")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	// The very first sample can legitimately be 0 (the child has not accrued CPU in
+	// its first instant), so establish a nonzero baseline first.
+	first := uint64(0)
+	for i := 0; i < 50 && first == 0; i++ {
+		time.Sleep(20 * time.Millisecond)
+		first = procCPUTicks(cmd.Process.Pid)
+	}
+	if first == 0 {
+		t.Fatal("procCPUTicks never left 0 for a busy process")
+	}
+	time.Sleep(200 * time.Millisecond)
+	second := procCPUTicks(cmd.Process.Pid)
+	if second <= first {
+		t.Fatalf("procCPUTicks must advance for a busy process: first=%d second=%d", first, second)
+	}
 }

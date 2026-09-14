@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -50,13 +53,39 @@ var pluginInvokeNoProgressOverride time.Duration
 
 // pluginActivity is one call's forward-progress clock. A nil *pluginActivity is safe:
 // touch is a no-op and idleFor reports 0, so a server without a clock never trips.
-type pluginActivity struct{ nanos atomic.Int64 }
+//
+// TWO activity sources feed it:
+//   - touch() from the host reverse legs (host-visible work), and
+//   - cpu() polling of the PEER PLUGIN PROCESS's monotonic CPU. The second is
+//     load-bearing: a plugin can do all its work PLUGIN-LOCALLY (the vm deploy's
+//     console bootstrap runs `virsh send-key` and its ssh readiness retries as the
+//     plugin's OWN children), which touches no host leg — measured: the idle guard
+//     false-killed a legitimately-booting ISO guest at prepare-venue because of it.
+//     /proc/<pid>/stat's utime+stime+cutime+cstime is monotonic and AGGREGATES reaped
+//     descendants' CPU, so a retry loop (ssh every few seconds) advances it while a
+//     futex-wedged plugin (no work, no children) leaves it frozen.
+type pluginActivity struct {
+	nanos atomic.Int64
+	// pid is the peer plugin process whose CPU counts as progress; 0 = no polling
+	// (an in-proc/builtin peer on the host legs only, or an unplumbed pid).
+	pid int
+}
 
 func (a *pluginActivity) touch() {
 	if a == nil {
 		return
 	}
 	a.nanos.Store(time.Now().UnixNano())
+}
+
+// cpu reads the plugin process's monotonic CPU ticks (utime+stime+cutime+cstime) from
+// /proc/<pid>/stat; 0 when unavailable (no pid, non-Linux, process gone). The caller
+// only ever compares it for ADVANCE, never as an absolute.
+func (a *pluginActivity) cpu() uint64 {
+	if a == nil || a.pid <= 0 {
+		return 0
+	}
+	return procCPUTicks(a.pid)
 }
 
 func (a *pluginActivity) idleFor() time.Duration {
@@ -99,6 +128,15 @@ func pluginLeafCap() time.Duration {
 	return pluginLeafCapDefault
 }
 
+// providerPid returns the OS pid of an out-of-process provider's plugin process (0 for
+// an in-proc/builtin provider, which has none). The idle guard polls it for CPU progress.
+func providerPid(prov Provider) int {
+	if gp, ok := prov.(*grpcProvider); ok {
+		return gp.pid
+	}
+	return 0
+}
+
 // pluginInvokeNoProgress resolves the no-progress window: test override, else the
 // project readiness `no_progress`, else the built-in fallback. loadedReadiness() is
 // sync.Once-cached + re-entrancy-guarded (it returns built-in defaults mid-load), so
@@ -114,8 +152,10 @@ func pluginInvokeNoProgress() time.Duration {
 }
 
 // idleBoundedContext returns a context cancelled with errPluginCallIdle when the
-// call's activity clock stays untouched for noProgress, plus a stop func. It carries
-// NO wall-clock cap (see the file header). Applied only when the caller supplied no
+// call makes no progress for noProgress, plus a stop func. Progress is EITHER a host
+// reverse leg (a.touch) OR the peer plugin process's CPU advancing (a.cpu) — the
+// second covers work the plugin does entirely locally (virsh/ssh children). NO
+// wall-clock cap (see the file header). Applied only when the caller supplied no
 // deadline of its own.
 func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *pluginActivity) (context.Context, context.CancelFunc) {
 	a.touch() // the dispatch itself is baseline activity
@@ -128,6 +168,7 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 		}
 		t := time.NewTicker(interval)
 		defer t.Stop()
+		lastCPU := a.cpu()
 		for {
 			select {
 			case <-stop:
@@ -135,6 +176,12 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 			case <-cctx.Done():
 				return
 			case <-t.C:
+				// CPU advancing is progress: refresh the activity clock and the CPU
+				// high-water, so a plugin busy on its own children never trips.
+				if cur := a.cpu(); cur > lastCPU {
+					lastCPU = cur
+					a.touch()
+				}
 				if a.idleFor() >= noProgress {
 					cancel(errPluginCallIdle)
 					return
@@ -143,6 +190,38 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 		}
 	}()
 	return cctx, func() { close(stop); cancel(nil) }
+}
+
+// procCPUTicks reads a process's monotonic CPU ticks from /proc/<pid>/stat: utime +
+// stime + cutime + cstime (fields 14-17). cutime/cstime aggregate REAPED descendants'
+// CPU, which is exactly the signal for a plugin whose work is its own retry children.
+// 0 on any error (process gone, non-Linux, malformed) — the caller only compares for
+// ADVANCE, so a transient 0 can never look like progress.
+func procCPUTicks(pid int) uint64 {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0
+	}
+	// The comm field is parenthesized and may contain spaces: parse from the LAST ')'.
+	i := strings.LastIndexByte(string(b), ')')
+	if i < 0 || i+2 >= len(b) {
+		return 0
+	}
+	fields := strings.Fields(string(b[i+2:]))
+	// After comm, field 1 is state; utime is field 14 overall => index 11 here
+	// (fields[0]=state=field3). utime,stime,cutime,cstime = indices 11,12,13,14.
+	if len(fields) < 15 {
+		return 0
+	}
+	var sum uint64
+	for _, idx := range []int{11, 12, 13, 14} {
+		v, err := strconv.ParseUint(fields[idx], 10, 64)
+		if err != nil {
+			return 0
+		}
+		sum += v
+	}
+	return sum
 }
 
 // startPluginActivityHeartbeat touches the clock every 5s until stopped. host_build_cli

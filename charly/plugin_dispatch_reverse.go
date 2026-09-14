@@ -94,21 +94,6 @@ func substrateFallbackRef(class ProviderClass, word, extraRef string) string {
 }
 
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
-	// Fail fast on a hung PLUGIN→PLUGIN call, mirroring the host→plugin guard in
-	// invokeTyped: the broker context a plugin passes back to the host carries no
-	// deadline of its own, so a peer that never answers (the deploy-del teardown
-	// deadlock — a plugin waiting on a peer that is itself waiting) would block this
-	// goroutine in futex_wait forever. The bound is IDLE-based, not total-duration
-	// (plugin_activity.go): a long rebuild that keeps performing host-visible work
-	// (its host child alive) is never killed; a wedged peer trips the no-progress
-	// window.
-	var activity *pluginActivity
-	if _, ok := ctx.Deadline(); !ok {
-		activity = &pluginActivity{}
-		var cancel context.CancelFunc
-		ctx, cancel = idleBoundedContext(ctx, pluginInvokeNoProgress(), activity)
-		defer cancel()
-	}
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
 	prov, ok := providerRegistry.resolve(class, word)
@@ -129,6 +114,22 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 	}
 	if !ok {
 		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, word)
+	}
+	// Fail fast on a hung PLUGIN→PLUGIN call, mirroring the host→plugin guard in
+	// invokeTyped: the broker context a plugin passes back to the host carries no
+	// deadline of its own, so a peer that never answers (the deploy-del teardown
+	// deadlock — a plugin waiting on a peer that is itself waiting) would block this
+	// goroutine in futex_wait forever. The bound is IDLE-based, not total-duration
+	// (plugin_activity.go), and its progress signal is BOTH the host reverse legs AND
+	// the PEER PLUGIN PROCESS's own CPU — the latter covers work the plugin does
+	// entirely locally (its virsh/ssh retry children), without which a legitimately
+	// long prepare-venue was false-killed (measured).
+	var activity *pluginActivity
+	if _, ok := ctx.Deadline(); !ok {
+		activity = &pluginActivity{pid: providerPid(prov)}
+		var cancel context.CancelFunc
+		ctx, cancel = idleBoundedContext(ctx, pluginInvokeNoProgress(), activity)
+		defer cancel()
 	}
 	op := &Operation{Reserved: word, Op: req.GetOp(), Params: req.GetParamsJson(), Env: req.GetEnvJson()}
 	// The venue executor every branch below may need: the caller's own threaded executor (s.exec),
