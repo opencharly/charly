@@ -29,9 +29,33 @@ import (
 // error (context deadline exceeded), never deadlock the host forever — the
 // deploy-del VM-member hang (the deploy del + its plugins sat in futex_wait for
 // hours, 0% CPU).
-// defaultPluginInvokeTimeout is a package var (not a const) so a test can
-// override it to a short value.
-var defaultPluginInvokeTimeout = 10 * time.Minute
+//
+// CONFIGURABLE: CHARLY_PLUGIN_INVOKE_TIMEOUT overrides the 10m default (a Go
+// duration string, e.g. "30m"). The default bounds a HUNG plugin, but some
+// legitimate host→plugin calls are long-running — a full unattended OS reinstall
+// at the R10 `[update]` step (deploy:vm op=rebuild) exceeds 10m — so the operator
+// must be able to raise it without a rebuild. A missing or unparseable value
+// keeps the default. It stays a package var (not a const) so a test can override
+// it to a short value, and so the env seed below runs once at process start.
+const PluginInvokeTimeoutEnv = "CHARLY_PLUGIN_INVOKE_TIMEOUT"
+
+var defaultPluginInvokeTimeout = pluginInvokeTimeoutFromEnv()
+
+// pluginInvokeTimeoutFromEnv resolves the invoke timeout: CHARLY_PLUGIN_INVOKE_TIMEOUT
+// (a Go duration string) when set and parseable and positive, else 10 minutes.
+func pluginInvokeTimeoutFromEnv() time.Duration {
+	const fallback = 10 * time.Minute
+	raw := os.Getenv(PluginInvokeTimeoutEnv)
+	if raw == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		fmt.Fprintf(os.Stderr, "WARNING: %s=%q is not a positive duration (%v) — using the %s default\n", PluginInvokeTimeoutEnv, raw, err, fallback)
+		return fallback
+	}
+	return d
+}
 
 func invokeTyped[In, Out any](ctx context.Context, prov Provider, word, op string, in In) (Out, error) {
 	var out Out
