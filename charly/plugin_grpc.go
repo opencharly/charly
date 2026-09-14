@@ -409,7 +409,7 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 				// live overlay-build inputs (M4): a lifecycle Invoke attaches them to the ctx
 				// (withOverlayBuildInputs) so the reverse server can re-thread them onto a
 				// HostBuild("overlay") builder ctx; nil for every other Invoke.
-				pb.RegisterExecutorServiceServer(s, &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx)})
+				pb.RegisterExecutorServiceServer(s, &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx), activity: pluginActivityFrom(ctx)})
 			}
 			if cc != nil {
 				pb.RegisterCheckContextServiceServer(s, cc)

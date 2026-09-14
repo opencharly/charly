@@ -95,14 +95,18 @@ func substrateFallbackRef(class ProviderClass, word, extraRef string) string {
 
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	// Fail fast on a hung PLUGIN→PLUGIN call, mirroring the host→plugin guard in
-	// invokeTyped (#468): the broker context a plugin passes back to the host carries
-	// no deadline of its own, so a peer that never answers (the deploy-del teardown
+	// invokeTyped: the broker context a plugin passes back to the host carries no
+	// deadline of its own, so a peer that never answers (the deploy-del teardown
 	// deadlock — a plugin waiting on a peer that is itself waiting) would block this
-	// goroutine in futex_wait forever. Bound it with the same default invoke timeout
-	// when the caller supplied none.
+	// goroutine in futex_wait forever. The bound is IDLE-based, not total-duration
+	// (plugin_activity.go): a long rebuild that keeps performing host-visible work
+	// (its host child alive) is never killed; a wedged peer trips the no-progress
+	// window.
+	var activity *pluginActivity
 	if _, ok := ctx.Deadline(); !ok {
+		activity = &pluginActivity{}
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultPluginInvokeTimeout)
+		ctx, cancel = idleBoundedContext(ctx, pluginInvokeNoProgress(), activity)
 		defer cancel()
 	}
 	class := ProviderClass(req.GetClass())
@@ -253,7 +257,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 			// OUT-OF-PROCESS target: thread the venue executor + build onto a nested reverse
 			// channel (the nested-broker round-trip — the one-level RunHostStep ExternalPlugin
 			// arm, generalized to any class/op).
-			res, err = inv.InvokeWithExecutor(ctx, op, exec, s.build, s.rebootable, nil)
+			res, err = inv.InvokeWithExecutor(withPluginActivity(ctx, activity), op, exec, s.build, s.rebootable, nil)
 		} else {
 			// IN-PROC target (compiled-in / builtin, non-verb): thread the in-proc reverse channel
 			// carrying the SAME resolved venue executor + build the out-of-proc branch threads
@@ -264,12 +268,15 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 			// in-proc target recovers this via specexec.ExecutorForInvoke(ctx) and FAIL-FASTS when absent
 			// (RDD-enumerated: no in-proc target relies on the executor being absent), so completing
 			// the seam only enables currently-broken callbacks; a pure-data target ignores it.
-			inprocSrv := &executorReverseServer{exec: exec, build: s.build, rebootable: s.rebootable}
-			res, err = prov.Invoke(specexec.ContextWithExecutor(ctx, specexec.NewInProcExecutor(&inprocExecutorClient{srv: inprocSrv})), op)
+			inprocSrv := &executorReverseServer{exec: exec, build: s.build, rebootable: s.rebootable, activity: activity}
+			// Thread the call's progress clock onto the peer's ctx too: its OWN reverse
+			// legs (through inprocSrv) touch it, and — placement-invariantly — a peer that
+			// reports forward progress can reach it via pluginActivityFrom.
+			res, err = prov.Invoke(withPluginActivity(specexec.ContextWithExecutor(ctx, specexec.NewInProcExecutor(&inprocExecutorClient{srv: inprocSrv})), activity), op)
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("InvokeProvider %s:%s op=%s: %w", class, word, op.Op, err)
+		return nil, fmt.Errorf("InvokeProvider %s:%s op=%s: %w", class, word, op.Op, pluginInvokeErr(ctx, "InvokeProvider", err))
 	}
 	if res == nil {
 		return &pb.InvokeReply{}, nil
@@ -283,6 +290,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 // to a standalone build request. M13/M14 register the image/kustomize builders onto this seam.
 func (s *executorReverseServer) HostBuild(ctx context.Context, req *pb.HostBuildRequest) (*pb.HostBuildReply, error) {
 	fn, ok := hostBuilderFor(req.GetKind())
+	s.activity.touch()
 	if !ok {
 		return &pb.HostBuildReply{Error: fmt.Sprintf("no host-builder registered for kind %q", req.GetKind())}, nil
 	}
@@ -291,6 +299,10 @@ func (s *executorReverseServer) HostBuild(ctx context.Context, req *pb.HostBuild
 	if s.live != nil {
 		ctx = withOverlayBuildInputs(ctx, s.live)
 	}
+	// Carry this call's progress clock onto the builder ctx: the "cli" host-builder
+	// (host_build_cli) heartbeats it while its host child runs, so a long install is
+	// seen as progress by the idle guard.
+	ctx = withPluginActivity(ctx, s.activity)
 	result, err := fn(ctx, req.GetSpecJson(), s.build)
 	if err != nil {
 		return &pb.HostBuildReply{Error: err.Error()}, nil

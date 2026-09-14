@@ -41,6 +41,11 @@ type executorReverseServer struct {
 	// ctx, read by InvokeWithExecutor); the HostBuild handler re-threads it onto the builder ctx.
 	// nil for every non-lifecycle Invoke.
 	live *overlayBuildInputs
+	// activity is THIS call's forward-progress clock (plugin_activity.go). Every host
+	// leg below touches it, so the idle guard can tell a progressing long rebuild from a
+	// wedged plugin. nil for a server with no guard (a short in-proc dispatch) — touches
+	// are then no-ops.
+	activity *pluginActivity
 }
 
 func (s *executorReverseServer) Venue(context.Context, *pb.Empty) (*pb.VenueReply, error) {
@@ -48,10 +53,12 @@ func (s *executorReverseServer) Venue(context.Context, *pb.Empty) (*pb.VenueRepl
 }
 
 func (s *executorReverseServer) RunSystem(ctx context.Context, req *pb.RunRequest) (*pb.RunReply, error) {
+	s.activity.touch()
 	return runReply(s.exec.RunSystem(ctx, req.GetScript(), decodeReverseEmitOpts(req.GetOptsJson())))
 }
 
 func (s *executorReverseServer) RunUser(ctx context.Context, req *pb.RunRequest) (*pb.RunReply, error) {
+	s.activity.touch()
 	return runReply(s.exec.RunUser(ctx, req.GetScript(), decodeReverseEmitOpts(req.GetOptsJson())))
 }
 
@@ -64,6 +71,7 @@ func (s *executorReverseServer) RunUser(ctx context.Context, req *pb.RunRequest)
 // SSHExecutor), preserving the owner_root → root:root semantics. The gRPC call itself
 // succeeds; a placement failure travels in PutFileReply.Error (the runReply convention).
 func (s *executorReverseServer) PutFile(ctx context.Context, req *pb.PutFileRequest) (*pb.PutFileReply, error) {
+	s.activity.touch()
 	tmp, err := os.CreateTemp("", "charly-putfile-*")
 	if err != nil {
 		return &pb.PutFileReply{Error: err.Error()}, nil
@@ -88,6 +96,7 @@ func (s *executorReverseServer) PutFile(ctx context.Context, req *pb.PutFileRequ
 // succeeds; an execution failure (not a non-zero exit) travels in CaptureReply.Error.
 func (s *executorReverseServer) RunCapture(ctx context.Context, req *pb.RunRequest) (*pb.CaptureReply, error) {
 	stdout, stderr, exit, err := s.exec.RunCapture(ctx, req.GetScript())
+	s.activity.touch()
 	return &pb.CaptureReply{Stdout: stdout, Stderr: stderr, ExitCode: int32(exit), Error: errString(err)}, nil
 }
 
@@ -112,6 +121,7 @@ func (s *executorReverseServer) RunStream(ctx context.Context, req *pb.RunReques
 // (a record .cast / a screenshot) reads it back to the host. asRoot reads via sudo.
 func (s *executorReverseServer) GetFile(ctx context.Context, req *pb.GetFileRequest) (*pb.GetFileReply, error) {
 	content, err := s.exec.GetFile(ctx, req.GetPath(), req.GetAsRoot(), decodeReverseEmitOpts(req.GetOptsJson()))
+	s.activity.touch()
 	return &pb.GetFileReply{Content: content, Error: errString(err)}, nil
 }
 
@@ -138,6 +148,7 @@ func (s *executorReverseServer) GetFile(ctx context.Context, req *pb.GetFileRequ
 // the reply's error field (the RPC itself succeeds, like runReply).
 func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostStepRequest) (*pb.HostStepReply, error) {
 	var view spec.InstallStepView
+	s.activity.touch()
 	if err := json.Unmarshal(req.GetStepJson(), &view); err != nil {
 		return &pb.HostStepReply{Error: fmt.Sprintf("decode step view: %v", err)}, nil
 	}

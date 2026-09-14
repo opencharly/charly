@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,7 +21,7 @@ func TestRunCliSubcommandAbsoluteExecutableSurvivesChdir(t *testing.T) {
 	}
 
 	t.Chdir(t.TempDir())
-	reply := runCliSubcommand(executable, spec.CliRequest{Argv: []string{"ok"}, Capture: true, Combined: true})
+	reply := runCliSubcommand(context.Background(), executable, spec.CliRequest{Argv: []string{"ok"}, Capture: true, Combined: true})
 	if reply.ExitCode != 0 || reply.Error != "" || reply.Stdout != "nested:ok" {
 		t.Fatalf("runCliSubcommand() = %#v", reply)
 	}
@@ -28,7 +29,7 @@ func TestRunCliSubcommandAbsoluteExecutableSurvivesChdir(t *testing.T) {
 
 func TestRunCliSubcommandPreservesSpawnError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing-charly")
-	reply := runCliSubcommand(missing, spec.CliRequest{Capture: true, Combined: true})
+	reply := runCliSubcommand(context.Background(), missing, spec.CliRequest{Capture: true, Combined: true})
 	if reply.ExitCode != -1 {
 		t.Fatalf("ExitCode = %d, want -1", reply.ExitCode)
 	}
@@ -70,7 +71,7 @@ func TestRunCliSubcommandCombinedKeepsLinesIntact(t *testing.T) {
 printf 'warning: config file changed\n' >&2
 printf '...\n' >&1`)
 
-	reply := runCliSubcommand(helper, spec.CliRequest{Capture: true, Combined: true})
+	reply := runCliSubcommand(context.Background(), helper, spec.CliRequest{Capture: true, Combined: true})
 	got := capturedLines(t, reply)
 
 	want := []string{"Starting full system upgrade...", "warning: config file changed"}
@@ -92,7 +93,7 @@ func TestRunCliSubcommandCombinedPreservesPerStreamOrder(t *testing.T) {
 	helper := writeShellHelper(t, `i=1
 while [ $i -le 40 ]; do printf 'out-%s\n' "$i" >&1; printf 'err-%s\n' "$i" >&2; i=$((i+1)); done`)
 
-	reply := runCliSubcommand(helper, spec.CliRequest{Capture: true, Combined: true})
+	reply := runCliSubcommand(context.Background(), helper, spec.CliRequest{Capture: true, Combined: true})
 	got := capturedLines(t, reply)
 
 	var out, errs []string
@@ -124,7 +125,7 @@ func TestRunCliSubcommandCombinedSurvivesConcurrentWriters(t *testing.T) {
 ( i=1; while [ $i -le 60 ]; do printf 'err-' >&2; printf '%s\n' "$i" >&2; i=$((i+1)); done ) &
 wait`)
 
-	reply := runCliSubcommand(helper, spec.CliRequest{Capture: true, Combined: true})
+	reply := runCliSubcommand(context.Background(), helper, spec.CliRequest{Capture: true, Combined: true})
 	got := capturedLines(t, reply)
 
 	intact := regexp.MustCompile(`^(out|err)-\d+$`)
@@ -144,7 +145,7 @@ func TestRunCliSubcommandNonCombinedCapturesStdoutOnly(t *testing.T) {
 	helper := writeShellHelper(t, `printf 'to-stdout\n' >&1
 printf 'to-stderr\n' >&2`)
 
-	reply := runCliSubcommand(helper, spec.CliRequest{Capture: true})
+	reply := runCliSubcommand(context.Background(), helper, spec.CliRequest{Capture: true})
 	if reply.ExitCode != 0 || reply.Error != "" {
 		t.Fatalf("helper failed: %#v", reply)
 	}

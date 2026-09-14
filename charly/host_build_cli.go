@@ -27,7 +27,7 @@ const cliBuilderKind = "cli"
 // hostBuildCli runs a `charly <argv>` subcommand host-side and returns the CliReply. A non-zero exit
 // rides CliReply.Error unless BestEffort. The context is unused (an interactive leg must not be
 // deadlined — the host TTY owns its lifetime, like the operator running the command directly).
-func hostBuildCli(_ context.Context, req spec.CliRequest, _ buildEngineContext) (spec.CliReply, error) {
+func hostBuildCli(ctx context.Context, req spec.CliRequest, _ buildEngineContext) (spec.CliReply, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return spec.CliReply{ExitCode: -1, Error: fmt.Sprintf("resolve charly executable: %v", err)}, nil
@@ -36,12 +36,19 @@ func hostBuildCli(_ context.Context, req spec.CliRequest, _ buildEngineContext) 
 	if err != nil {
 		return spec.CliReply{ExitCode: -1, Error: fmt.Sprintf("resolve absolute charly executable path: %v", err)}, nil
 	}
-	return runCliSubcommand(executable, req), nil
+	return runCliSubcommand(ctx, executable, req), nil
 }
 
-func runCliSubcommand(executable string, req spec.CliRequest) spec.CliReply {
+func runCliSubcommand(ctx context.Context, executable string, req spec.CliRequest) spec.CliReply {
 	cmd := exec.Command(executable, req.Argv...)
 	cmd.Stdin = os.Stdin
+	// The host CHILD being alive IS forward progress for the enclosing plugin call:
+	// a lifecycle rebuild runs a full unattended OS install here (~13min), and the
+	// idle guard must see it as progress for its whole duration, else a legitimate
+	// long install is killed as if wedged. Start the heartbeat before Run, stop it
+	// after Run returns (the child is gone). The clock rides the invoke ctx.
+	stopHeartbeat := startPluginActivityHeartbeat(pluginActivityFrom(ctx))
+	defer stopHeartbeat()
 
 	var stdoutOnly bytes.Buffer
 	var combined *combinedLineCapture
