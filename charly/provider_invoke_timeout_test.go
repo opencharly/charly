@@ -23,9 +23,9 @@ func (blockingProvider) Invoke(ctx context.Context, _ *Operation) (*Result, erro
 // channel, so a hung plugin offers no progress signal and the guard is a
 // TOTAL-duration bound (the readiness absolute_cap, via pluginLeafCap).
 func TestInvokeTyped_FailsFastOnHungPlugin(t *testing.T) {
-	old := pluginInvokeNoProgressOverride
-	pluginInvokeNoProgressOverride = 100 * time.Millisecond
-	defer func() { pluginInvokeNoProgressOverride = old }()
+	old := pluginLeafCapOverride
+	pluginLeafCapOverride = 100 * time.Millisecond
+	defer func() { pluginLeafCapOverride = old }()
 
 	_, err := invokeTyped[struct{}, struct{}](context.Background(), blockingProvider{}, "blocking", "run", struct{}{})
 	if err == nil {

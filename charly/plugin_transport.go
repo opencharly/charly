@@ -118,6 +118,15 @@ func localPluginClientConfig(cmd *exec.Cmd) *plugin.ClientConfig {
 	}
 }
 
+// processPid returns cmd's OS pid once it has been started, or 0 when cmd is nil or not
+// yet started. Nil-safe: the idle guard's CPU-progress source is simply absent at 0.
+func processPid(cmd *exec.Cmd) int {
+	if cmd == nil || cmd.Process == nil {
+		return 0
+	}
+	return cmd.Process.Pid
+}
+
 func pluginClientLogger(output io.Writer) hclog.Logger {
 	return hclog.New(&hclog.LoggerOptions{
 		Name:   "charly.plugin",
@@ -144,10 +153,7 @@ func connectAndDescribe(ctx context.Context, client *plugin.Client, readTimeout 
 	}
 	// The plugin process is STARTED only now (client.Client spawns it), so its pid is
 	// available only here — capture it for the idle guard's CPU-progress poll.
-	pid := 0
-	if cmd != nil && cmd.Process != nil {
-		pid = cmd.Process.Pid
-	}
+	pid := processPid(cmd)
 	raw, err := rpc.Dispense(transport.DispenseKey)
 	if err != nil {
 		teardown()

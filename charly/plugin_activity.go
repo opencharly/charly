@@ -47,9 +47,14 @@ import (
 // distinguish a real hang from an ordinary timeout/transport error.
 var errPluginCallIdle = errors.New("plugin call made no host-visible progress within the no-progress window (hung plugin — the peer runs no host work)")
 
-// pluginInvokeNoProgressOverride, when > 0, replaces the config-sourced window. A test
-// seam only; production leaves it 0. Read before the watchdog starts.
-var pluginInvokeNoProgressOverride time.Duration
+// Two INDEPENDENT test seams (never one var driving both bounds, which would let a
+// leaf-cap test silently shrink the idle window): pluginInvokeNoProgressOverride for the
+// idle/no-progress window, pluginLeafCapOverride for the host→plugin leaf total cap.
+// A test seam only; production leaves both 0. Read before the watchdog starts.
+var (
+	pluginInvokeNoProgressOverride time.Duration
+	pluginLeafCapOverride          time.Duration
+)
 
 // pluginActivity is one call's forward-progress clock. A nil *pluginActivity is safe:
 // touch is a no-op and idleFor reports 0, so a server without a clock never trips.
@@ -122,8 +127,8 @@ const pluginLeafCapDefault = 10 * time.Minute
 
 // pluginLeafCap resolves the leaf bound: the test override, else pluginLeafCapDefault.
 func pluginLeafCap() time.Duration {
-	if pluginInvokeNoProgressOverride > 0 {
-		return pluginInvokeNoProgressOverride
+	if pluginLeafCapOverride > 0 {
+		return pluginLeafCapOverride
 	}
 	return pluginLeafCapDefault
 }

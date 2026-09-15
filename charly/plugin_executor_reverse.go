@@ -116,15 +116,22 @@ func (s *executorReverseServer) runCapture(ctx context.Context, req *pb.RunReque
 // The pod plugin's OpAttach drives it for `charly shell`/`charly cmd`. Not deadlined (the TTY owns
 // its lifetime).
 func (s *executorReverseServer) RunInteractive(ctx context.Context, req *pb.RunRequest) (*pb.LiveReply, error) {
-	exit, err := s.exec.RunInteractive(ctx, req.GetScript())
-	return &pb.LiveReply{ExitCode: int32(exit), Error: errString(err)}, nil
+	return withActivityHeartbeat(s.activity, func() (*pb.LiveReply, error) {
+		exit, err := s.exec.RunInteractive(ctx, req.GetScript())
+		return &pb.LiveReply{ExitCode: int32(exit), Error: errString(err)}, nil
+	})
 }
 
 // RunStream is the F12 LIVE-OUTPUT leg (charly logs --follow): streams stdout/stderr to the
-// operator's terminal (host-held); only script→exit crosses the wire.
+// operator's terminal (host-held); only script→exit crosses the wire. A `logs --follow`
+// runs for as long as the operator watches (bounded only by the TTY, like RunInteractive),
+// so it is heartbeated for its whole duration — otherwise the idle guard would kill a
+// perfectly-progressing quiet stream.
 func (s *executorReverseServer) RunStream(ctx context.Context, req *pb.RunRequest) (*pb.LiveReply, error) {
-	exit, err := s.exec.RunStream(ctx, req.GetScript())
-	return &pb.LiveReply{ExitCode: int32(exit), Error: errString(err)}, nil
+	return withActivityHeartbeat(s.activity, func() (*pb.LiveReply, error) {
+		exit, err := s.exec.RunStream(ctx, req.GetScript())
+		return &pb.LiveReply{ExitCode: int32(exit), Error: errString(err)}, nil
+	})
 }
 
 // GetFile is the CHECK-VERB artifact-pull leg: a verb that produces a file on the venue

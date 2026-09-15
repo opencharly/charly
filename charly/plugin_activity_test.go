@@ -209,3 +209,29 @@ func TestIdleBoundedContext_LongHostLegIsProgress(t *testing.T) {
 	}
 	stop()
 }
+
+// TestProcessPid_NilSafeAndLive pins the pid PLUMB (review finding 2): the idle guard's
+// CPU source is only real if cmd.Process.Pid actually reaches grpcProvider.pid. A nil/not-
+// yet-started cmd must yield 0 (source absent, guard falls back to host legs), and a
+// STARTED cmd must yield its real pid.
+func TestProcessPid_NilSafeAndLive(t *testing.T) {
+	if got := processPid(nil); got != 0 {
+		t.Fatalf("processPid(nil) = %d, want 0", got)
+	}
+	cmd := exec.Command("sleep", "5")
+	if got := processPid(cmd); got != 0 {
+		t.Fatalf("processPid(before Start) = %d, want 0", got)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	if got := processPid(cmd); got != cmd.Process.Pid {
+		t.Fatalf("processPid(started) = %d, want %d", got, cmd.Process.Pid)
+	}
+	// And a grpcProvider built with that pid surfaces it via providerPid.
+	gp := &grpcProvider{pid: cmd.Process.Pid}
+	if got := providerPid(gp); got != cmd.Process.Pid {
+		t.Fatalf("providerPid = %d, want %d", got, cmd.Process.Pid)
+	}
+}
