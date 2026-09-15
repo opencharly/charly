@@ -21,7 +21,8 @@ func (blockingProvider) Invoke(ctx context.Context, _ *Operation) (*Result, erro
 // TestInvokeTyped_FailsFastOnHungPlugin is the regression guard for the
 // deploy-del VM-member hang on the host→plugin LEAF path: it attaches no reverse
 // channel, so a hung plugin offers no progress signal and the guard is a
-// TOTAL-duration bound (the readiness absolute_cap, via pluginLeafCap).
+// TOTAL-duration bound (the RETAINED hardcoded pluginLeafCapDefault, via pluginLeafCap;
+// the pluginLeafCapOverride seam shrank it for this test).
 func TestInvokeTyped_FailsFastOnHungPlugin(t *testing.T) {
 	old := pluginLeafCapOverride
 	pluginLeafCapOverride = 100 * time.Millisecond

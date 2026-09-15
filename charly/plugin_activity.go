@@ -23,9 +23,10 @@ import (
 // runs ~13 min and was cut off at exactly 10m with `context deadline exceeded`
 // (measured: check-omarchy-iso-vm's R10 [update], 788 s, after 64/64 check-live).
 //
-// THE SIGNAL IS HOST-VISIBLE WORK, not wall-clock. Every reverse-channel LEAF the
+// THE SIGNAL IS HOST-VISIBLE WORK, not wall-clock. Every reverse-channel LEG the
 // host performs for the peer plugin (RunSystem/RunUser/PutFile/GetFile/RunCapture/
-// RunHostStep/HostBuild) touches the call's activity clock, and a long-running host
+// RunStream/RunInteractive/RunHostStep/HostBuild) heartbeats the call's activity
+// clock for its duration, and a long-running host
 // CHILD (host_build_cli's `charly …`, where the install actually runs) heartbeats
 // while it is alive. A call is IDLE only when no such activity occurred within the
 // no-progress window:
