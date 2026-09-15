@@ -351,6 +351,12 @@ type grpcProvider struct {
 	conn       *transport.Conn
 	lifecycle  bool // set ONLY for a class:deploy capability bringing its OWN host-side venue lifecycle (F6)
 	preresolve bool // set ONLY for a class:deploy capability declaring a host-side preresolve step (F6)
+	// pid is the out-of-process plugin's OS process id, captured at connect. The plugin
+	// call idle guard polls this process's CPU as a progress signal, so work the plugin
+	// does ENTIRELY LOCALLY (its own virsh/ssh retry children) is seen as progress — the
+	// gap that false-killed a legitimately-booting ISO guest (plugin_activity.go). 0 for
+	// an in-proc provider (no separate process).
+	pid int
 }
 
 func (g *grpcProvider) Invoke(ctx context.Context, op *Operation) (*Result, error) {
@@ -409,7 +415,7 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 				// live overlay-build inputs (M4): a lifecycle Invoke attaches them to the ctx
 				// (withOverlayBuildInputs) so the reverse server can re-thread them onto a
 				// HostBuild("overlay") builder ctx; nil for every other Invoke.
-				pb.RegisterExecutorServiceServer(s, &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx)})
+				pb.RegisterExecutorServiceServer(s, &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx), activity: pluginActivityFrom(ctx)})
 			}
 			if cc != nil {
 				pb.RegisterCheckContextServiceServer(s, cc)
@@ -438,7 +444,7 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 // gRPC-backed Providers AND the served CUE schema (source + per-capability input
 // defs). This is THE client-side construction — identical for an external plugin
 // and a builtin served out-of-process; the host never reads a candy schema/ dir.
-func buildUnit(conn *transport.Conn, caps *pb.Capabilities) (*PluginUnit, error) {
+func buildUnit(conn *transport.Conn, caps *pb.Capabilities, pid int) (*PluginUnit, error) {
 	// Version gate — a readable refusal here, never a later wire panic.
 	// ProtocolVersion is the ENFORCED wire-compatibility gate: a plugin built
 	// against a different charly proto/SDK speaks a different contract and is
@@ -455,7 +461,7 @@ func buildUnit(conn *transport.Conn, caps *pb.Capabilities) (*PluginUnit, error)
 	// preresolve flags (F6), which ONLY *grpcProvider carries (they need the reverse channel, and
 	// the executorInvoker discriminator is satisfied SOLELY by *grpcProvider).
 	providers, inputDefs, err := liftCapabilities(caps.GetProvided(), "plugin", func(meta capMeta, c *pb.ProvidedCapability) Provider {
-		gp := &grpcProvider{capMeta: meta, conn: conn}
+		gp := &grpcProvider{capMeta: meta, conn: conn, pid: pid}
 		if meta.class == ClassDeployTarget && c.GetLifecycle() {
 			gp.lifecycle = true
 		}

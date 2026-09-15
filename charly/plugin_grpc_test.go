@@ -84,7 +84,7 @@ func TestPluginGRPCRoundTrip(t *testing.T) {
 		t.Fatalf("describe provided = %v, want verb:testprobe with input_def #TestprobeInput", caps.GetProvided())
 	}
 
-	got, err := buildUnit(pc, caps)
+	got, err := buildUnit(pc, caps, 0)
 	if err != nil {
 		t.Fatalf("buildUnit: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestBuildUnitRefusesProtocolMismatch(t *testing.T) {
 		SchemaCue:       "#ExternalprobeInput: {marker?: string}\n",
 	}
 	// conn is nil: the gate must refuse before constructing any grpcProvider.
-	if _, err := buildUnit(nil, caps); err == nil {
+	if _, err := buildUnit(nil, caps, 0); err == nil {
 		t.Fatal("buildUnit accepted a protocol-version mismatch; want a readable refusal")
 	} else if !strings.Contains(err.Error(), "protocol version mismatch") {
 		t.Fatalf("error = %v, want it to name the protocol version mismatch", err)

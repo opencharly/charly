@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 )
 
 // provider_invoke.go — the ONE host→plugin call codec (R3). Before this file, ~20
@@ -24,22 +23,19 @@ import (
 // credential await-unlock, an in-proc reverse-channel executor for the arbiter). A
 // nil/empty reply body yields the zero Out — the guard every former hand skeleton
 // carried.
-// defaultPluginInvokeTimeout bounds a host→plugin call when the caller did not
-// provide a deadline. A hung out-of-process plugin must fail fast with a clear
-// error (context deadline exceeded), never deadlock the host forever — the
-// deploy-del VM-member hang (the deploy del + its plugins sat in futex_wait for
-// hours, 0% CPU).
-// defaultPluginInvokeTimeout is a package var (not a const) so a test can
-// override it to a short value.
-var defaultPluginInvokeTimeout = 10 * time.Minute
-
 func invokeTyped[In, Out any](ctx context.Context, prov Provider, word, op string, in In) (Out, error) {
 	var out Out
-	// Fail fast: apply a default timeout to the plugin call if the caller did
-	// not provide one — a hung plugin must not deadlock the host forever.
+	// Fail fast on a HUNG plugin when the caller supplied no deadline of its own. A
+	// host→plugin LEAF call (distro/resource/init/project/gpu/arbiter resolve) attaches
+	// NO reverse channel, so the plugin performs no host-visible work the host could use
+	// as a progress signal — a TOTAL-duration bound is therefore the only correct guard.
+	// It is the RETAINED former hardcoded 10m (pluginLeafCapDefault; this cutover must
+	// not loosen the leaf guard). The LONG, PROGRESSING case lives on the plugin→plugin
+	// path (InvokeProvider), which has the reverse channel and uses the idle bound
+	// (plugin_activity.go).
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultPluginInvokeTimeout)
+		ctx, cancel = context.WithTimeout(ctx, pluginLeafCap())
 		defer cancel()
 	}
 	params, err := marshalJSON(in)
@@ -48,7 +44,7 @@ func invokeTyped[In, Out any](ctx context.Context, prov Provider, word, op strin
 	}
 	res, err := prov.Invoke(ctx, &Operation{Reserved: word, Op: op, Params: params})
 	if err != nil {
-		return out, err
+		return out, pluginInvokeErr(ctx, "host->plugin "+word, err)
 	}
 	if res != nil && len(res.JSON) > 0 {
 		if err := json.Unmarshal(res.JSON, &out); err != nil {

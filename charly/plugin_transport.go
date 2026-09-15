@@ -82,7 +82,7 @@ func (t *LocalTransport) Connect(ctx context.Context) (*PluginUnit, io.Closer, e
 		cmd.Env = append(cmd.Env, "CHARLY_BIN="+exe)
 	}
 	client := plugin.NewClient(localPluginClientConfig(cmd))
-	unit, err := connectAndDescribe(ctx, client, t.readyTimeout(), func() { killPluginClient(client, cmd) })
+	unit, err := connectAndDescribe(ctx, client, t.readyTimeout(), func() { killPluginClient(client, cmd) }, cmd)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -118,6 +118,15 @@ func localPluginClientConfig(cmd *exec.Cmd) *plugin.ClientConfig {
 	}
 }
 
+// processPid returns cmd's OS pid once it has been started, or 0 when cmd is nil or not
+// yet started. Nil-safe: the idle guard's CPU-progress source is simply absent at 0.
+func processPid(cmd *exec.Cmd) int {
+	if cmd == nil || cmd.Process == nil {
+		return 0
+	}
+	return cmd.Process.Pid
+}
+
 func pluginClientLogger(output io.Writer) hclog.Logger {
 	return hclog.New(&hclog.LoggerOptions{
 		Name:   "charly.plugin",
@@ -136,12 +145,15 @@ func pluginClientLogger(output io.Writer) hclog.Logger {
 //
 // readTimeout bounds ONLY the readiness read (the describe leg), started after the handshake — see
 // pluginReadyTimeout for why the bound belongs to that leg and not to the whole connect.
-func connectAndDescribe(ctx context.Context, client *plugin.Client, readTimeout time.Duration, teardown func()) (*PluginUnit, error) {
+func connectAndDescribe(ctx context.Context, client *plugin.Client, readTimeout time.Duration, teardown func(), cmd *exec.Cmd) (*PluginUnit, error) {
 	rpc, err := client.Client()
 	if err != nil {
 		teardown()
 		return nil, pluginPhase("start/handshake", fmt.Errorf("plugin client: %w", err))
 	}
+	// The plugin process is STARTED only now (client.Client spawns it), so its pid is
+	// available only here — capture it for the idle guard's CPU-progress poll.
+	pid := processPid(cmd)
 	raw, err := rpc.Dispense(transport.DispenseKey)
 	if err != nil {
 		teardown()
@@ -159,7 +171,7 @@ func connectAndDescribe(ctx context.Context, client *plugin.Client, readTimeout 
 	}
 	// buildUnit applies the protocol-version gate (a readable refusal, not a later
 	// wire panic) before lifting caps → unit.
-	unit, err := buildUnit(conn, caps)
+	unit, err := buildUnit(conn, caps, pid)
 	if err != nil {
 		teardown()
 		return nil, pluginPhase("protocol-gate", err)

@@ -16,9 +16,9 @@ import (
 // goroutine in futex_wait forever (the recurring deploy-del VM-member hang that
 // #468's host→plugin guard did not cover).
 func TestInvokeProvider_FailsFastOnHungPeer(t *testing.T) {
-	old := defaultPluginInvokeTimeout
-	defaultPluginInvokeTimeout = 100 * time.Millisecond
-	defer func() { defaultPluginInvokeTimeout = old }()
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 100 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
 
 	// Register a blocking provider the broker can resolve.
 	RegisterBuiltinProvider(blockingProvider{})
@@ -30,9 +30,9 @@ func TestInvokeProvider_FailsFastOnHungPeer(t *testing.T) {
 		Op:       "run",
 	})
 	if err == nil {
-		t.Fatal("InvokeProvider with a hung peer: expected a timeout error, got nil")
+		t.Fatal("InvokeProvider with a hung peer: expected an idle-timeout error, got nil")
 	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("InvokeProvider with a hung peer: expected context.DeadlineExceeded, got %v", err)
+	if !errors.Is(err, errPluginCallIdle) {
+		t.Fatalf("InvokeProvider with a hung peer: expected errPluginCallIdle, got %v", err)
 	}
 }
