@@ -121,7 +121,9 @@ func TestIdleBoundedContext_PluginLocalCPUIsProgress(t *testing.T) {
 	defer func() { pluginInvokeNoProgressOverride = old }()
 
 	// A real child that burns CPU for ~2s — the plugin process's OWN work, no host leg.
-	cmd := exec.Command("sh", "-c", "end=$((SECONDS+2)); while [ $SECONDS -lt $end ]; do :; done")
+	// POSIX-only loop (no $SECONDS, a bash/ksh extension): under dash this must still
+	// actually spin, else the test would silently skip on the CI image.
+	cmd := exec.Command("sh", "-c", "i=0; while [ $i -lt 100000000 ]; do i=$((i+1)); done")
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start cpu-burner: %v", err)
 	}
@@ -139,7 +141,7 @@ func TestIdleBoundedContext_PluginLocalCPUIsProgress(t *testing.T) {
 		base = procCPUTicks(cmd.Process.Pid)
 	}
 	if base == 0 {
-		t.Skip("procCPUTicks unavailable on this platform — the CPU-progress path cannot be exercised")
+		t.Fatal("procCPUTicks never left 0 for a busy child — the CPU-progress path is not being exercised")
 	}
 	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
 	select {
@@ -173,4 +175,37 @@ func TestProcCPUTicks_Monotonic(t *testing.T) {
 	if second <= first {
 		t.Fatalf("procCPUTicks must advance for a busy process: first=%d second=%d", first, second)
 	}
+}
+
+// TestIdleBoundedContext_LongHostLegIsProgress pins the third progress path: a host
+// reverse LEG that itself runs longer than the no-progress window (a multi-minute
+// RunSystem/RunHostStep/HostBuild) must keep the call alive for its whole duration.
+// The plugin is blocked in the RPC and its CPU frozen then, so without the leg
+// heartbeat the idle guard would kill precisely the plugin-legitimate-long-work class
+// this change exists to protect (review finding 6).
+func TestIdleBoundedContext_LongHostLegIsProgress(t *testing.T) {
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 300 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
+
+	a := &pluginActivity{} // no pid: the CPU source is silent, only the leg heartbeat can act
+	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+	// A host leg running 1s — >3x the window — wrapped by the heartbeat.
+	done := make(chan error, 1)
+	go func() {
+		_, err := withActivityHeartbeat(a, func() (int, error) {
+			time.Sleep(1 * time.Second)
+			return 0, nil
+		})
+		done <- err
+	}()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("a long host leg must not be idle-killed, got %v", context.Cause(ctx))
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("host leg: %v", err)
+		}
+	}
+	stop()
 }

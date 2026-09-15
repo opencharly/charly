@@ -137,18 +137,16 @@ func providerPid(prov Provider) int {
 	return 0
 }
 
-// pluginInvokeNoProgress resolves the no-progress window: test override, else the
-// project readiness `no_progress`, else the built-in fallback. loadedReadiness() is
-// sync.Once-cached + re-entrancy-guarded (it returns built-in defaults mid-load), so
-// this is safe from any call site and cheap after the first.
+// pluginInvokeNoProgress resolves the no-progress window: the test override, else the
+// project readiness `no_progress`. That field is ALWAYS populated — poll.ResolveReadiness
+// fills it from readinessNoProgressFallback and ValidateOrdering rejects a non-positive
+// set — so there is no second literal here (R3); loadedReadiness() is sync.Once-cached
+// and re-entrancy-guarded (built-in defaults mid-load), so this is safe anywhere.
 func pluginInvokeNoProgress() time.Duration {
 	if pluginInvokeNoProgressOverride > 0 {
 		return pluginInvokeNoProgressOverride
 	}
-	if np := loadedReadiness().NoProgress; np > 0 {
-		return np
-	}
-	return 90 * time.Second
+	return loadedReadiness().NoProgress
 }
 
 // idleBoundedContext returns a context cancelled with errPluginCallIdle when the
@@ -224,17 +222,40 @@ func procCPUTicks(pid int) uint64 {
 	return sum
 }
 
-// startPluginActivityHeartbeat touches the clock every 5s until stopped. host_build_cli
-// wraps its blocking host-child run with this so the child being ALIVE is forward
-// progress for the whole (possibly ~13min) duration — the signal that distinguishes a
-// progressing install from a wedged plugin.
+// withActivityHeartbeat runs fn while heartbeating the clock every 5s, so a host reverse
+// leg that itself runs longer than the no-progress window (a RunSystem/RunHostStep doing
+// a multi-minute build, say) is seen as progressing for its whole duration. The plugin is
+// blocked in the RPC and its own CPU is frozen then, so the LEG'S duration is the signal.
+func withActivityHeartbeat[T any](a *pluginActivity, fn func() (T, error)) (T, error) {
+	stop := startPluginActivityHeartbeat(a)
+	defer stop()
+	return fn()
+}
+
+// withActivityHeartbeatErr is withActivityHeartbeat for an error-only operation.
+func withActivityHeartbeatErr(a *pluginActivity, fn func() error) error {
+	stop := startPluginActivityHeartbeat(a)
+	defer stop()
+	return fn()
+}
+
+// startPluginActivityHeartbeat touches the clock every beat until stopped, where beat
+// is DERIVED from the no-progress window (never a fixed 5s): a host leg / host child
+// that runs longer than the window must be heartbeated WITHIN it, else the guard would
+// still kill it. host_build_cli and the host reverse legs wrap their blocking work with
+// this so the work being ALIVE is forward progress for its whole (possibly ~13min)
+// duration — the signal that distinguishes a progressing operation from a wedged plugin.
 func startPluginActivityHeartbeat(a *pluginActivity) func() {
 	if a == nil {
 		return func() {}
 	}
+	interval := pluginInvokeNoProgress() / 4
+	if interval <= 0 || interval > 5*time.Second {
+		interval = 5 * time.Second // cap the beat; still window-derived when the window is small
+	}
 	stop := make(chan struct{})
 	go func() {
-		t := time.NewTicker(5 * time.Second)
+		t := time.NewTicker(interval)
 		defer t.Stop()
 		for {
 			select {

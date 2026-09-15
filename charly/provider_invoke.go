@@ -28,10 +28,11 @@ func invokeTyped[In, Out any](ctx context.Context, prov Provider, word, op strin
 	// Fail fast on a HUNG plugin when the caller supplied no deadline of its own. A
 	// host→plugin LEAF call (distro/resource/init/project/gpu/arbiter resolve) attaches
 	// NO reverse channel, so the plugin performs no host-visible work the host could use
-	// as a progress signal — a total-duration bound is therefore the only correct guard,
-	// and it is sourced from the readiness config's absolute_cap (no hardcoded literal).
-	// The LONG, PROGRESSING case lives on the plugin→plugin path (InvokeProvider), which
-	// has the reverse channel and uses the idle bound (plugin_activity.go).
+	// as a progress signal — a TOTAL-duration bound is therefore the only correct guard.
+	// It is the RETAINED former hardcoded 10m (pluginLeafCapDefault; this cutover must
+	// not loosen the leaf guard). The LONG, PROGRESSING case lives on the plugin→plugin
+	// path (InvokeProvider), which has the reverse channel and uses the idle bound
+	// (plugin_activity.go).
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, pluginLeafCap())

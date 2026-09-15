@@ -25,8 +25,11 @@ import (
 const cliBuilderKind = "cli"
 
 // hostBuildCli runs a `charly <argv>` subcommand host-side and returns the CliReply. A non-zero exit
-// rides CliReply.Error unless BestEffort. The context is unused (an interactive leg must not be
-// deadlined — the host TTY owns its lifetime, like the operator running the command directly).
+// rides CliReply.Error unless BestEffort. The context carries this call's plugin-activity clock
+// (plugin_activity.go): while the child runs, runCliSubcommand heartbeats it, so the enclosing
+// plugin call is seen as progressing for the child's whole (possibly ~13min) duration. The
+// context is NOT used as a deadline (an interactive leg must not be deadlined — the host TTY
+// owns its lifetime, like the operator running the command directly).
 func hostBuildCli(ctx context.Context, req spec.CliRequest, _ buildEngineContext) (spec.CliReply, error) {
 	executable, err := os.Executable()
 	if err != nil {

@@ -291,7 +291,6 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 // to a standalone build request. M13/M14 register the image/kustomize builders onto this seam.
 func (s *executorReverseServer) HostBuild(ctx context.Context, req *pb.HostBuildRequest) (*pb.HostBuildReply, error) {
 	fn, ok := hostBuilderFor(req.GetKind())
-	s.activity.touch()
 	if !ok {
 		return &pb.HostBuildReply{Error: fmt.Sprintf("no host-builder registered for kind %q", req.GetKind())}, nil
 	}
@@ -304,7 +303,12 @@ func (s *executorReverseServer) HostBuild(ctx context.Context, req *pb.HostBuild
 	// (host_build_cli) heartbeats it while its host child runs, so a long install is
 	// seen as progress by the idle guard.
 	ctx = withPluginActivity(ctx, s.activity)
-	result, err := fn(ctx, req.GetSpecJson(), s.build)
+	var result []byte
+	err := withActivityHeartbeatErr(s.activity, func() error {
+		var ferr error
+		result, ferr = fn(ctx, req.GetSpecJson(), s.build)
+		return ferr
+	})
 	if err != nil {
 		return &pb.HostBuildReply{Error: err.Error()}, nil
 	}
