@@ -369,7 +369,12 @@ Every AI-authored commit, including a merge commit, ends with:
 
 Use the exact harness, provider, and full model name exposed by the authoring
 runtime. Every AI-authored issue or PR ends with the matching italicized line.
-A 100% human-authored contribution carries no AI attribution.
+A 100% human-authored contribution carries no AI attribution. A body emitted by a
+fixed, model-free CI generator (a committed `printf/echo` block with no LLM in the
+loop) has no AI provider or model: it ends with `*Assisted-by: <Harness> <Runtime>
+(<confidence>)*` (the automation + runner identity, e.g. `GitHub Actions
+ubuntu-latest`), never a fabricated model name and never an `N/A` placeholder.
+*Detail:* `/charly-internals:git-workflow`.
 
 | Confidence | Required proof |
 |---|---|
