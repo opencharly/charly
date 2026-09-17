@@ -87,3 +87,14 @@ jobs:
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
           "$(go env GOPATH)/bin/golangci-lint" run ./charly/...
+          # The root .golangci.yml states it governs the tools/* modules as well
+          # as charly/, but `run ./charly/...` never reaches them — they are
+          # separate GOWORK=off modules. Same detection hole the `Test tools
+          # modules` step closes for tests; the lint sweep is part of it.
+          fail=0
+          for d in tools/*/; do
+            [ -f "$d/go.mod" ] || continue
+            echo "== lint $d =="
+            ( cd "$d" && GOWORK=off "$(go env GOPATH)/bin/golangci-lint" run ./... ) || fail=1
+          done
+          exit $fail
