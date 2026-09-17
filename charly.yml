@@ -3159,6 +3159,63 @@ check-commands-local:
                 command: ${CHARLY_BIN} reap-orphans
                 in_container: false
 # =================================================================
+# check-loader-flat-import-local — R10 witness for the FLAT-import plugin PRESCAN path.
+#
+# The changed code is the import leg of `prescanDeclaredPluginWords` (charly/plugin_prescan.go):
+# a FLAT `import:` entry (a bare sibling filename, e.g. `- flat.yml`) must be decoded by the
+# canonical `spec.ImportList` decoder AND its own pinned plugin refs read, so a plugin-provided
+# kind word (`examplekind:`) is registered BEFORE parse.
+#
+# The bed validates the COMMITTED fixture `charly/testdata/flat-import-project` (so it needs the
+# repo tree, not merely the binary): the root's flat `import: - flat.yml` points at a sibling
+# that carries BOTH the pin for the out-of-tree plugin-example-kind plugin AND an `examplekind:`
+# entity it provides — the only plugin ref in the project. Both halves of the fix are therefore
+# witnessed: a pre-fix binary fails at parse (the flat decode aborted the prescan), and a binary
+# with ONLY the decode fix also fails (the flat file's refs were never read, so `examplekind`
+# never registers). The fixed binary validates OK.
+# =================================================================
+check-loader-flat-import-app:
+    local:
+        description: |-
+            Minimal kind:local template for check-loader-flat-import-local — no candies: the
+            bed validates a committed fixture with the host charly binary.
+        candy: []
+        plan:
+            - check: the bed's host has a charly binary
+              id: charly-present
+              context:
+                - runtime
+              command:
+                command: "test -x ${CHARLY_BIN}"
+                in_container: false
+check-loader-flat-import-local:
+    local:
+        from: check-loader-flat-import-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole R10 witness for the FLAT-import plugin prescan path (charly/plugin_prescan.go's
+            import leg). Validates the committed fixture charly/testdata/flat-import-project: a
+            root charly.yml whose `import:` has a FLAT bare-filename entry (`- flat.yml`); the
+            flat-imported sibling carries BOTH the only pin for the out-of-tree plugin-example-kind
+            plugin AND an `examplekind:` entity it provides. `charly box validate -C <fixture>`
+            proves the flat entry decoded (the prescan ran) AND the flat file's own ref was read
+            (so the plugin kind word registered) — a pre-fix binary fails at parse with "no kind
+            discriminator", and a decode-fix-only binary (flat read removed) ALSO fails, so both
+            halves of the fix are witnessed by this ONE bed.
+        plan:
+            - check: a flat import plus a plugin-provided kind validates (both the decode fix and the flat-file read are exercised)
+              id: loader-flat-import-validates
+              exit_status: 0
+              stdout:
+                - contains: 'box validate: OK'
+              context:
+                - runtime
+              command:
+                command: "${CHARLY_BIN} box validate -C charly/testdata/flat-import-project"
+                in_container: false
+# =================================================================
 # check-gpu-local — R10 witness for cutover C11's externalized GPU/VFIO HOST-DETECTION
 # (candy/plugin-gpu, verb:gpu) — the DETECTION cluster of the core-externalization program.
 # A disposable kind:local deploy on host: local that runs the two deterministic, GPU-less

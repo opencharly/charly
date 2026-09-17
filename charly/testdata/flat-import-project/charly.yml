@@ -1,0 +1,15 @@
+# A fixture for the FLAT-import plugin PRESCAN path (charly/plugin_prescan.go's import leg).
+#
+# The root's `import:` has a FLAT bare-filename entry (`- flat.yml`, the per-kind sibling-file
+# split shape). `flat.yml` carries BOTH the pin for the out-of-tree plugin-example-kind plugin
+# AND an `examplekind:` entity it provides — so the kind word is prescanned ONLY when the flat
+# file is read.
+#
+# A pre-fix charly fails at parse with `node "probe-kind": no kind discriminator` (the flat
+# decode aborted the whole prescan). A charly with ONLY the decode fix (no flat-file read) ALSO
+# fails here, because the plugin ref was never seen. The fixed charly validates OK. Used by the
+# R10 bed check-loader-flat-import-local and by the prescan unit tests.
+version: 2026.249.2125
+import:
+    - flat.yml
+discover: []

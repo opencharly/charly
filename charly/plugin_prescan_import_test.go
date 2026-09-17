@@ -81,3 +81,59 @@ func TestResolveImportedProject_PrefersLocalCheckout(t *testing.T) {
 		t.Errorf("resolved %q, want the local checkout %q", got, local)
 	}
 }
+
+// A FLAT import entry (`- vm.yml`) is a bare-string ref, not the `alias: ref` map shape.
+// Decoding `import:` as []map[string]string made the WHOLE struct unmarshal fail on the
+// first bare string, so the early return skipped the discover walk AND the import leg: a
+// project with a flat import plus any plugin-provided kind failed to parse EVERY document
+// with "no kind discriminator" (the kind word was never prescanned).
+//
+// This test proves BOTH halves of the import leg:
+//   - the DECODE fix (spec.ImportList) lets the walk run at all — asserted via the
+//     discovered manifest's declared word; and
+//   - the FLAT-file read registers the sibling's OWN declared word — `flatprobe` lives
+//     ONLY inside the flat-imported file, so deleting the `!strings.HasPrefix(ref, "@")`
+//     branch (which the decode-only fix would survive) fails this assertion.
+func TestPrescan_FlatImportDoesNotAbortTheWalk(t *testing.T) {
+	dir := t.TempDir()
+	// A flat sibling file imported by bare name (the per-kind split shape). It carries its
+	// OWN plugin declaration — the word `flatprobe` is reachable ONLY by reading this file.
+	if err := os.WriteFile(filepath.Join(dir, "vm.yml"), []byte(
+		"flat-vm:\n    candy:\n        plugin:\n            providers:\n                - kind:flatprobe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A discovered candy manifest that declares a DIFFERENT external kind word.
+	candy := filepath.Join(dir, "candy", "decl")
+	if err := os.MkdirAll(candy, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(candy, "charly.yml"), []byte(
+		"decl:\n    candy:\n        plugin:\n            providers:\n                - kind:prescanprobe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	root := []byte("import:\n    - vm.yml\ndiscover:\n    - path: candy\n      recursive: true\n")
+
+	for _, w := range []string{"prescanprobe", "flatprobe"} {
+		declaredDeployMu.Lock()
+		delete(declaredKind, w)
+		declaredDeployMu.Unlock()
+	}
+	t.Cleanup(func() {
+		for _, w := range []string{"prescanprobe", "flatprobe"} {
+			declaredDeployMu.Lock()
+			delete(declaredKind, w)
+			declaredDeployMu.Unlock()
+		}
+	})
+
+	prescanDeclaredPluginWords(root, dir)
+
+	if !isDeclaredExternalKind("prescanprobe") {
+		t.Fatal("discover walk was skipped on a flat-import project — the declared kind word was never registered")
+	}
+	// The FLAT branch's own coverage: without it this word never registers.
+	if !isDeclaredExternalKind("flatprobe") {
+		t.Fatal("the flat-imported sibling file's own plugin declaration was never prescanned — the flat branch is missing")
+	}
+}

@@ -390,7 +390,15 @@ func declaredExternalCommandWords() []string {
 func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 	var doc struct {
 		Discover spec.DiscoverConfig `yaml:"discover"`
-		Import   []map[string]string `yaml:"import"`
+		// Import MUST use the canonical mixed-shape decoder (spec.ImportList): `import:` is a
+		// list whose items are EITHER a bare string (a flat import — the per-kind sibling-file
+		// split, e.g. `- vm.yml`) OR a single-key `alias: ref` map. Decoding it as
+		// []map[string]string made a bare-string entry fail the WHOLE struct unmarshal, so the
+		// early return below skipped the local discover walk AND the import leg entirely: a
+		// project with a flat import plus any plugin-provided kind (e.g. `pipeline:`) then
+		// failed to parse EVERY document with "no kind discriminator", because the plugin's
+		// kind word was never prescanned. spec.ImportList is the ONE decoder (R3).
+		Import spec.ImportList `yaml:"import"`
 	}
 	// A missing/!unparseable discover: block skips the LOCAL walk only. The remote leg
 	// below is about @github refs, which have nothing to do with local discovery: gating
@@ -449,35 +457,60 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 			}
 		}
 	}
-	// The IMPORT leg. A project's `import:` namespaces resolve to WHOLE PROJECTS (a
-	// distro repo, or the local box/<name> submodule a ref maps to), and their manifests
+	// The IMPORT leg. A project's `import:` entries resolve to WHOLE PROJECTS (a
+	// distro repo, or the local box/<name> submodule a ref maps to) OR to sibling
+	// per-kind files (a flat bare-path import, e.g. `- vm.yml`), and their manifests
 	// carry plugin refs of their own — a bed in an imported box that authors a plugin
-	// verb's SCALAR shorthand needs that verb's `plugin: primary:` registered BEFORE parse,
-	// exactly like one in the root file.
+	// verb's SCALAR shorthand needs that verb's `plugin: primary:` registered BEFORE
+	// parse, exactly like one in the root file.
 	//
-	// Without this leg the root's own refs and its discovered candies' refs were prescanned
-	// and an imported box's were not, so `cstream: status` in box/cachyos failed to parse
-	// with "declares no primary field for the scalar shorthand" — while the SAME manifest
-	// validated cleanly from its own repo root, where it IS the root file. That asymmetry
-	// (green standing alone, red composed) is the shape this closes.
-	for _, ns := range doc.Import {
-		for name, ref := range ns {
-			ref = strings.TrimSpace(ref)
-			if !strings.HasPrefix(ref, "@") {
-				continue
-			}
-			dir, err := resolveImportedProject(name, strings.TrimPrefix(ref, "@"), baseDir)
-			if err != nil {
-				continue
-			}
-			manifest := filepath.Join(dir, spec.UnifiedFileName)
-			prescanPluginManifest(manifest)
-			if b, err := os.ReadFile(manifest); err == nil {
-				allData = append(allData, b...)
-			}
+	// Without this leg the root's own refs and its discovered candies' refs were
+	// prescanned and an imported box's were not, so `cstream: status` in box/cachyos
+	// failed to parse with "declares no primary field for the scalar shorthand" —
+	// while the SAME manifest validated cleanly from its own repo root, where it IS
+	// the root file. That asymmetry (green standing alone, red composed) is the shape
+	// this closes.
+	//
+	// A FLAT entry (Namespace == "") is a local sibling file: read it directly so its
+	// plugin refs reach the remote leg too. A NAMESPACED entry mounts a whole project
+	// (a distro repo / local box/<name> submodule) whose manifest is prescanned and
+	// whose bytes join allData for the remote leg.
+	for _, imp := range doc.Import {
+		ref := strings.TrimSpace(imp.Ref)
+		if ref == "" {
+			continue
 		}
+		if !strings.HasPrefix(ref, "@") {
+			// FLAT local sibling file (the per-kind split): read + prescan it so its
+			// own pinned plugin refs register before parse.
+			p := ref
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(baseDir, p)
+			}
+			prescanAndCollect(p, &allData)
+			continue
+		}
+		if imp.Namespace == "" {
+			continue
+		}
+		dir, err := resolveImportedProject(imp.Namespace, strings.TrimPrefix(ref, "@"), baseDir)
+		if err != nil {
+			continue
+		}
+		prescanAndCollect(filepath.Join(dir, spec.UnifiedFileName), &allData)
 	}
 	prescanRemotePluginManifests(allData, baseDir)
+}
+
+// prescanAndCollect registers the external words a manifest declares AND appends its bytes to
+// allData for the remote ref leg — the ONE idiom both import shapes (flat local sibling file,
+// namespaced whole project) drive (R3). Best-effort: a missing/unreadable file registers nothing
+// and appends nothing, exactly like the byte-gated per-manifest prescan it wraps.
+func prescanAndCollect(path string, allData *[]byte) {
+	prescanPluginManifest(path)
+	if b, err := os.ReadFile(path); err == nil {
+		*allData = append(*allData, b...)
+	}
 }
 
 // resolveImportedProject resolves one `import:` ref to the directory holding its manifest —
