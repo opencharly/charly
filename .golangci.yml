@@ -1,26 +1,28 @@
-# Root config — the ONLY config the 95 modules below this directory see:
-# the 91 `candy/*` modules and the 4 `tools/*` modules. (An earlier revision said
-# "the 91 candy/* modules"; it governs `tools/` too, which nobody had enumerated.)
+# Root config — the ONLY config for every module below this directory: the
+# `charly` module and the `tools/*` modules. (The in-repo `candy/*` modules are
+# gone — the candy de-submodule cutover moved every plugin candy to its own
+# repo — and the counts that used to be spelled out here went stale the moment
+# that landed. The scope is expressed STRUCTURALLY now: every `go.mod` under
+# this directory, which is what golangci-lint's walk-up discovery resolves to
+# for each of them. Two earlier claims are retired with it: "95 modules" (the
+# current tree has 6) and the note that `tools/golden-cloudinit` /
+# `tools/golden-compile` "do not build" — both build and lint clean now, and
+# the `Test tools modules` + tools-lint CI steps keep them that way.)
 #
-# DISCOVERED by 95, ANALYSABLE in 93. `tools/golden-cloudinit` and `tools/golden-compile`
-# do not build — `go: updates to go.mod needed` — so golangci-lint reports "no go files to
-# analyze" even though both have a main.go. That is a pre-existing defect this gate now
-# surfaces, not one it causes; its fix is a `go mod tidy` that also bumps the go directive
-# and the spec require, i.e. a version adoption, routed to the module-hygiene batch.
+# golangci-lint discovers a config by walking UP from the working directory, so
+# this ONE file covers `charly/` and every `tools/*` module — it is an ancestor of
+# each. Each module MAY keep its own closer config (the closest wins): `charly/`
+# does, because it needs a stricter, explicitly-curated linter set than the
+# standard one below.
 #
-# golangci-lint discovers a config by walking UP from the working directory, and
-# `charly/.golangci.yml` is NOT an ancestor of `candy/<name>/`, so before this file
-# those modules ran with "No config file detected" — which means they ran golangci-lint's
-# DEFAULT STANDARD SET (errcheck, govet, ineffassign, staticcheck, unused), not nothing.
-# A per-module copy would put the same block in 90+ places (R3); one root config
-# covers them all, and a module that wants more (candy/plugin-check) keeps its own,
-# because the CLOSEST config wins.
-#
-# `default: standard` is therefore what these modules ALREADY ran. An earlier revision
-# set `default: none` on the belief that "no config" meant "no linting" — it does not,
-# and that silenced 5 live findings across 3 modules. This config ADDS gofmt and removes
-# nothing. The eleven quality linters the three named module configs use are still
-# deliberately NOT enabled here; that remains a separate, measured cutover.
+# `default: standard` (errcheck, govet, ineffassign, staticcheck, unused) is the
+# baseline for every module below this directory, and this config ADDS gofmt and
+# the errcheck exclusions below, and removes nothing. The eleven curated
+# quality/idiom linters are NOT enabled here — they are enabled in
+# `charly/.golangci.yml`, the module's own closer config, which wins for
+# `charly/`; the `tools/*` modules run this baseline alone. Enforcing both in CI
+# is what the `ci.yml` golangci-lint step does, for `charly/` and now for the
+# `tools/*` modules as well.
 version: "2"
 
 run:
@@ -30,8 +32,8 @@ linters:
   default: standard
   settings:
     errcheck:
-      # The SAME exclusions the charly core module already carries. Without them the root config
-      # would hold the 91 candy modules to a STRICTER errcheck than core, which is not a
+      # The SAME exclusions `charly/.golangci.yml` carries. Without them this root config
+      # would hold the tools/* modules to a STRICTER errcheck than charly, which is not a
       # gate improvement — it is an inconsistency that happens to fail. A deferred
       # best-effort Close on a response body or a read handle is the idiomatic form;
       # genuinely actionable errors are not excluded.

@@ -91,9 +91,9 @@ func TestContractPinsMatchShared(t *testing.T) {
 	// The sdk pin WAS a hardcoded constant, on the premise that core imports zero sdk
 	// packages and so offers no anchor. Core now carries an sdk require (indirect, via
 	// the compiled-in plugin modules), so anchor it exactly as spec is anchored. The
-	// constant had already drifted from the tree it polices (v0.2026234.347 against the
-	// tree's v0.2026241.1032) — the argument against a hand-maintained copy of a value
-	// that already exists in the tree.
+	// constant had already drifted from the tree it polices (the constant said
+	// v0.2026234.347 while the tree carried a later pin) — the argument against a
+	// hand-maintained copy of a value that already exists in the tree.
 	wantSDK, okSDK := corePins["sdk"]
 	if !okSDK {
 		t.Fatalf("%s: no `github.com/opencharly/sdk <version>` require found — the core module "+
