@@ -16,9 +16,13 @@
 # standard one below.
 #
 # `default: standard` (errcheck, govet, ineffassign, staticcheck, unused) is the
-# baseline: this config ADDS gofmt and the curated quality/idiom set, and removes
-# nothing. Enforcing it in CI is what the `ci.yml` golangci-lint step does, for
-# `charly/` and now for the `tools/*` modules as well.
+# baseline for every module below this directory, and this config ADDS gofmt and
+# the errcheck exclusions below, and removes nothing. The eleven curated
+# quality/idiom linters are NOT enabled here — they are enabled in
+# `charly/.golangci.yml`, the module's own closer config, which wins for
+# `charly/`; the `tools/*` modules run this baseline alone. Enforcing both in CI
+# is what the `ci.yml` golangci-lint step does, for `charly/` and now for the
+# `tools/*` modules as well.
 version: "2"
 
 run:
