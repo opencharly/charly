@@ -32,8 +32,8 @@ linters:
   default: standard
   settings:
     errcheck:
-      # The SAME exclusions the charly core module already carries. Without them the root config
-      # would hold the 91 candy modules to a STRICTER errcheck than core, which is not a
+      # The SAME exclusions `charly/.golangci.yml` carries. Without them this root config
+      # would hold the tools/* modules to a STRICTER errcheck than charly, which is not a
       # gate improvement — it is an inconsistency that happens to fail. A deferred
       # best-effort Close on a response body or a read handle is the idiomatic form;
       # genuinely actionable errors are not excluded.
