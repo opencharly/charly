@@ -1,0 +1,4 @@
+# A FLAT-imported sibling file carrying a plugin-provided kind entity (`examplekind`).
+probe-kind:
+    examplekind:
+        marker: value

@@ -1,0 +1,16 @@
+# A fixture for the FLAT-import plugin PRESCAN path (charly/plugin_prescan.go's import leg).
+#
+# The root's `import:` has a FLAT bare-filename entry (`- flat.yml`, the per-kind sibling-file
+# split shape) AND a `discover:` of a candy whose ONLY job is to pin an out-of-tree
+# plugin-provided kind (`examplekind`). The flat-imported file declares that kind.
+#
+# A pre-fix charly fails at parse with `node "probe-kind": no kind discriminator` — the flat
+# decode aborted the whole prescan, so the discover walk never ran and `examplekind` was never
+# registered. The fixed charly validates OK. Used by the R10 bed
+# check-loader-flat-import-local and by the prescan unit tests.
+version: 2026.249.2125
+import:
+    - flat.yml
+discover:
+    - path: candy
+      recursive: true

@@ -487,10 +487,7 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 			if !filepath.IsAbs(p) {
 				p = filepath.Join(baseDir, p)
 			}
-			prescanPluginManifest(p)
-			if b, err := os.ReadFile(p); err == nil {
-				allData = append(allData, b...)
-			}
+			prescanAndCollect(p, &allData)
 			continue
 		}
 		if imp.Namespace == "" {
@@ -500,13 +497,20 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 		if err != nil {
 			continue
 		}
-		manifest := filepath.Join(dir, spec.UnifiedFileName)
-		prescanPluginManifest(manifest)
-		if b, err := os.ReadFile(manifest); err == nil {
-			allData = append(allData, b...)
-		}
+		prescanAndCollect(filepath.Join(dir, spec.UnifiedFileName), &allData)
 	}
 	prescanRemotePluginManifests(allData, baseDir)
+}
+
+// prescanAndCollect registers the external words a manifest declares AND appends its bytes to
+// allData for the remote ref leg — the ONE idiom both import shapes (flat local sibling file,
+// namespaced whole project) drive (R3). Best-effort: a missing/unreadable file registers nothing
+// and appends nothing, exactly like the byte-gated per-manifest prescan it wraps.
+func prescanAndCollect(path string, allData *[]byte) {
+	prescanPluginManifest(path)
+	if b, err := os.ReadFile(path); err == nil {
+		*allData = append(*allData, b...)
+	}
 }
 
 // resolveImportedProject resolves one `import:` ref to the directory holding its manifest —

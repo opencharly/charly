@@ -3159,6 +3159,62 @@ check-commands-local:
                 command: ${CHARLY_BIN} reap-orphans
                 in_container: false
 # =================================================================
+# check-loader-flat-import-local — R10 witness for the FLAT-import plugin PRESCAN path.
+#
+# The changed code is the import leg of `prescanDeclaredPluginWords` (charly/plugin_prescan.go):
+# a FLAT `import:` entry (a bare sibling filename, e.g. `- flat.yml`) must be decoded by the
+# canonical `spec.ImportList` decoder AND its own pinned plugin refs read, so a plugin-provided
+# kind word (`examplekind:`) is registered BEFORE parse. Before the fix the flat decode failed
+# the whole struct unmarshal, the discover walk was skipped, and EVERY document carrying the
+# plugin kind failed with "no kind discriminator".
+#
+# A disposable kind:local deploy on host: local writes the exact fixture to a temp dir and runs
+# `charly box validate` against it: the flat-imported file declares an `examplekind:` entity, and
+# the plugin ref lives ONLY in a discovered candy — so the validation passing proves BOTH the
+# decode fix and the flat-file read (each alone leaves the other broken).
+# =================================================================
+check-loader-flat-import-app:
+    local:
+        description: |-
+            Minimal kind:local template for check-loader-flat-import-local — no candies: the
+            bed only needs the host charly binary + a temp dir.
+        candy: []
+        plan:
+            - check: the bed's host has a charly binary
+              id: charly-present
+              context:
+                - runtime
+              command:
+                command: "test -x ${CHARLY_BIN}"
+                in_container: false
+check-loader-flat-import-local:
+    local:
+        from: check-loader-flat-import-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole R10 witness for the FLAT-import plugin prescan path (charly/plugin_prescan.go's
+            import leg). Writes, into a mktemp dir, the exact failing shape: a root charly.yml
+            whose `import:` has a FLAT bare-filename entry (`- flat.yml`) plus a `discover:` of a
+            candy that pins the out-of-tree plugin-example-kind plugin; the flat-imported file
+            declares an `examplekind:` entity. `charly box validate -C <dir>` then proves the flat
+            entry decoded (so the discover walk ran and registered the plugin kind word) AND the
+            flat file's own refs were read — a pre-fix binary fails at parse with "no kind
+            discriminator"; the fixed binary validates OK. The plugin ref lives ONLY in the
+            discovered candy, so deleting EITHER half of the fix breaks the bed.
+        plan:
+            - check: a flat import plus a plugin-provided kind validates (the discover walk ran and the kind word was prescanned)
+              id: loader-flat-import-validates
+              exit_status: 0
+              stdout:
+                - contains: 'box validate: OK'
+              context:
+                - runtime
+              command:
+                command: "${CHARLY_BIN} box validate -C charly/testdata/flat-import-project"
+                in_container: false
+# =================================================================
 # check-gpu-local — R10 witness for cutover C11's externalized GPU/VFIO HOST-DETECTION
 # (candy/plugin-gpu, verb:gpu) — the DETECTION cluster of the core-externalization program.
 # A disposable kind:local deploy on host: local that runs the two deterministic, GPU-less
