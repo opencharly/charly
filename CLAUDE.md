@@ -174,7 +174,7 @@ Hooks enforce deterministic command mechanics only — `.claude/hooks/pre-commit
 
 ## AI Attribution (Fedora Policy Compliant)
 
-Every AI-authored commit ends with `Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)`, using the exact identity the authoring runtime exposes; matching italicized line on AI-authored issues/PRs. A purely human-authored commit carries no attribution.
+Every AI-authored commit ends with `Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)`, using the exact identity the authoring runtime exposes; matching italicized line on AI-authored issues/PRs. A purely human-authored commit carries no attribution. A model-free CI generator's body uses `*Assisted-by: <Harness> <Runtime> (<confidence>)*` (automation + runner identity, e.g. `GitHub Actions ubuntu-latest`) — never a fabricated model name or `N/A`. *Detail:* `/charly-internals:git-workflow`.
 
 | Confidence | Required proof |
 |---|---|
