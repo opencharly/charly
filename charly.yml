@@ -3164,20 +3164,21 @@ check-commands-local:
 # The changed code is the import leg of `prescanDeclaredPluginWords` (charly/plugin_prescan.go):
 # a FLAT `import:` entry (a bare sibling filename, e.g. `- flat.yml`) must be decoded by the
 # canonical `spec.ImportList` decoder AND its own pinned plugin refs read, so a plugin-provided
-# kind word (`examplekind:`) is registered BEFORE parse. Before the fix the flat decode failed
-# the whole struct unmarshal, the discover walk was skipped, and EVERY document carrying the
-# plugin kind failed with "no kind discriminator".
+# kind word (`examplekind:`) is registered BEFORE parse.
 #
-# A disposable kind:local deploy on host: local writes the exact fixture to a temp dir and runs
-# `charly box validate` against it: the flat-imported file declares an `examplekind:` entity, and
-# the plugin ref lives ONLY in a discovered candy — so the validation passing proves BOTH the
-# decode fix and the flat-file read (each alone leaves the other broken).
+# The bed validates the COMMITTED fixture `charly/testdata/flat-import-project` (so it needs the
+# repo tree, not merely the binary): the root's flat `import: - flat.yml` points at a sibling
+# that carries BOTH the pin for the out-of-tree plugin-example-kind plugin AND an `examplekind:`
+# entity it provides — the only plugin ref in the project. Both halves of the fix are therefore
+# witnessed: a pre-fix binary fails at parse (the flat decode aborted the prescan), and a binary
+# with ONLY the decode fix also fails (the flat file's refs were never read, so `examplekind`
+# never registers). The fixed binary validates OK.
 # =================================================================
 check-loader-flat-import-app:
     local:
         description: |-
             Minimal kind:local template for check-loader-flat-import-local — no candies: the
-            bed only needs the host charly binary + a temp dir.
+            bed validates a committed fixture with the host charly binary.
         candy: []
         plan:
             - check: the bed's host has a charly binary
@@ -3195,16 +3196,16 @@ check-loader-flat-import-local:
         lifecycle: dev
         description: >-
             Sole R10 witness for the FLAT-import plugin prescan path (charly/plugin_prescan.go's
-            import leg). Writes, into a mktemp dir, the exact failing shape: a root charly.yml
-            whose `import:` has a FLAT bare-filename entry (`- flat.yml`) plus a `discover:` of a
-            candy that pins the out-of-tree plugin-example-kind plugin; the flat-imported file
-            declares an `examplekind:` entity. `charly box validate -C <dir>` then proves the flat
-            entry decoded (so the discover walk ran and registered the plugin kind word) AND the
-            flat file's own refs were read — a pre-fix binary fails at parse with "no kind
-            discriminator"; the fixed binary validates OK. The plugin ref lives ONLY in the
-            discovered candy, so deleting EITHER half of the fix breaks the bed.
+            import leg). Validates the committed fixture charly/testdata/flat-import-project: a
+            root charly.yml whose `import:` has a FLAT bare-filename entry (`- flat.yml`); the
+            flat-imported sibling carries BOTH the only pin for the out-of-tree plugin-example-kind
+            plugin AND an `examplekind:` entity it provides. `charly box validate -C <fixture>`
+            proves the flat entry decoded (the prescan ran) AND the flat file's own ref was read
+            (so the plugin kind word registered) — a pre-fix binary fails at parse with "no kind
+            discriminator", and a decode-fix-only binary (flat read removed) ALSO fails, so both
+            halves of the fix are witnessed by this ONE bed.
         plan:
-            - check: a flat import plus a plugin-provided kind validates (the discover walk ran and the kind word was prescanned)
+            - check: a flat import plus a plugin-provided kind validates (both the decode fix and the flat-file read are exercised)
               id: loader-flat-import-validates
               exit_status: 0
               stdout:

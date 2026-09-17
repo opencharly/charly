@@ -1,4 +1,26 @@
-# A FLAT-imported sibling file carrying a plugin-provided kind entity (`examplekind`).
+# A FLAT-imported sibling file (the per-kind split shape, `- flat.yml`).
+#
+# It carries BOTH:
+#   - a candy whose require: pins the out-of-tree plugin-example-kind plugin — the ONLY
+#     reference to that plugin in the project, so the `examplekind` kind word is prescanned
+#     ONLY if this flat file is read (the flat branch of the import leg); and
+#   - an `examplekind:` entity that the plugin provides.
+#
+# So a charly with the `spec.ImportList` decode fix but WITHOUT the flat-file read still fails
+# here (the plugin ref is never seen -> `examplekind` never registers -> "no kind discriminator").
+pin:
+    candy:
+        version: 2026.242.0529
+        description: Pins the out-of-tree example-kind plugin so its kind word is prescanned.
+        require:
+            - '@github.com/opencharly/plugin-example-kind/candy/plugin-example-kind:v2026.242.0529'
+        distro:
+            arch:
+                package: [bash]
+        plan:
+            - check: placeholder
+              context: [build]
+              command: 'true'
 probe-kind:
     examplekind:
         marker: value
