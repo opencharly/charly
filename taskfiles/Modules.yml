@@ -44,8 +44,8 @@ tasks:
         # "run task mods:tidy" — the remedy naming a task that could not perform it.
         # That exact loop is why this task now edits the requires itself.
         core=charly/go.mod
-        want_sdk=$(sed -n 's/^[[:space:]]*github\.com\/opencharly\/sdk[[:space:]]\+\(v[^[:space:]]*\).*/\1/p' "$core" | head -1)
-        want_spec=$(sed -n 's/^[[:space:]]*github\.com\/opencharly\/spec[[:space:]]\+\(v[^[:space:]]*\).*/\1/p' "$core" | head -1)
+        want_sdk=$(sed -n 's/^[[:space:]]*github\.com\/opencharly\/sdk[[:space:]][[:space:]]*\(v[^[:space:]]*\).*/\1/p' "$core" | head -1)
+        want_spec=$(sed -n 's/^[[:space:]]*github\.com\/opencharly\/spec[[:space:]][[:space:]]*\(v[^[:space:]]*\).*/\1/p' "$core" | head -1)
         [ -n "$want_sdk" ] || { echo "mods:tidy: no sdk pin found in $core" >&2; exit 1; }
         [ -n "$want_spec" ] || { echo "mods:tidy: no spec pin found in $core" >&2; exit 1; }
         echo "shared pins: sdk=$want_sdk spec=$want_spec"
