@@ -81,3 +81,45 @@ func TestResolveImportedProject_PrefersLocalCheckout(t *testing.T) {
 		t.Errorf("resolved %q, want the local checkout %q", got, local)
 	}
 }
+
+// A FLAT import entry (`- vm.yml`) is a bare-string ref, not the `alias: ref` map shape.
+// Decoding `import:` as []map[string]string made the WHOLE struct unmarshal fail on the
+// first bare string, so the early return skipped the discover walk AND the import leg: a
+// project with a flat import plus any plugin-provided kind failed to parse EVERY document
+// with "no kind discriminator" (the kind word was never prescanned).
+//
+// The regression this guards: parse the root leniently, then assert the prescan still ran
+// the discover walk (a discovered plugin manifest's declared word is registered).
+func TestPrescan_FlatImportDoesNotAbortTheWalk(t *testing.T) {
+	dir := t.TempDir()
+	// A flat sibling file imported by bare name (the per-kind split shape).
+	if err := os.WriteFile(filepath.Join(dir, "vm.yml"), []byte("my-vm:\n    vm: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A discovered candy manifest that declares an external kind word.
+	candy := filepath.Join(dir, "candy", "decl")
+	if err := os.MkdirAll(candy, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(candy, "charly.yml"), []byte(
+		"decl:\n    candy:\n        plugin:\n            providers:\n                - kind:prescanprobe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	root := []byte("import:\n    - vm.yml\ndiscover:\n    - path: candy\n      recursive: true\n")
+
+	declaredDeployMu.Lock()
+	delete(declaredKind, "prescanprobe")
+	declaredDeployMu.Unlock()
+	t.Cleanup(func() {
+		declaredDeployMu.Lock()
+		delete(declaredKind, "prescanprobe")
+		declaredDeployMu.Unlock()
+	})
+
+	prescanDeclaredPluginWords(root, dir)
+
+	if !isDeclaredExternalKind("prescanprobe") {
+		t.Fatal("discover walk was skipped on a flat-import project — the declared kind word was never registered")
+	}
+}
