@@ -24,8 +24,11 @@ version: '3'
 # Two mechanisms keep the surface drift-free: the canonical-go.mod GATE
 # (tools/gomod-canonical/gomod_canonical_test.go — Shape-A' for the plugin candies, plus
 # the shared-pin equality assertion across every module this sweep touches) and this
-# `mods:tidy` sweep, which keeps each go.sum in step with its imports. Run tidy after
-# adding or removing a dep, and after ANY shared-pin adoption.
+# `mods:tidy` sweep, which ADOPTS the shared pins into each lockstep module and then
+# tidies, keeping go.mod AND go.sum in step. Run it after adding or removing a dep, and
+# after ANY shared-pin adoption. (Running `go mod tidy` ALONE is not enough for the
+# second case: tidy never raises an already-satisfied require to a newer version, so it
+# would report success while the gate stayed red — see the loop note in the task body.)
 
 tasks:
   tidy:
