@@ -430,3 +430,99 @@ func candyDirKeys(m map[string]string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// releaseWorkflow = the release-binary workflow, the ONLY producer of the
+// `charly-linux-<arch>` + `charly-plugins-linux-<arch>.tar.gz` assets the distro
+// package repos consume.
+const releaseWorkflow = "../.github/workflows/release-binary.yml"
+
+// TestReleaseWorkflowPublishesEveryArchitecture pins the arch set the release
+// publishes, in each of the places an arch must appear to be fully shipped: a
+// charly binary, a welded-plugin tarball, a CalVer stamp check, and an entry in
+// the release upload list. An arch added to one of those but not the others
+// ships a half-built release (a binary with no plugins, or an artifact that is
+// built but never uploaded). armv7 was added for a 32-bit appliance target (a
+// JetKVM's uClibc armv7l userland), which is why the set exceeds the historical
+// amd64+arm64 pair.
+//
+// The check is deliberately shape-agnostic about WHERE the plugins land: amd64
+// alone builds into unsuffixed `bin/plugins/` and regenerates each `.providers`
+// (the native build can run `charly __plugin-providers`), while the cross arches
+// use `bin/plugins-<arch>/` and COPY the manifests from amd64 — so the tarball
+// name and the upload entry are the arch-invariant facts asserted here.
+func TestReleaseWorkflowPublishesEveryArchitecture(t *testing.T) {
+	data, err := os.ReadFile(releaseWorkflow)
+	if err != nil {
+		t.Fatalf("read %s: %v", releaseWorkflow, err)
+	}
+	src := string(data)
+
+	arches := []string{"amd64", "arm64", "armv7"}
+	for _, a := range arches {
+		// 1. The build: a `go build` invocation targeting this arch.
+		if build := "GOOS=linux GOARCH=" + goArchFor(a); !strings.Contains(src, build) {
+			t.Errorf("release-binary.yml has no %q build — the %s charly binary is never built", build, a)
+		}
+		// 2. The built binary path, written by that build.
+		if bin := "charly-linux-" + a; !strings.Contains(src, bin) {
+			t.Errorf("release-binary.yml never names %q — the %s charly binary is not produced", bin, a)
+		}
+		// 3. The plugins tarball (the upload asset the package repos fetch).
+		if tar := "charly-plugins-linux-" + a + ".tar.gz"; !strings.Contains(src, tar) {
+			t.Errorf("release-binary.yml never produces %q — %s would ship without its welded plugins", tar, a)
+		}
+		// 4. The per-arch CalVer stamp check. Cross binaries cannot execute on the
+		// amd64 runner, so every non-native arch must appear in a `go version -m`
+		// assertion; amd64 is verified by RUNNING `version`, so it is exempt.
+		if a != "amd64" {
+			if stamp := "go version -m bin/charly-linux-" + a; !strings.Contains(src, stamp) {
+				t.Errorf("release-binary.yml does not verify %q — the %s artifact would ship unverified", stamp, a)
+			}
+		}
+		// 5. The stripped-binary check must cover this arch's binary and plugins.
+		for _, b := range []string{"bin/charly-linux-" + a, pluginDir(pluginDirSuffix(a))} {
+			if !strings.Contains(src, b) {
+				t.Errorf("release-binary.yml's stripped check does not cover %q for %s", b, a)
+			}
+		}
+		// 6. Both artifacts must be in the release upload list, not merely built.
+		for _, asset := range []string{"bin/charly-linux-" + a, "charly-plugins-linux-" + a + ".tar.gz"} {
+			if !strings.Contains(src, "            "+asset+"\n") {
+				t.Errorf("release-binary.yml does not upload %q — the %s artifact would be built but never published", asset, a)
+			}
+		}
+	}
+
+	// The armv7 build needs GOARM=7: the appliance is ARMv7, not Go's default
+	// GOARM=5, so a missing GOARM ships a binary the target cannot run.
+	if !strings.Contains(src, "GOOS=linux GOARCH=arm GOARM=7") {
+		t.Error("release-binary.yml has no `GOOS=linux GOARCH=arm GOARM=7` build — the armv7 artifact would target the wrong ARM ABI")
+	}
+}
+
+// goArchFor maps the artifact arch suffix to the GOARCH value the workflow passes.
+func goArchFor(arch string) string {
+	if arch == "armv7" {
+		return "arm"
+	}
+	return arch
+}
+
+// pluginDirSuffix maps the artifact arch suffix to the workflow's plugin dir
+// suffix: amd64 builds into the unsuffixed `bin/plugins/` (its native binary can
+// regenerate the .providers manifests), the cross arches into `bin/plugins-<a>/`.
+func pluginDirSuffix(arch string) string {
+	if arch == "amd64" {
+		return ""
+	}
+	return arch
+}
+
+// pluginDir renders the glob the workflow's stripped-binary loop uses for an
+// arch, e.g. `bin/plugins/*` (amd64) or `bin/plugins-armv7/*`.
+func pluginDir(suffix string) string {
+	if suffix == "" {
+		return "bin/plugins/*"
+	}
+	return "bin/plugins-" + suffix + "/*"
+}
