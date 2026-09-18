@@ -37,11 +37,11 @@
 # Bump a pin the way any other ref is bumped: to a MERGED tag, never a branch.
 plugin-secrets@v2026.242.0530
 plugin-udev@v2026.242.0532
-plugin-preempt@v2026.250.0552
-plugin-feature@v2026.242.0530
-plugin-vm@v2026.253.1809
-plugin-doctor@v2026.243.1554
-plugin-clean@v2026.242.0526
+plugin-preempt@v2026.261.0030
+plugin-feature@v2026.261.0008
+plugin-vm@v2026.261.0009
+plugin-doctor@v2026.261.0030
+plugin-clean@v2026.261.0029
 plugin-settings@v2026.242.0532
 plugin-candy@v2026.242.0526
 plugin-mcp@v2026.250.0721
