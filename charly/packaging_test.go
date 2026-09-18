@@ -430,3 +430,54 @@ func candyDirKeys(m map[string]string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// releaseWorkflow = the release-binary workflow, the ONLY producer of the
+// `charly-linux-<arch>` + `charly-plugins-linux-<arch>.tar.gz` assets the distro
+// package repos consume.
+const releaseWorkflow = "../.github/workflows/release-binary.yml"
+
+// TestReleaseWorkflowPublishesEveryArchitecture pins the arch set the release
+// publishes, in each of the places an arch must appear to be fully shipped: a
+// charly binary, a welded-plugin tarball, a CalVer stamp check, and an entry in
+// the release upload list. An arch added to one of those but not the others
+// ships a half-built release (a binary with no plugins, or an artifact that is
+// built but never uploaded). armv7 was added for a 32-bit appliance target (a
+// JetKVM's uClibc armv7l userland), which is why the set exceeds the historical
+// amd64+arm64 pair.
+//
+// The check is deliberately shape-agnostic about WHERE the plugins land: amd64
+// alone builds into unsuffixed `bin/plugins/` and regenerates each `.providers`
+// (the native build can run `charly __plugin-providers`), while the cross arches
+// use `bin/plugins-<arch>/` and COPY the manifests from amd64 — so the tarball
+// name and the upload entry are the arch-invariant facts asserted here.
+func TestReleaseWorkflowPublishesEveryArchitecture(t *testing.T) {
+	data, err := os.ReadFile(releaseWorkflow)
+	if err != nil {
+		t.Fatalf("read %s: %v", releaseWorkflow, err)
+	}
+	src := string(data)
+
+	arches := []string{"amd64", "arm64", "armv7"}
+	for _, a := range arches {
+		// The built charly binary for this arch.
+		if bin := "charly-linux-" + a; !strings.Contains(src, bin) {
+			t.Errorf("release-binary.yml never names %q — the %s charly binary is not built", bin, a)
+		}
+		// The plugins tarball for this arch (the upload asset the package repos fetch).
+		if tar := "charly-plugins-linux-" + a + ".tar.gz"; !strings.Contains(src, tar) {
+			t.Errorf("release-binary.yml never produces %q — %s would ship without its welded plugins", tar, a)
+		}
+		// Both must be in the release upload list, not merely built.
+		for _, asset := range []string{"bin/charly-linux-" + a, "charly-plugins-linux-" + a + ".tar.gz"} {
+			if !strings.Contains(src, "            "+asset+"\n") {
+				t.Errorf("release-binary.yml does not upload %q — the %s artifact would be built but never published", asset, a)
+			}
+		}
+	}
+
+	// The armv7 build needs GOARM=7: the appliance is ARMv7, not Go's default
+	// GOARM=5, so a missing GOARM ships a binary the target cannot run.
+	if !strings.Contains(src, "GOOS=linux GOARCH=arm GOARM=7") {
+		t.Error("release-binary.yml has no `GOOS=linux GOARCH=arm GOARM=7` build — the armv7 artifact would target the wrong ARM ABI")
+	}
+}
