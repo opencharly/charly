@@ -459,15 +459,33 @@ func TestReleaseWorkflowPublishesEveryArchitecture(t *testing.T) {
 
 	arches := []string{"amd64", "arm64", "armv7"}
 	for _, a := range arches {
-		// The built charly binary for this arch.
-		if bin := "charly-linux-" + a; !strings.Contains(src, bin) {
-			t.Errorf("release-binary.yml never names %q — the %s charly binary is not built", bin, a)
+		// 1. The build: a `go build` invocation targeting this arch.
+		if build := "GOOS=linux GOARCH=" + goArchFor(a); !strings.Contains(src, build) {
+			t.Errorf("release-binary.yml has no %q build — the %s charly binary is never built", build, a)
 		}
-		// The plugins tarball for this arch (the upload asset the package repos fetch).
+		// 2. The built binary path, written by that build.
+		if bin := "charly-linux-" + a; !strings.Contains(src, bin) {
+			t.Errorf("release-binary.yml never names %q — the %s charly binary is not produced", bin, a)
+		}
+		// 3. The plugins tarball (the upload asset the package repos fetch).
 		if tar := "charly-plugins-linux-" + a + ".tar.gz"; !strings.Contains(src, tar) {
 			t.Errorf("release-binary.yml never produces %q — %s would ship without its welded plugins", tar, a)
 		}
-		// Both must be in the release upload list, not merely built.
+		// 4. The per-arch CalVer stamp check. Cross binaries cannot execute on the
+		// amd64 runner, so every non-native arch must appear in a `go version -m`
+		// assertion; amd64 is verified by RUNNING `version`, so it is exempt.
+		if a != "amd64" {
+			if stamp := "go version -m bin/charly-linux-" + a; !strings.Contains(src, stamp) {
+				t.Errorf("release-binary.yml does not verify %q — the %s artifact would ship unverified", stamp, a)
+			}
+		}
+		// 5. The stripped-binary check must cover this arch's binary and plugins.
+		for _, b := range []string{"bin/charly-linux-" + a, pluginDir(pluginDirSuffix(a))} {
+			if !strings.Contains(src, b) {
+				t.Errorf("release-binary.yml's stripped check does not cover %q for %s", b, a)
+			}
+		}
+		// 6. Both artifacts must be in the release upload list, not merely built.
 		for _, asset := range []string{"bin/charly-linux-" + a, "charly-plugins-linux-" + a + ".tar.gz"} {
 			if !strings.Contains(src, "            "+asset+"\n") {
 				t.Errorf("release-binary.yml does not upload %q — the %s artifact would be built but never published", asset, a)
@@ -480,4 +498,31 @@ func TestReleaseWorkflowPublishesEveryArchitecture(t *testing.T) {
 	if !strings.Contains(src, "GOOS=linux GOARCH=arm GOARM=7") {
 		t.Error("release-binary.yml has no `GOOS=linux GOARCH=arm GOARM=7` build — the armv7 artifact would target the wrong ARM ABI")
 	}
+}
+
+// goArchFor maps the artifact arch suffix to the GOARCH value the workflow passes.
+func goArchFor(arch string) string {
+	if arch == "armv7" {
+		return "arm"
+	}
+	return arch
+}
+
+// pluginDirSuffix maps the artifact arch suffix to the workflow's plugin dir
+// suffix: amd64 builds into the unsuffixed `bin/plugins/` (its native binary can
+// regenerate the .providers manifests), the cross arches into `bin/plugins-<a>/`.
+func pluginDirSuffix(arch string) string {
+	if arch == "amd64" {
+		return ""
+	}
+	return arch
+}
+
+// pluginDir renders the glob the workflow's stripped-binary loop uses for an
+// arch, e.g. `bin/plugins/*` (amd64) or `bin/plugins-armv7/*`.
+func pluginDir(suffix string) string {
+	if suffix == "" {
+		return "bin/plugins/*"
+	}
+	return "bin/plugins-" + suffix + "/*"
 }
