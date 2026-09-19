@@ -1113,8 +1113,17 @@ omarchy:
                 # such disk yet, so the size arrives as .DiskSizeBytes and the rest is
                 # constant.
                 #
-                # `kernels` is "linux", not "linux-t2". The configurator picks linux-t2
-                # only when lspci sees Apple's T2 bridge (106b:1801/1802); a VM never does.
+                # `kernels` is "linux-omarchy", not "linux" and not "linux-t2". This
+                # mirrors the 4.0.4 ISO configurator's `detect_kernel`: it returns
+                # linux-omarchy on every non-T2 machine, and linux-t2 only when lspci
+                # sees Apple's T2 bridge (106b:1801/1802) — a VM never does. The
+                # 4.0.3->4.0.4 configurator delta is exactly this one value, and it is
+                # load-bearing: 4.0.4's install orchestrator adds
+                # `f"{kernel}-headers"` for each kernel and then runs
+                # `_validate_kernel_headers`, aborting the install when the headers are
+                # missing from `/usr/lib/modules/<release>/build`. The vanilla `linux`
+                # package ships no headers and the omarchy offline mirror has none, so
+                # `kernels: ["linux"]` fails at "Validating boot setup" (measured).
                 - path: user_configuration.json
                   content: |
                       {
@@ -1134,7 +1143,7 @@ omarchy:
                             "efi_binary": "limine_x64.efi",
                             "enable_fallback": true
                           },
-                          "storage": { "kernel": "linux" }
+                          "storage": { "kernel": "linux-omarchy" }
                         },
                         "disk_config": {
                           "config_type": "default_layout",
@@ -1202,7 +1211,7 @@ omarchy:
                           }{{end}}
                         },
                         "hostname": "{{.Hostname}}",
-                        "kernels": [ "linux" ],
+                        "kernels": [ "linux-omarchy" ],
                         "network_config": { "type": "iso" },
                         "ntp": true,
                         "parallel_downloads": 8,
