@@ -305,10 +305,9 @@ func (m *metaGRPCServer) Describe(_ context.Context, _ *pb.Empty) (*pb.Capabilit
 		provided = append(provided, &pb.ProvidedCapability{Class: string(c.Class), Word: c.Word, InputDef: c.InputDef, CommandModelJson: c.CommandModelJson})
 	}
 	return &pb.Capabilities{
-		Calver:          m.set.calver,
-		ProtocolVersion: transport.ProtocolVersion,
-		Provided:        provided,
-		SchemaCue:       m.set.schemaCUE,
+		Calver:    m.set.calver,
+		Provided:  provided,
+		SchemaCue: m.set.schemaCUE,
 	}, nil
 }
 
@@ -445,17 +444,10 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 // defs). This is THE client-side construction — identical for an external plugin
 // and a builtin served out-of-process; the host never reads a candy schema/ dir.
 func buildUnit(conn *transport.Conn, caps *pb.Capabilities, pid int) (*PluginUnit, error) {
-	// Version gate — a readable refusal here, never a later wire panic.
-	// ProtocolVersion is the ENFORCED wire-compatibility gate: a plugin built
-	// against a different charly proto/SDK speaks a different contract and is
-	// refused before any Invoke. CalVer is the plugin's advisory version stamp,
-	// surfaced in the refusal for the operator but NOT an equality gate — plugins
-	// are independent repos at independent CalVers, and a same-host builtin served
-	// out-of-process may advertise an empty/unstamped CalVer (identical binary).
-	if caps.GetProtocolVersion() != transport.ProtocolVersion {
-		return nil, fmt.Errorf("plugin protocol version mismatch: plugin advertises protocol %d (CalVer %q), host requires protocol %d — rebuild the plugin against this charly",
-			caps.GetProtocolVersion(), caps.GetCalver(), transport.ProtocolVersion)
-	}
+	// No version gate: the wireframe contract is the CUE schema the plugin serves over
+	// Describe (caps.SchemaCue), spliced onto the host base by registerPluginUnitSchema —
+	// a capability gap there is a hard schema error. The go-plugin handshake already
+	// rejected a transport-incompatible binary before Describe.
 	// The capability-lift loop is shared with buildUnitInProc via liftCapabilities (R3); the grpc
 	// factory adds the out-of-process extras — the connection plus the class:deploy lifecycle /
 	// preresolve flags (F6), which ONLY *grpcProvider carries (they need the reverse channel, and

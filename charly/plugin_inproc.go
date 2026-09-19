@@ -54,10 +54,9 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 	if err != nil {
 		return nil, fmt.Errorf("compiled-in plugin describe: %w", err)
 	}
-	if caps.GetProtocolVersion() != transport.ProtocolVersion {
-		return nil, fmt.Errorf("compiled-in plugin protocol version mismatch: plugin advertises protocol %d (CalVer %q), host requires protocol %d",
-			caps.GetProtocolVersion(), caps.GetCalver(), transport.ProtocolVersion)
-	}
+	// No version gate: a compiled-in plugin is THIS binary (same transport, same proto);
+	// its wireframe contract is the CUE schema it serves over Describe, gated by
+	// registerPluginUnitSchema exactly like an external's (zero distinction).
 	// The capability-lift loop is shared with buildUnit via liftCapabilities (R3): the compiled-in
 	// factory wraps the SAME capMeta in an inprocProvider (its only extra is the in-proc
 	// pb.ProviderServer). Placement is invisible above the registry.

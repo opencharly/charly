@@ -111,25 +111,6 @@ func TestPluginGRPCRoundTrip(t *testing.T) {
 	}
 }
 
-// TestBuildUnitRefusesProtocolMismatch proves the version gate (PE4): a plugin
-// advertising a different proto/SDK ProtocolVersion is refused with a readable
-// error before any Invoke, instead of being silently accepted to fail later as a
-// wire panic. CalVer is carried in the diagnostic but is not itself a gate.
-func TestBuildUnitRefusesProtocolMismatch(t *testing.T) {
-	caps := &pb.Capabilities{
-		Calver:          "2026.172.0001",
-		ProtocolVersion: transport.ProtocolVersion + 1, // a plugin built against a different charly
-		Provided:        []*pb.ProvidedCapability{{Class: "verb", Word: "externalprobe", InputDef: "#ExternalprobeInput"}},
-		SchemaCue:       "#ExternalprobeInput: {marker?: string}\n",
-	}
-	// conn is nil: the gate must refuse before constructing any grpcProvider.
-	if _, err := buildUnit(nil, caps, 0); err == nil {
-		t.Fatal("buildUnit accepted a protocol-version mismatch; want a readable refusal")
-	} else if !strings.Contains(err.Error(), "protocol version mismatch") {
-		t.Fatalf("error = %v, want it to name the protocol version mismatch", err)
-	}
-}
-
 // TestProviderRegistryDispatch proves the registry resolves a verb provider and
 // the (class, word) keying keeps a kind and a verb of the SAME word distinct.
 func TestProviderRegistryDispatch(t *testing.T) {
