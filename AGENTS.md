@@ -241,6 +241,15 @@ skills and are mandatory when dispatched.
 - **R7 — Prove behavior, not compilation.** Add coverage that fails without
   the change, execute the changed path live, and retain commands, outputs, and
   exit codes. Tests that cannot fail are invalid.
+- **R7a — Live or skip — never fake a live service.** Any test, harness, or gate
+  that crosses a live-service boundary (a `gh` / GitHub API call, an LLM or
+  provider endpoint, a network or `charly` call) runs against the **REAL**
+  service, or **SKIPS cleanly** when its credential/endpoint is absent — never a
+  mock, stub, or fake of that boundary. A fake asserts the behaviour the author
+  IMAGINED, not what the service actually does, so it certifies a contract that
+  may not exist and hides a real integration break behind green. Gate the skip on
+  the real credential (`LIVE_*` unset → skip, visibly reported — never a silent
+  pass), and keep pure/deterministic in-repo logic unit-testable normally.
 - **R8 — Preserve emitted artifacts.** Validate labels, plans, configs,
   schemas, generated files, and other user-visible output at their actual
   boundary.

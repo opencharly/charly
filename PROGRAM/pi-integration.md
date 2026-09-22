@@ -107,6 +107,14 @@ rewrite, hook bypass, or direct push to main.
 ### R7 — Prove Behavior, Not Compilation
 A green compile proves nothing. Run the changed path live.
 
+### R7a — Live or Skip — Never Fake a Live Service
+A test / harness / gate crossing a live-service boundary (a `gh`/GitHub API call,
+an LLM or provider endpoint, a network or `charly` call) runs against the REAL
+service, or SKIPS cleanly when its credential/endpoint is absent — never a mock,
+stub, or fake of that boundary. A fake certifies the behaviour its author
+imagined, not what the service does, and hides a real break behind green. Gate
+the skip on the real credential (`LIVE_*` unset → skip, visibly reported).
+
 ### R8 — Preserve Emitted Artifacts
 Validate labels, plans, configs, schemas at their actual boundary.
 
