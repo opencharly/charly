@@ -3113,6 +3113,16 @@ check-commands-local:
               command:
                 command: ${CHARLY_BIN} clean --deep --dry-run
                 in_container: false
+            - check: command=charly clean --cache --dry-run exits 0 and reports the per-store CAS ArtifactStore GC outcome (proving the `cache` retention category reaches the content-addressed spec/cache store's own GC over the plugin-side cache enumerator, touching nothing) — one `cache <name>` line per named store, or the explicit `cache` no-named-stores line
+              id: clean-cache-dry-run-runs
+              exit_status: 0
+              stdout:
+                - contains: 'cache'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} clean --cache --dry-run
+                in_container: false
             - check: charly box new + candy + box + validate + generate render a valid box Containerfile in a scratch project, proving the box command plugin (candy/plugin-box, P15) dispatches its NESTED verbs end-to-end host-side — new via the sdk/kit scaffold engine, validate via the plugin's own validate ENGINE over the HostBuild("validate-project") resolved-project envelope (task #60), generate via InvokeProvider to the build-generate word then build-resolve
               id: box-new-validate-generate
               exit_status: 0
