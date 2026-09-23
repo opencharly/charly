@@ -12,13 +12,13 @@ require (
 	github.com/opencharly/plugin-agentteams/candy/plugin-agentteams v0.2026237.1414
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026237.1414
-	github.com/opencharly/plugin-box/candy/plugin-box v0.2026251.1834
+	github.com/opencharly/plugin-box/candy/plugin-box v0.2026266.1110
 	github.com/opencharly/plugin-build/candy/plugin-build v0.2026257.723
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026248.730
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026237.1416
-	github.com/opencharly/plugin-check/candy/plugin-check v0.2026262.1607
+	github.com/opencharly/plugin-check/candy/plugin-check v0.2026266.1235
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026237.1417
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026237.1417
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026244.617
@@ -35,7 +35,7 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026237.1421
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026242.2145
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026260.1357
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026266.1111
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026254.600
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026237.1423
@@ -51,7 +51,7 @@ require (
 	github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026237.1426
 	github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026237.1426
 	github.com/opencharly/plugin-package/candy/plugin-package v0.2026237.1426
-	github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026260.929
+	github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026266.1109
 	github.com/opencharly/plugin-port/candy/plugin-port v0.2026237.1411
 	github.com/opencharly/plugin-preempt/candy/plugin-preempt v0.2026250.552
 	github.com/opencharly/plugin-process/candy/plugin-process v0.2026237.1427
@@ -62,7 +62,7 @@ require (
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026237.1428
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026237.1428
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026250.552
-	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026250.553
+	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026266.1251
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026237.1429
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026237.1429
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026237.1430
