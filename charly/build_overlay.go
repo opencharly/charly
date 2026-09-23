@@ -147,7 +147,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	case tag != "":
 		baseRef = base + ":" + tag
 	default:
-		if resolved, rerr := container.ResolveNewestLocalCalVer("podman", base); rerr == nil && resolved != "" {
+		if resolved, rerr := container.ResolveNewestLocalCalVer(hostEngineBinary(), base); rerr == nil && resolved != "" {
 			baseRef = resolved
 		} else {
 			baseRef = base

@@ -45,7 +45,47 @@ var (
 	bareListItemRe = regexp.MustCompile(`^-\s+([a-z][a-z0-9-]*)\s*(?:#.*)?$`)
 	// candyListKeyRe matches a require:/candy: list header line.
 	candyListKeyRe = regexp.MustCompile(`^\s*(require|candy):\s*$`)
+	// blockScalarKeyRe matches a mapping key whose value is a YAML block scalar
+	// (`key: |` / `key: >`, with optional chomping/indent indicators).
+	blockScalarKeyRe = regexp.MustCompile(`^(\s*)[^\s#][^:]*:\s*[|>][+-]?[0-9]*\s*(?:#.*)?$`)
 )
+
+// stripBlockScalarBodies replaces the body of every YAML block scalar (the
+// indented lines under a `key: |` / `key: >`) with empty lines, so the raw-text
+// sweep never flags a bare candy-list name that lives inside embedded
+// documentation — a candy's `content:` skill block, whose fenced markdown
+// example legitimately lists candy names. The rule (R4a): when a scanner
+// false-positives on documentation, fix the SCANNER, not the docs. A live
+// `require:`/`candy:` list is never a block-scalar body, so nothing that the
+// sweep is meant to catch is hidden.
+func stripBlockScalarBodies(text string) string {
+	lines := strings.Split(text, "\n")
+	out := make([]string, len(lines))
+	scalarIndent := -1
+	for i, ln := range lines {
+		if scalarIndent >= 0 {
+			if strings.TrimSpace(ln) == "" || indentOf(ln) > scalarIndent {
+				continue // blank or inside the block scalar → drop
+			}
+			scalarIndent = -1
+		}
+		if m := blockScalarKeyRe.FindStringSubmatch(ln); m != nil {
+			scalarIndent = len(m[1])
+			out[i] = ln
+			continue
+		}
+		out[i] = ln
+	}
+	return strings.Join(out, "\n")
+}
+
+func indentOf(s string) int {
+	n := 0
+	for n < len(s) && s[n] == ' ' {
+		n++
+	}
+	return n
+}
 
 // collectRefs walks every charly.yml under the repo root (candy/**, box/**,
 // box/*/box/** and the root manifest) and returns:
@@ -71,19 +111,21 @@ func collectRefs(repoRoot string) (movedBare []string, pins []string) {
 		if err != nil {
 			continue // box submodule placeholder dirs glob fine but read as dirs
 		}
-		for _, m := range movedPinRe.FindAllStringSubmatch(string(b), -1) {
+		for _, m := range movedPinRe.FindAllStringSubmatch(stripBlockScalarBodies(string(b)), -1) {
 			moved[m[2]] = true // kind in m[1], name in m[2]
 		}
 	}
 
 	// Pass 2: walk require:/candy: lists; flag bare items for moved candies,
-	// collect every remote pin.
+	// collect every remote pin. Block-scalar bodies are dropped first so a bare
+	// name inside embedded documentation (a skill's fenced markdown example) is
+	// never a false positive — the R4a rule: fix the scanner, not the docs.
 	for _, f := range ymls {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			continue
 		}
-		lines := strings.Split(string(b), "\n")
+		lines := strings.Split(stripBlockScalarBodies(string(b)), "\n")
 		inList := false
 		for _, ln := range lines {
 			trimmed := strings.TrimSpace(ln)
@@ -102,7 +144,7 @@ func collectRefs(repoRoot string) (movedBare []string, pins []string) {
 				}
 			}
 		}
-		pins = append(pins, remoteRefRe.FindAllString(string(b), -1)...)
+		pins = append(pins, remoteRefRe.FindAllString(stripBlockScalarBodies(string(b)), -1)...)
 	}
 	slices.Sort(movedBare)
 	movedBare = slices.Compact(movedBare)

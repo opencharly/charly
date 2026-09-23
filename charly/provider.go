@@ -67,6 +67,14 @@ const (
 	// the registered downloader, so an alternative refs plugin (OCI/S3) can swap the backend. The
 	// host keeps the fetch orchestration (override/cache/migrate). See candy/plugin-refs (P7).
 	ClassRefs ProviderClass = "refs"
+	// ClassEngine serves the container-engine PROVIDER family (engine:podman, engine:docker
+	// compiled-in; engine:nerdctl out-of-process). Each provider answers the engine op envelope
+	// (spec/schema/engine.cue): describe/binary/gpu_args/start_plan/unit_emit/network_ensure.
+	// The op BODIES are pure and live once in spec/container.InvokeEngineOp, so a compiled-in
+	// provider and an out-of-process plugin serve identical behavior. Compiled-in for the same
+	// bootstrap reasoning as ClassLoader/ClassRefs (the engine is needed early). The host
+	// consumes it through hostEngineBinary (the overlay base-image probe).
+	ClassEngine ProviderClass = "engine"
 	// ClassAgentRuntime is a structured agent-session runtime (Pi, a terminal
 	// adapter, or another implementation). Core resolves this class generically.
 	ClassAgentRuntime ProviderClass = "agent-runtime"
