@@ -70,11 +70,9 @@ func init() {
 var engineProviderOpsAreServed = container.EngineOps
 
 // engineDescribeFor resolves an engine capability through the CLASS (registry)
-// rather than the data table directly. It is the class's typed accessor: today it
-// is consumed by engine_provider_test.go's wiring proof, and it is the seam a
-// host call site uses to ask the engine PROVIDER (not the data table) for a
-// capability. The host's engine selection still reads the capability table
-// directly in this cutover; routing it through this accessor is a following unit.
+// rather than the data table directly. It is the typed accessor the host uses to
+// ask the engine PROVIDER (not the data table) for a capability, and it is
+// exercised by engine_provider_test.go's wiring proof.
 func engineDescribeFor(engine string) (spec.EngineCapability, bool) {
 	prov, ok := providerRegistry.ResolveEngine(engine)
 	if !ok {
@@ -89,4 +87,17 @@ func engineDescribeFor(engine string) (spec.EngineCapability, bool) {
 		return spec.EngineCapability{}, false
 	}
 	return *reply.Capability, true
+}
+
+// hostEngineBinary returns the binary the host drives its OWN local container
+// storage with, resolved through the engine PROVIDER CLASS (Registry.ResolveEngine
+// -> provider.Invoke -> container.InvokeEngineOp), never the data table. The
+// host's local-storage probes (the overlay base-image resolution) call it, so the
+// class drives a production path. Falls back to "podman" if the class is somehow
+// unwired, preserving the former behavior.
+func hostEngineBinary() string {
+	if cap, ok := engineDescribeFor("podman"); ok && cap.Binary != "" {
+		return cap.Binary
+	}
+	return "podman"
 }

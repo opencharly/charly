@@ -51,4 +51,10 @@ func TestEngineProviderClassServesEveryDeclaredOp(t *testing.T) {
 	if _, ok := providerRegistry.ResolveEngine("not-an-engine"); ok {
 		t.Fatal("ResolveEngine(not-an-engine) resolved — the class is not word-scoped")
 	}
+
+	// hostEngineBinary is the production consumer: the host's local-storage probes
+	// resolve the engine binary through the class.
+	if bin := hostEngineBinary(); bin == "" {
+		t.Fatal("hostEngineBinary() returned empty — the class does not drive the host's local probes")
+	}
 }
