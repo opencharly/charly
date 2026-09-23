@@ -375,7 +375,7 @@ charly:
             # assert it parses.
             config:
                 path: /etc/charly/charly.yml
-                version: 2026.249.2125
+                version: 2026.261.1747
                 description: System-wide charly MCP server project (started via systemd)
                 plugins:
                     - '@github.com/opencharly/plugin-mcp/candy/plugin-mcp:v2026.250.0635'
