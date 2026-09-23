@@ -71,9 +71,11 @@ const (
 	// compiled-in; engine:nerdctl out-of-process). Each provider answers the engine op envelope
 	// (spec/schema/engine.cue): describe/binary/gpu_args/start_plan/unit_emit/network_ensure.
 	// The op BODIES are pure and live once in spec/container.InvokeEngineOp, so a compiled-in
-	// provider and an out-of-process plugin serve identical behavior. Compiled-in because the
-	// engine is needed for local-image probes / box pull before any project plugin loads — the
-	// same bootstrap reasoning as ClassLoader/ClassRefs.
+	// provider and an out-of-process plugin serve identical behavior. Compiled-in for the same
+	// bootstrap reasoning as ClassLoader/ClassRefs (the engine is needed early). NOTE: this
+	// class is registered but not yet consumed by the host's engine selection — the host reads
+	// the capability table directly today; routing those call sites through this class is the
+	// remaining Phase-1 unit (opencharly/charly#633).
 	ClassEngine ProviderClass = "engine"
 	// ClassAgentRuntime is a structured agent-session runtime (Pi, a terminal
 	// adapter, or another implementation). Core resolves this class generically.

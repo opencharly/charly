@@ -20,9 +20,12 @@ import (
 // registry_bootstrap.go): the engine provider carries NO authored input schema of
 // its own (its envelopes live in the base schema/spec), so it registers from a
 // package-var initializer via RegisterBuiltinProvider and is intentionally absent
-// from both builtinProviderInstances and the `providers:` manifest. It must be
-// available before any project plugin loads (local-image probes / box pull reach
-// it during bootstrap), the same reasoning behind the loader/refs classes.
+// from both builtinProviderInstances and the `providers:` manifest. It is
+// compiled in for the same bootstrap reasoning as loader/refs (the engine is
+// needed early), and it is consumed today by engine_provider_test.go's wiring
+// proof; the host's engine SELECTION still reads the capability table directly,
+// and routing those call sites through this class is the remaining Phase-1 unit
+// (opencharly/charly#633).
 //
 // podman and docker are compiled in here; nerdctl is the out-of-process
 // engine:nerdctl plugin (a project that references it connects it by word). All
