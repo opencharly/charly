@@ -90,6 +90,37 @@ func TestPackagingSectionWellFormed(t *testing.T) {
 	}
 }
 
+// TestPackagingDeclaresTheNerdctlEngineStack — the nerdctl engine stack
+// (plan/nerdctl-integration.md Phase 5) is a hard dependency on the distros that
+// HAVE a nerdctl package (archlinux + apk; cachyos/omarchy inherit archlinux),
+// and NOT on rpm/deb/ipk where no such package exists.
+func TestPackagingDeclaresTheNerdctlEngineStack(t *testing.T) {
+	pkg := loadPackaging(t)
+	stack := []string{"nerdctl", "cni-plugins", "rootlesskit", "buildkit"}
+	for _, distro := range []string{"archlinux", "apk"} {
+		f, ok := pkg.Formats[distro]
+		if !ok {
+			t.Fatalf("format %q missing", distro)
+		}
+		for _, p := range stack {
+			if !slices.Contains(f.Depends, p) {
+				t.Errorf("%s.depends must include %q (the nerdctl engine stack)", distro, p)
+			}
+		}
+	}
+	for _, distro := range []string{"rpm", "deb", "ipk"} {
+		f, ok := pkg.Formats[distro]
+		if !ok {
+			continue
+		}
+		for _, p := range stack {
+			if slices.Contains(f.Depends, p) {
+				t.Errorf("%s.depends must NOT include %q — no such package exists", distro, p)
+			}
+		}
+	}
+}
+
 func checkPlainNames(t *testing.T, what string, names ...string) {
 	t.Helper()
 	for _, n := range names {
