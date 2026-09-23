@@ -268,6 +268,11 @@ charly-vm:
             timezone: UTC
             package:
                 - sudo
+# alpine-repo-box — the check-alpine-repo bed's pod workload. A minimal Alpine base box
+# (a raw registry image cannot be a pod's `image:` — the check-bed runner's image-build
+# phase resolves it as a box name — so the pod needs a real charly box whose base IS the
+# alpine image). No init metadata → the pod deploy starts it with `sleep infinity`; the
+# repo-install check steps run in-container.
 sudo-nopasswd:
     candy:
         version: 2026.229.0900
@@ -1367,6 +1372,16 @@ check-structkind:
                         - runtime
                       command:
                         command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
+# charly-dev candy binary-install witness against the LOCAL charly-dev candy (no @github):
+# deploys the charly-dev candy declared in THIS file to a disposable Arch Cloud VM, where
+# the layer's `copy: bin/charly` run step places the in-development binary at
+# /usr/bin/charly. The
+# OS-tracked package install (the former localpkg: map) is GONE — the sdk's
+# localpkg machinery now builds via the `charly generate-packages` plugin
+# (sdk/packagekit) from the `charly` candy's `packaging:` section. The copy step
+# survives ONLY in the charly-dev candy (the local-source install for charly check
+# beds); this bed proves the in-development binary lands on a fresh Arch VM (the
+# repo-based install proof lives in the per-distro check beds).
 check-charly-vm:
     vm:
         from: charly-vm
@@ -2212,6 +2227,17 @@ check-feature-app:
             externalized `charly feature` CLI host-side.
         candy:
             - '@github.com/opencharly/plugin-feature/candy/plugin-feature:v2026.237.1422'
+# =================================================================
+# check-agent-local — R10 witness for the agent de-type (Cutover E). The AI-CLI
+# grader catalog (kind:agent) is a plugin kind stored OPAQUELY; candy/plugin-agent's
+# OpResolve resolves it into a generic AgentExecSpec the check/iterate harness
+# consumes. A disposable kind:local deploy on host: local whose plan carries a
+# deterministic check: (proving the deploy) PLUS an agent-check: step: `charly check
+# run` resolves the project's `agent:` catalog via resolveGraderAgent →
+# resolveAgentViaPlugin (ResolveKind → Invoke(OpResolve)) and drives the claude
+# grader (RunAgentOnce with the resolved AgentExecSpec) to assess the live host —
+# proving the resolved exec spec launches the CLI end-to-end.
+# =================================================================
 check-agent-local:
     local:
         from: check-feature-app
@@ -2233,6 +2259,29 @@ check-agent-local:
               id: agent-grader-resolves-and-runs
               context:
                 - runtime
+# =================================================================
+# check-commands-local — R10 witness for cutover C15's THREE remaining externalized COMMANDs + P15's command:box verbs
+# (candy/plugin-{clean,settings,candy}: command:clean / command:settings / command:candy) — the
+# sixth-through-eighth welded-command externalizations. ONE disposable kind:local deploy on
+# host: local composes the three command plugins and runs each command host-side with a SAFE,
+# read-only / dry-run / --help invocation, one check step per command:
+#   - `charly settings list`  → exit 0 + stdout lists the resolved runtime-config keys (auto_enable);
+#   - `charly candy --help`   → exit 0 (a TREE command whose --help proves dispatch WITHOUT mutating
+#                                any candy manifest — the tree has no non-mutating read verb);
+#   - `charly clean --dry-run`→ exit 0 + stdout carries the "would remove" retention report (dry-run
+#                                touches nothing).
+# clean + settings + candy are all COMPILED-IN and OWN their commands: each Invoke(OpRun) is dispatched
+# in-proc (dispatchInProcCommand). clean reaches a shared core engine over the "retention" HostBuild
+# seam; settings OWNS its config subsystem directly (its "settings" seam RETIRED); candy owns its ENTIRE logic (the yaml.Node
+# candy-manifest mutation) itself, sharing only the generic kit.SetByDotPath / kit.MappingChild utilities
+# (sdk/kit/yaml.go). None uses a hidden core command — proving the externalized commands end-to-end.
+# NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION kept core — NOT "unfixable". RDD (2026-07-01)
+# refuted the chicken-and-egg claim (the CalVer is already
+# Taskfile-computed via scripts/calver.sh, so externalizing IS feasible), but it sheds ZERO deps and would
+# make R9's canonical identity command depend on the plugin subsystem across 3 package repos — worst-value,
+# highest-blast-radius; operator-decided to keep it a core command. Not exercised here (covered by
+# candy/charly's own version check).
+# =================================================================
 check-commands-app:
     local:
         description: |-
@@ -2400,6 +2449,27 @@ check-loader-flat-import-local:
               command:
                 command: "${CHARLY_BIN} box validate -C charly/testdata/flat-import-project"
                 in_container: false
+# =================================================================
+# check-preflight-local — R10 witness for the RELOCATED check-run image
+# PREFLIGHT (K-wave 2 cone R4: the "check-run" HostBuild kind's last arm
+# "preflight" moved to candy/plugin-check's pluginCheckRunPreflight).
+#
+# The preflight arm fires ONLY on the ITERATE path when the sandbox classifies
+# as TargetKindHost (candy/plugin-check/run_cmd.go, case targetKindHost). The
+# bed is a GROUP (targetless → its resource children fold as MEMBERS with
+# BARE-name venues), so the member named after the real project box
+# check-k8s-deploy-app makes preflightImageCandidates(reply.Plan) yield a
+# GENUINE image ref (NOT the bed's own name). pluginCheckRunPreflight then
+# loads the project via loaderkit, filters agent-provisioned venues (this
+# member is NOT agent_provisioned, so it is NOT skipped), and
+# InvokeProvider("build","ensure")-ensures the candidate into local podman
+# storage BEFORE the harness drives the AI. The member's check is a
+# deterministic HOST probe — the member is a kind:local deploy (host-rooted),
+# so the scoring chain is the host executor — asserting the ensured image is
+# in local storage. NO other roster bed exercises this arm (no "preflight:"
+# line in any bed log) and it has no end-to-end test (only the pure
+# preflightImageCandidates unit test); this bed closes that gap live.
+# =================================================================
 check-preflight-sandbox:
     local:
         from: check-feature-app
@@ -2434,6 +2504,27 @@ check-preflight-local:
                 == Bed purpose == This bed proves the relocated check-run image preflight. The only scored check probes the host for the ensured image: `charly box list tags check-k8s-deploy-app` (or `charly box list tags` and confirm `check-k8s-deploy-app` appears).
 
                 == Your task == Run that probe and confirm the image is present. Do NOT modify anything, do not build or deploy, do not create or delete files. Report the probe output and done.
+# =============================================================================
+# dsh-app + check-dsh-pod — the R10 bed for the deepseek-harness dsh candy + the
+# compiled-in plugin-dsh management plugin (command:dsh + verb:dsh).
+#
+# The bed builds a minimal Fedora box composing nodejs + dsh. The npm builder
+# (fedora.fedora-builder) installs @deepseek-ai/dsh 0.1.0-rc.6 globally; node-pty
+# (a dsh dependency) ships NO linux-x64 prebuild in the npm tarball, so its install
+# script falls through to node-gyp — the fedora-builder's build-toolchain provides
+# gcc/make/python3, and the compiled pty.node is N-API (ABI-stable across node
+# versions, so building against the builder's node 20 runs on the image's node 22).
+# The dsh service boots `dsh web` (loopback-only, 127.0.0.1:3080) and the
+# charly-owned dsh-entrypoint exec's a socat forwarder exposing it on eth0:3081
+# (socat cannot share port 3080 with the loopback listener — Linux forbids a
+# wildcard + specific pair on one port — so the published port maps the
+# auto-allocated host port to container 3081).
+# The bed asserts: the pod reaches steady state, the dsh service runs, the web UI
+# answers HTTP 200 in-box AND through the published port (the socat forwarder),
+# node >= 22.19.0 (the dsh floor), the four dsh: verb methods dispatch in-box, and
+# the compiled-in `charly dsh status` command reaches the deployed box over the
+# pod-lifecycle reverse channel.
+# =============================================================================
 dsh-app:
     candy:
         version: 2026.243.0300
@@ -2536,6 +2627,41 @@ check-dsh-pod:
               command:
                 command: ${CHARLY_BIN} dsh status --box check-dsh-pod
                 in_container: false
+# =============================================================================
+# check-retention-app — the FIXTURE BOX of the retention discriminator bed.
+#
+# BLOCKED, NOT DISABLED. This box is `enabled: false` for ONE named reason, and it
+# becomes satisfiable the moment that reason is removed:
+#
+#   candy/plugin-box/box.go:296-302 acquires the build-activity lock and holds it
+#   "across the whole build (the candy podman drive) + the post-build prune", so
+#   the post-build retention pass ALWAYS observes live >= 1 — its own lock. That
+#   makes candy/plugin-clean/retention.go's `if live > 0 { … if lastTag { return
+#   false } }` engage on every build, so `charly box build` can never remove an
+#   image's LAST tag and therefore can never reclaim a distinct image. The lock's
+#   stated purpose is to stop a SIBLING build from untagging a pin an in-flight
+#   build may still resolve; blocking the build's own prune is an unintended
+#   effect the comment does not contemplate.
+#
+# The bed this fixture serves asserts a PAIR: that a multi-tag image keeps every
+# tag (which discriminates the two-ordinal ranking from the pre-fix tag-row one),
+# and that the distinct sibling past the budget is REMOVED (which discriminates
+# nothing, but fails under exactly the conditions that would falsely satisfy the
+# first). The second assertion is the canary, and it cannot pass while the
+# self-lock stands: the only verb that removes a last tag is `charly clean`, which
+# a bed must not run. Measured live on 2026-08-16 — four generations built, gen1
+# left at rank 3 under keep_images: 3, and NOT reclaimed.
+#
+# EXCLUDE THE BUILD'S OWN LOCK FROM THE LIVE COUNT AND THIS BED GOES GREEN. Until
+# then it would assert something the product cannot do, so it stays unbuilt rather
+# than shipping as a check that cannot fail on its own subject.
+#
+# The base is a raw registry ref rather than a distro box on purpose: the fixture
+# must be a LEAF image with nothing built FROM it, because `podman rmi` refuses an
+# image another image depends on and retention swallows that refusal silently
+# (observed on fedora-nonfree:check-docs-2026.227.1835 — selected by retention,
+# refused by the engine, absent from the removed list, still in the store).
+# =============================================================================
 check-retention-app:
     candy:
         version: 2026.228.0400
