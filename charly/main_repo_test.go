@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/spec/refs"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -32,6 +33,13 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	writeMinProject(t, cachedRepo)
+	// A real fetch ALWAYS writes the v2 provenance sidecar (spec#148 gated
+	// IsRepoCached on it, so a legacy sidecar cannot certify a mutated tree). Seed
+	// it here so the immutable-tag cache-hit fast path is exercised, not a network
+	// fetch.
+	if err := refs.WriteRepoCacheProvenance(cachedRepo, "v1.0.0"); err != nil {
+		t.Fatalf("setup: writing cache provenance: %v", err)
+	}
 
 	// Spawn from /tmp so a missed chdir would fail loudly.
 	startCwd := os.TempDir()

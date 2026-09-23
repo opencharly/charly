@@ -9,7 +9,7 @@
 # decode aborted the whole prescan). A charly with ONLY the decode fix (no flat-file read) ALSO
 # fails here, because the plugin ref was never seen. The fixed charly validates OK. Used by the
 # R10 bed check-loader-flat-import-local and by the prescan unit tests.
-version: 2026.249.2125
+version: 2026.261.1747
 import:
     - flat.yml
 discover: []
