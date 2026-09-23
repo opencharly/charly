@@ -67,9 +67,11 @@ func init() {
 var engineProviderOpsAreServed = container.EngineOps
 
 // engineDescribeFor resolves an engine capability through the CLASS (registry)
-// rather than the table directly, proving the class is wired end-to-end. It is
-// the in-tree consumer the class previously lacked: a caller that asks the
-// engine PROVIDER (not the data table) for a capability.
+// rather than the data table directly. It is the class's typed accessor: today it
+// is consumed by engine_provider_test.go's wiring proof, and it is the seam a
+// host call site uses to ask the engine PROVIDER (not the data table) for a
+// capability. The host's engine selection still reads the capability table
+// directly in this cutover; routing it through this accessor is a following unit.
 func engineDescribeFor(engine string) (spec.EngineCapability, bool) {
 	prov, ok := providerRegistry.ResolveEngine(engine)
 	if !ok {
