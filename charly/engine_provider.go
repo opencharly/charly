@@ -22,10 +22,8 @@ import (
 // package-var initializer via RegisterBuiltinProvider and is intentionally absent
 // from both builtinProviderInstances and the `providers:` manifest. It is
 // compiled in for the same bootstrap reasoning as loader/refs (the engine is
-// needed early), and it is consumed today by engine_provider_test.go's wiring
-// proof; the host's engine SELECTION still reads the capability table directly,
-// and routing those call sites through this class is the remaining Phase-1 unit
-// (opencharly/charly#633).
+// needed early), and it is consumed by the host through hostEngineBinary (the
+// overlay base-image probe) and exercised by engine_provider_test.go.
 //
 // podman and docker are compiled in here; nerdctl is the out-of-process
 // engine:nerdctl plugin (a project that references it connects it by word). All
