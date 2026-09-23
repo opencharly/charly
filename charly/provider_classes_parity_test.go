@@ -24,7 +24,7 @@ func TestProviderClassesParity(t *testing.T) {
 	}
 	// Every typed constant must remain a valid class (nothing hand-deleted from the set).
 	all := []ProviderClass{ClassKind, ClassVerb, ClassDeployTarget, ClassStep, ClassBuilder,
-		ClassCommand, ClassBuild, ClassLoader, ClassRefs, ClassAgentRuntime, ClassTerminal}
+		ClassCommand, ClassBuild, ClassLoader, ClassRefs, ClassEngine, ClassAgentRuntime, ClassTerminal}
 	for _, c := range all {
 		if !providerClasses[c] {
 			t.Errorf("typed constant %q is missing from the derived closed set", c)

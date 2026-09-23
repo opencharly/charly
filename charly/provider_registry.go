@@ -250,6 +250,9 @@ func (r *Registry) ResolveDeploy(word string) (Provider, bool) {
 func (r *Registry) ResolveStep(word string) (Provider, bool)    { return r.resolve(ClassStep, word) }
 func (r *Registry) ResolveBuilder(word string) (Provider, bool) { return r.resolve(ClassBuilder, word) }
 
+// ResolveEngine resolves a container-engine provider word (podman/docker/nerdctl).
+func (r *Registry) ResolveEngine(word string) (Provider, bool) { return r.resolve(ClassEngine, word) }
+
 // allServedUnits expresses every in-proc provider as PluginUnits for
 // `charly __plugin serve`: each builtin plugin unit (carrying its self-contained
 // schema) plus a single schema-less unit wrapping the remaining core providers

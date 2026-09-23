@@ -41,14 +41,14 @@ func deriveChildExecutorForPath(path string, node *spec.DeployNode, parentExec s
 		// exact name (omitting the prefix made a nested-child deploy exec a nonexistent bare-named
 		// container, exit 125).
 		name := "charly-" + specexec.NestedContainerName(path)
-		engineJump := specexec.JumpPodmanExec
-		if node.Engine == "docker" {
-			engineJump = specexec.JumpDockerExec
-		}
+		// The engine is DATA on the jump (NestedJump.Engine), not one enum arm per
+		// engine: a new engine sets Engine, it does not add a JumpKind. Empty
+		// resolves to the default engine (the exec hop's own engineBinary).
+		engine := string(node.Engine)
 		if parentExec == nil {
 			parentExec = specexec.ShellExecutor{}
 		}
-		return &specexec.NestedExecutor{Parent: parentExec, Jump: specexec.NestedJump{Kind: engineJump, Target: name}}, nil
+		return &specexec.NestedExecutor{Parent: parentExec, Jump: specexec.NestedJump{Kind: specexec.JumpContainerExec, Engine: engine, Target: name}}, nil
 	case "ssh":
 		return specexec.VmChildExecutor(parentExec, path)
 	case "reject":

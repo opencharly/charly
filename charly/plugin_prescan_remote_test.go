@@ -60,7 +60,7 @@ func TestPrescanRemoteLegRunsWithoutDiscoverBlock(t *testing.T) {
 
 	// A root manifest that pins the plugin remotely and carries NO discover: block —
 	// the exact shape that used to skip the remote leg entirely.
-	root := []byte(`version: 2026.249.2125
+	root := []byte(`version: 2026.261.1747
 probe-img:
     candy:
         version: 2026.242.0001
