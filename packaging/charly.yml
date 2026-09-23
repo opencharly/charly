@@ -173,6 +173,13 @@ charly:
                         - tmux
                         - fuse-overlayfs
                         - slirp4netns
+                        # the nerdctl engine stack (plan/nerdctl-integration.md Phase 5):
+                        # nerdctl + CNI + rootlesskit + buildkit. fuse-overlayfs +
+                        # slirp4netns above are shared with the podman path.
+                        - nerdctl
+                        - cni-plugins
+                        - rootlesskit
+                        - buildkit
                         - libisoburn
                         - cdrtools
                         - edk2-ovmf
@@ -308,6 +315,11 @@ charly:
                         - libvirt
                         - libvirt-client
                         - libarchive-tools
+                        # the nerdctl engine stack (plan/nerdctl-integration.md Phase 5):
+                        - nerdctl
+                        - cni-plugins
+                        - rootlesskit
+                        - buildkit
                         - iproute2
                         - xorriso
                         - ovmf
