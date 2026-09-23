@@ -111,7 +111,7 @@ func TestPackagingDeclaresTheNerdctlEngineStack(t *testing.T) {
 	for _, distro := range []string{"rpm", "deb", "ipk"} {
 		f, ok := pkg.Formats[distro]
 		if !ok {
-			continue
+			t.Fatalf("format %q missing — the negative assertion must not silently vanish", distro)
 		}
 		for _, p := range stack {
 			if slices.Contains(f.Depends, p) {
