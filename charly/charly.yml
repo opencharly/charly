@@ -459,7 +459,7 @@ alpine:
                     download_template: https://opencharly.github.io/charly-alpine/${ARCH}/charly-${ARCH}.apk
                     probe: command -v apk
                 uninstall_template: |
-                    apk del{{range .Packages}} {{.}}{{end}}
+                    apk del{{range .Packages}} {{splitFirst . "="}}{{end}}
                 phase:
                     install:
                         container: |
@@ -616,7 +616,7 @@ arch:
                             (pacman-key --populate 2>/dev/null || true) && \
                             OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
                 uninstall_template: |
-                    pacman -Rs --noconfirm{{range .Packages}} {{.}}{{end}}
+                    pacman -Rs --noconfirm{{range .Packages}} {{splitFirst . "="}}{{end}}
                 local_pkg:
                     # Refresh the sync DB (+ reseed the keyring from the installed keyring
                     # packages) BEFORE installing the local pkg — `pacman -U` resolves the
@@ -1370,7 +1370,7 @@ debian:
                             {{- range .Packages}} \
                                   {{.}}{{end}}
                 uninstall_template: |
-                    DEBIAN_FRONTEND=noninteractive apt-get purge -y{{range .Packages}} {{.}}{{end}}
+                    DEBIAN_FRONTEND=noninteractive apt-get purge -y{{range .Packages}} {{splitFirst . "="}}{{end}}
         debootstrap:
             suite: trixie
             mirror: http://deb.debian.org/debian
@@ -1677,7 +1677,7 @@ fedora:
                                 dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:{{replace . "/" ":"}}.enabled=0"
                             {{- end}}
                 uninstall_template: |
-                    dnf remove -y{{range .Packages}} {{.}}{{end}}
+                    dnf remove -y{{range .Packages}} {{splitFirst . "="}}{{end}}
 ubuntu:
     distro:
         inherits: debian
