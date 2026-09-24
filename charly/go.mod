@@ -25,7 +25,7 @@ require (
 	github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026242.1131
 	github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418
 	github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419
-	github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026237.1419
+	github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026266.2321
 	github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026250.951
 	github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026237.1419
 	github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap v0.2026237.1419
