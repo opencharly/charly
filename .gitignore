@@ -32,9 +32,10 @@ profile.cov
 # vendor/
 
 # Go workspace file — COMMITTED (not ignored): go.work is a generated artifact
-# (pluginsgen, from charly.yml compiled_plugins:) that maps the charly module + every
-# compiled-in plugin candy, so `go build ./charly` / `go test ./...` resolve the candy
-# imports in charly/plugins_generated.go WITHOUT first running `scripts/bootstrap-charly.sh`.
+# (pluginsgen, from charly.yml compiled_plugins:) listing the charly module; each
+# compiled-in plugin candy resolves as a `require` pin in charly/go.mod from the
+# module proxy (no `use` directive), so `go build ./charly` / `go test ./...` resolve
+# the candy imports in charly/plugins_generated.go WITHOUT first running `scripts/bootstrap-charly.sh`.
 # go.work.sum is its checksum lock (committed for reproducible/offline builds). The
 # reproducibility gate is TestPluginsGenReproducible.
 

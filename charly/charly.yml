@@ -44,8 +44,10 @@ verb_primaries:
 # compiled_plugins — the plugin CANDIES compiled INTO this charly binary (in-proc
 # placement). Read by the pluginsgen generator (charly/internal/pluginsgen, run by
 # `scripts/bootstrap-charly.sh` before `go build`) to emit charly/plugins_generated.go (one
-# registerCompiledPlugin() call per entry) + the repo-root go.work (a `use` directive
-# per entry, so `go build ./charly` resolves the candy imports). A plugin candy NOT
+# registerCompiledPlugin() call per entry). Each compiled-in plugin module is a `require`
+# pin in charly/go.mod resolved from the module proxy (no `use` directive in go.work — see
+# the generator's go.work writer), so `go build ./charly` resolves the candy imports. A
+# plugin candy NOT
 # listed here still loads OUT-OF-PROCESS over gRPC when a plan references its word
 # (the coexist path). "which plugins are in the binary" is a normal candy-inclusion
 # choice; a consumer overrides it by pointing pluginsgen at its own charly.yml.

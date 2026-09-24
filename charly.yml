@@ -426,8 +426,8 @@ sudo-nopasswd:
 # DECLARING FILE's directory as SourceDir (loader_threaded.go:395), so `copy:
 # bin/charly` below resolves against the REPO ROOT — where `scripts/bootstrap-charly.sh`
 # already writes the binary. The former candy/charly-dev/bin/charly copy, and the
-# `cp` in scripts/bootstrap-charly.sh that kept it in step, existed only to make that path
-# resolve from a candy dir; both are gone.
+# historical `cp` in the deleted build task that kept it in step, existed only to make
+# that path resolve from a candy dir; both are gone.
 #
 # General-use boxes compose `charly` (installed from the published per-distro
 # package repos). This variant is the ONLY surviving `copy: bin/charly` install
