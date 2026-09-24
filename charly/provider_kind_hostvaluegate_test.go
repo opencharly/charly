@@ -11,10 +11,8 @@ import (
 )
 
 // hvgTestProv is a minimal HOST-VALUE-GATED kind provider for `task`: it echoes the
-// OpLoad body and honours OpValidate. Registered into the test registry ONLY when the
-// REAL compiled-in candy/plugin-task provider is absent (a charly build without the
-// plugin pin), so this test is placement-tolerant: it exercises the generic seam
-// against whichever `task` provider the build carries.
+// OpLoad body and honours OpValidate. It stands in for the not-yet-pinned
+// candy/plugin-task provider so this test exercises the DISPATCH ARM in runPluginKind.
 type hvgTestProv struct{ reject bool }
 
 func (p *hvgTestProv) Reserved() string     { return "task" }
@@ -40,32 +38,20 @@ func (p *hvgTestProv) Invoke(_ context.Context, op *Operation) (*Result, error) 
 	}
 }
 
-// TaskProvider resolves the `task` kind provider, registering a test double when the
-// real compiled-in plugin is not present in the build.
-func taskProvider(t *testing.T) Provider {
-	t.Helper()
-	if prov, ok := providerRegistry.ResolveKind("task"); ok {
-		return prov
-	}
+// TestRunPluginKind_HostValueGatedTask drives the DISPATCH ARM itself — a `task:` node
+// through runPluginKind — so deleting the generic arm's branch would leave this test
+// RED (the node would fall to the flat op.Params path and fail "no input def
+// registered"). It proves:
+//
+//   - a valid `task:` node dispatches through the arm and folds opaquely into
+//     acc.PluginKinds["task"] (NOT acc.Deploy — it is not a deploy substrate);
+//   - a typo'd field FAILS the closedness gate (the kept #TaskValue def is CLOSED);
+//   - a task missing its required `description` FAILS via the deep OpValidate (the
+//     CONCRETE gate the closedness-only host check cannot express).
+func TestRunPluginKind_HostValueGatedTask(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	prov := &hvgTestProv{}
 	RegisterBuiltinProvider(prov)
-	return prov
-}
-
-// TestFoldHostValueGatedKind_Task proves the generic host-value-gated kind arm
-// (foldHostValueGatedKind) for the `task` kind whose value is closedness-gated against
-// the kept #TaskValue def:
-//
-//   - a valid `task:` node folds opaquely into acc.PluginKinds["task"] (NOT acc.Deploy
-//     — a host-value-gated kind is not a deploy substrate);
-//   - a typo'd field FAILS the closedness gate (the kept def is CLOSED);
-//   - a task missing its required `description` FAILS via the deep OpValidate (the
-//     CONCRETE gate the closedness-only host check cannot express).
-//
-// The whole test FAILS without the generic seam (`task` would not resolve to this arm).
-func TestFoldHostValueGatedKind_Task(t *testing.T) {
-	prov := taskProvider(t)
 
 	good := singleParsedNode(t, `mytask:
   task:
@@ -76,8 +62,8 @@ func TestFoldHostValueGatedKind_Task(t *testing.T) {
         context: [deploy]
 `)
 	var acc spec.MaterializedProject
-	if err := foldHostValueGatedKind(prov, good, &acc); err != nil {
-		t.Fatalf("valid task must fold: %v", err)
+	if err := runPluginKind(prov, good, &acc); err != nil {
+		t.Fatalf("valid task must dispatch through the arm and fold: %v", err)
 	}
 	if acc.PluginKinds["task"]["mytask"] == nil {
 		t.Fatalf("task not folded into PluginKinds[task]; got %v", acc.PluginKinds)
@@ -89,18 +75,15 @@ func TestFoldHostValueGatedKind_Task(t *testing.T) {
 	// closedness: a typo'd task field is rejected by the kept #TaskValue def.
 	typo := singleParsedNode(t, "badtask:\n  task:\n    description: x\n    bogus: 1\n")
 	var acc2 spec.MaterializedProject
-	if err := foldHostValueGatedKind(prov, typo, &acc2); err == nil {
+	if err := runPluginKind(prov, typo, &acc2); err == nil {
 		t.Fatal("a typo'd task field must be rejected by the host value gate")
 	}
 
-	// concreteness: a missing required description fails the deep OpValidate. The real
-	// plugin rejects it unconditionally; the test double is told to (mirroring it).
-	if p, ok := prov.(*hvgTestProv); ok {
-		p.reject = true
-	}
+	// concreteness: a missing required description fails the deep OpValidate.
+	prov.reject = true
 	missing := singleParsedNode(t, "t:\n  task:\n    plan:\n      - check: x\n        command: \"true\"\n")
 	var acc3 spec.MaterializedProject
-	if err := foldHostValueGatedKind(prov, missing, &acc3); err == nil {
+	if err := runPluginKind(prov, missing, &acc3); err == nil {
 		t.Fatal("a task missing its required description must fail the deep OpValidate")
 	}
 }
