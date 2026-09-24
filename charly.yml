@@ -2627,6 +2627,17 @@ check-dsh-pod:
               command:
                 command: ${CHARLY_BIN} dsh status --box check-dsh-pod
                 in_container: false
+# =============================================================================
+# agentteams + agentteams-manager + check-agentteams-pod — the R10 bed for the
+# full AgentTeams stack (minio, matrix, element, higress, controller) on the
+# cachyos base. Every service runs as the image user (uid 1000) against its own
+# home-relative volume (~/.agentteams/minio, ~/.agentteams/matrix,
+# ~/.agentteams/higress, ~/.agentteams/controller) — the rootless charly
+# architecture, no root anywhere. The bed binds the host rootless podman socket
+# into the box so the controller can spawn the manager container from the
+# pre-built agentteams-manager image (AGENTTEAMS_MANAGER_IMAGE) on the charly
+# network.
+# =============================================================================
 agentteams:
     candy:
         version: 2026.243.0300
