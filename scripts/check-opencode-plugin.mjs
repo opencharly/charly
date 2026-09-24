@@ -144,26 +144,21 @@ for (const pluginPath of plugins) {
 
   // --- Layer 2: the REAL loader, opt-in -------------------------------------
   if (process.env.LIVE_OPENCODE === "1") {
-    // Warm-up: opencode builds its location/plugin cache on the first
-    // invocation in a directory, and a just-added local plugin is not listed
-    // until the second (RCA, measured: call 1 → "No plugins found", call 2 →
-    // resolved). Warm, then assert — never assert on the cold call.
-    const listOnce = () =>
+    // opencode builds its location/plugin cache on the first invocation in a
+    // directory, so the first call may not yet list a just-added local plugin
+    // (RCA, measured: call 1 → "No plugins found", call 2 → resolved). Call
+    // TWICE unconditionally and assert on the second — a deterministic warm-up,
+    // not a retry-on-absent-result.
+    const list = () =>
       spawnSync("opencode", ["plugin", "list"], { cwd: root, encoding: "utf8" });
-    const findByPath = (stdout) =>
-      stdout.split("\n").find((l) => l.includes(pluginPath));
-
-    let r = listOnce();
+    list(); // warm-up; its output is deliberately not asserted on
+    const r = list();
     if (r.error) {
       fail(`opencode plugin list did not run: ${r.error.message}`);
     } else {
       if (r.status !== 0) fail(`opencode plugin list exit ${r.status}`);
-      let line = findByPath(r.stdout);
-      if (line === undefined) {
-        r = listOnce();
-        line = findByPath(r.stdout);
-      }
       // A load failure shows the id as "-"; a real load shows the plugin id.
+      const line = r.stdout.split("\n").find((l) => l.includes(pluginPath));
       ok(
         line !== undefined && !line.trim().startsWith("-"),
         `live loader resolves id "${plugin.id}" (opencode plugin list)`,
