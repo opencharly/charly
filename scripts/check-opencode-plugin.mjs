@@ -39,7 +39,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -162,25 +162,17 @@ if (process.env.LIVE_OPENCODE === "1") {
           cwd: proj,
           timeout: 240000,
         });
-      const listPlugins = () => run("opencode", ["plugin", "list"], { cwd: proj });
 
-      // The loader builds its location/plugin cache on the FIRST `plugin list`
-      // call in a directory: call 1 reports "No plugins found", call 2 resolves
-      // (RCA, measured — a `run` does NOT prime this). Call it twice, assert on
-      // the second; deterministic, not a retry-on-failure.
-      listPlugins();
-      const list = listPlugins();
-      for (const abs of plugins) {
-        const rel = relative(root, abs); // e.g. .opencode/plugins/umbrella-gates.ts
-        const line = list.stdout.split("\n").find((l) => l.includes(rel));
-        ok(
-          line !== undefined && !line.trim().startsWith("-"),
-          `real \`opencode plugin list\` resolves ${rel}`,
-        );
-        if (line) console.log(`        ${line.trim()}`);
-      }
+      // The plugin id assertion is deliberately NOT a separate `opencode plugin
+      // list` call: that command has no directory or `--standalone` option, so it
+      // always queries the SHARED background service and its result depends on
+      // whichever project bound that service (measured: it reports "No plugins
+      // found" for a fresh project while the shared service is elsewhere). The
+      // deny/allow assertions below are the real proof and are deterministic:
+      // they run the real binary against THIS project via `--standalone`, and a
+      // plugin that failed to load would register no hook, so nothing would block.
 
-      // 2. A gated shell call is DENIED by the real gate through real opencode.
+      // 1. A gated shell call is DENIED by the real gate through real opencode.
       // The block comes from REPO STATE, not a "dangerous-looking" flag: a staged
       // `charly/*_aliases.go` trips the gate's ZERO-ALIASES rule on an innocent
       // `git commit -m x`. That matters because a recognisable bypass flag
@@ -203,7 +195,7 @@ if (process.env.LIVE_OPENCODE === "1") {
         "real opencode: the denied commit created nothing",
       );
 
-      // 3. A benign shell call proceeds — same command, no blocked state staged.
+      // 2. A benign shell call proceeds — same command, no blocked state staged.
       //    Unstage only the alias file and ensure f.txt is staged again; do NOT
       //    `git reset` (which would unstage everything and leave nothing to commit).
       run("git", ["rm", "-q", "--cached", "--ignore-unmatch", "charly/foo_aliases.go"], {
