@@ -155,8 +155,8 @@ github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418 h1:kleBg1r5FQm
 github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418/go.mod h1:v0cn/k1CRWVxIG4rDc+ba4dSumDyapHQTN2Cdz6CppY=
 github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419 h1:DcdNkUOzYQKw8X/3idFoINSnTNq0LOdcQLOFg/5Osig=
 github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419/go.mod h1:tL1Tiob105rvxInfA9H5UqFKB5rTEMFE9F6l6dDMnrw=
-github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026237.1419 h1:ZFMury3xLAH4BH3LFNEIVbodRua6AXDTNwCXRz53fjo=
-github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026237.1419/go.mod h1:lM0klmUElJ61ImzGI1GRsJM1sn1n82APZZOyYsBPeVg=
+github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026266.2321 h1:7R9a52AY87U9MKlsa6/7YVqPUImTh2sP+FRjTMBdclg=
+github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026266.2321/go.mod h1:lM0klmUElJ61ImzGI1GRsJM1sn1n82APZZOyYsBPeVg=
 github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026250.951 h1:5UBXwbx5VtRsgp7Wj7Rw1hvsb+iFHbm1OHWNSLVs050=
 github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026250.951/go.mod h1:5Uz4H7GYjW9WS8yPJGlr+dRv/jrR985d+PbaxJeAJZ8=
 github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026237.1419 h1:PSgk+nndtBbAUiEGFQr98IkjglpMxb7Je/GfTSUBrJ0=
