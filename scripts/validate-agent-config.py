@@ -56,7 +56,7 @@ SHARED_POLICY_MARKERS = (
     "Where things are documented",
     "pr-validator",
     "root-cause-analyzer",
-    "task build:binary",
+    "scripts/bootstrap-charly.sh",
     "disposable: true",
     "direct push to `main`",
     "one phase",
@@ -101,11 +101,6 @@ def current_markdown_names(
     """Decode `git ls-files -z` output without creating a fixture repository."""
     names = {record.decode() for record in records.split(b"\0") if record}
     return sorted(name for name in names if path_is_file(name))
-
-
-def task_dry_plan_contains(stdout: str, stderr: str, command: str) -> bool:
-    """Check Task's compiled plan regardless of its documented output stream."""
-    return command in f"{stdout}\n{stderr}"
 
 
 def rulebook_contract_errors(adapter: str, generic: str) -> list[str]:
@@ -277,85 +272,43 @@ def validate_developer_profiles(root: pathlib.Path, errors: list[str]) -> None:
 
 
 def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
-    """Require the executable, module-aware core Go command contract."""
-    buildfile = root / "taskfiles" / "Build.yml"
+    """Require the executable, module-aware core Go command contract.
+
+    The build gate is `scripts/bootstrap-charly.sh` — the ONE non-charly
+    entrypoint (the build that PRODUCES the binary cannot itself be a charly
+    task). Repository maintenance is the `kind:task` surface in charly.yml, run
+    via `charly task <name>`. There is no Taskfile any more.
+    """
+    buildfile = root / "scripts" / "bootstrap-charly.sh"
     try:
         build_text = buildfile.read_text()
     except OSError as error:
-        errors.append(f"core Go gate build file is unreadable: {error}")
+        errors.append(f"core Go gate build script is unreadable: {error}")
         return
     required_build_terms = (
-        "binary:",
         "main.BuildCalVer",
         "-o ../bin/.charly.next",
         "mv bin/.charly.next bin/charly",
+        "pluginsgen",
     )
     for term in required_build_terms:
         if term not in build_text:
             errors.append(f"core Go build gate lacks required content: {term!r}")
+    if not os.access(buildfile, os.X_OK):
+        errors.append("core Go build script scripts/bootstrap-charly.sh is not executable")
 
+    # The task surface: charly.yml must declare the maintenance tasks as
+    # kind:task entities (replacing the deleted taskfiles/).
+    manifest = root / "charly.yml"
     try:
-        task_list = subprocess.run(
-            ["task", "--list", "--json"],
-            cwd=root,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        manifest_text = manifest.read_text()
     except OSError as error:
-        errors.append(f"core Go gate cannot resolve Task includes: {error}")
+        errors.append(f"core Go gate charly.yml is unreadable: {error}")
         return
-    if task_list.returncode:
-        detail = (task_list.stderr or task_list.stdout).strip()
-        errors.append(f"core Go gate cannot resolve Task includes: {detail}")
-        return
-    try:
-        tasks = json.loads(task_list.stdout).get("tasks", [])
-    except (json.JSONDecodeError, AttributeError) as error:
-        errors.append(f"core Go gate returned invalid Task task list: {error}")
-        return
+    if "task:" not in manifest_text:
+        errors.append("core Go gate charly.yml declares no kind:task entities")
 
-    binary_task = next(
-        (
-            task
-            for task in tasks
-            if isinstance(task, dict) and task.get("name") == "build:binary"
-        ),
-        None,
-    )
-    expected_taskfile = root / "taskfiles" / "Build.yml"
-    taskfile_path = (
-        binary_task.get("location", {}).get("taskfile")
-        if isinstance(binary_task, dict)
-        else None
-    )
-    if not binary_task:
-        errors.append("core Go gate lacks resolved build:binary task")
-    elif not isinstance(taskfile_path, str):
-        errors.append("core Go build task has no resolved taskfile location")
-    elif pathlib.Path(taskfile_path).resolve() != expected_taskfile.resolve():
-        errors.append(
-            "core Go build task must be owned by taskfiles/Build.yml, "
-            f"not {taskfile_path!r}"
-        )
-    else:
-        dry_plan = subprocess.run(
-            ["task", "--dry", "build:binary"],
-            cwd=root,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if dry_plan.returncode:
-            detail = (dry_plan.stderr or dry_plan.stdout).strip()
-            errors.append(f"core Go build task cannot compile: {detail}")
-        elif not task_dry_plan_contains(
-            dry_plan.stdout, dry_plan.stderr, "main.BuildCalVer"
-        ):
-            errors.append(
-                "core Go build task lacks the CalVer stamp"
-            )
-
+    # The build gate the rulebook names must be the bootstrap script.
     for name in ("CLAUDE.md", "AGENTS.md"):
         path = root / name
         try:
@@ -363,8 +316,8 @@ def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
         except OSError as error:
             errors.append(f"core Go gate policy is unreadable: {error}")
             continue
-        if "task build:binary" not in text:
-            errors.append(f"{name} does not name the core Go build gate task")
+        if "scripts/bootstrap-charly.sh" not in text:
+            errors.append(f"{name} does not name the core Go build gate script")
         if BARE_ROOT_GO_GATE.search(text):
             errors.append(f"{name} contains a bare superproject Go ./... gate")
 
@@ -384,8 +337,6 @@ def self_test() -> None:
     records = b"keep.md\0old.md\0new.md\0"
     names = current_markdown_names(records, {"keep.md", "new.md"}.__contains__)
     assert names == ["keep.md", "new.md"]
-    assert task_dry_plan_contains("", "go build -ldflags -X main.BuildCalVer", "main.BuildCalVer")
-    assert not task_dry_plan_contains("task: no-op", "", "main.BuildCalVer")
     expected = "a" * 40
 
     def successful_git(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:

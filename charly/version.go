@@ -8,7 +8,7 @@ import (
 )
 
 // BuildCalVer is the CalVer build identity of THIS binary, injected at compile
-// time via `-ldflags "-X main.BuildCalVer=<calver>"` (see taskfiles/Build.yml,
+// time via `-ldflags "-X main.BuildCalVer=<calver>"` (see scripts/bootstrap-charly.sh,
 // which derives it from the git commit date through scripts/calver.sh — the
 // same value the distro repos' packaging workflows stamp as the release version).
 // Empty for an unstamped build (`go build` / `go test` without the ldflag).

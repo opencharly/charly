@@ -144,8 +144,8 @@ func (c *VersionCmd) Run() error {
 	fmt.Println(v)
 	if v == "unknown" {
 		// A non-zero exit lets scripts gate on an UNSTAMPED binary (build with
-		// `task build:binary`); the version is still printed to stdout above (#74).
-		return fmt.Errorf("unstamped binary (version %q) — build with `task build:binary`", v)
+		// `scripts/bootstrap-charly.sh`); the version is still printed to stdout above (#74).
+		return fmt.Errorf("unstamped binary (version %q) — build with `scripts/bootstrap-charly.sh`", v)
 	}
 	return nil
 }

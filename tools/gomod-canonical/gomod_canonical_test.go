@@ -19,7 +19,7 @@ var contractRequireRe = regexp.MustCompile(`(?m)^\s*github\.com/opencharly/(sdk|
 var contractReplaceRe = regexp.MustCompile(`(?m)^replace github\.com/opencharly/(sdk|spec) =>`)
 
 // lockstepModules returns every in-repo module that requires either contract module —
-// the exact set `task mods:tidy` sweeps. The glob is deliberately NOT `candy/plugin-*`:
+// the exact set `charly task mods-tidy` sweeps. The glob is deliberately NOT `candy/plugin-*`:
 // that shape misses `tools/generate-packages` (the command-plugin re-export shim — a candy
 // module that is not a plugin, and no longer under candy/ at all) and the `tools/golden-*`
 // fixture modules, and all three were found broken by exactly that blind spot. The shim was
@@ -66,7 +66,7 @@ func lockstepModules(t *testing.T) []string {
 // (opencharly/charly#326).
 //
 // The failure this catches is real and was observed twice in one afternoon before the
-// shared-pin gate existed. The remedy on failure is `task mods:tidy`.
+// shared-pin gate existed. The remedy on failure is `charly task mods-tidy`.
 func TestContractPinsMatchShared(t *testing.T) {
 	// The spec anchor is charly/go.mod — the core module's require, the single in-tree
 	// source of truth for the shared spec pin.
@@ -114,12 +114,12 @@ func TestContractPinsMatchShared(t *testing.T) {
 			switch m[1] {
 			case "sdk":
 				if m[2] != wantSDK {
-					t.Errorf("%s: requires sdk %s, but the shared sdk pin is %s — run `task mods:tidy`",
+					t.Errorf("%s: requires sdk %s, but the shared sdk pin is %s — run `charly task mods-tidy`",
 						mod, m[2], wantSDK)
 				}
 			case "spec":
 				if m[2] != wantSpec {
-					t.Errorf("%s: requires spec %s, but the shared spec pin is %s — run `task mods:tidy`",
+					t.Errorf("%s: requires spec %s, but the shared spec pin is %s — run `charly task mods-tidy`",
 						mod, m[2], wantSpec)
 				}
 			}

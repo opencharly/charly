@@ -254,7 +254,7 @@ skills and are mandatory when dispatched.
   schemas, generated files, and other user-visible output at their actual
   boundary.
 - **R9 — Binary equals source.** Build the CalVer-stamped worktree-local binary
-  with `task build:binary`, invoke it through that worktree's `bin`, verify its
+  with `scripts/bootstrap-charly.sh`, invoke it through that worktree's `bin`, verify its
   version and dependency/gitlink consistency, and never install it as a shared
   binary. Runtime OS dependencies belong in the charly candy's `packaging:`
   section (`packaging/charly.yml`).
@@ -269,8 +269,10 @@ Any rule violation forbids commit. Fix it and rerun the full gate, or stop and
 ask the operator. A lower confidence tier never legalizes a violation.
 
 The core Go gate runs `go test ./...` and `go vet ./...` from `charly/`, then
-`task build:binary` from the superproject and confirms `bin/charly version`.
-Never run bare module-wide Go commands from the superproject. Preserve
+`scripts/bootstrap-charly.sh` from the superproject and confirms `bin/charly version`.
+Repository maintenance (mods-tidy, push, …) is the `kind:task` surface in
+charly.yml, run via `charly task <name>`. Never run bare module-wide Go commands
+from the superproject. Preserve
 individual terminal proof when an aggregate task omits declared commands.
 
 ## Disposable-Only Autonomy

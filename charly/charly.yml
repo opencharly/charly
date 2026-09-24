@@ -43,7 +43,7 @@ verb_primaries:
 
 # compiled_plugins — the plugin CANDIES compiled INTO this charly binary (in-proc
 # placement). Read by the pluginsgen generator (charly/internal/pluginsgen, run by
-# `task build:binary` before `go build`) to emit charly/plugins_generated.go (one
+# `scripts/bootstrap-charly.sh` before `go build`) to emit charly/plugins_generated.go (one
 # registerCompiledPlugin() call per entry) + the repo-root go.work (a `use` directive
 # per entry, so `go build ./charly` resolves the candy imports). A plugin candy NOT
 # listed here still loads OUT-OF-PROCESS over gRPC when a plan references its word
@@ -109,6 +109,7 @@ compiled_plugins:
     - plugin-oci
     - plugin-status
     - plugin-check
+    - plugin-task
     - plugin-agentteams
     - plugin-dsh
     - plugin-ollama
