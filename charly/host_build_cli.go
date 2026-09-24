@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/opencharly/spec/spec"
@@ -42,9 +43,45 @@ func hostBuildCli(ctx context.Context, req spec.CliRequest, _ buildEngineContext
 	return runCliSubcommand(ctx, executable, req), nil
 }
 
+// mergedChildEnv returns the child environment: the host's own environment with
+// req.Env merged OVER it (a per-call key REPLACES the inherited value for the same
+// key). Returns nil when the request carries no env, so os/exec inherits the host
+// environment unchanged (byte-identical to the pre-env behavior). A nil req.Env map
+// and an empty map are both no-ops.
+func mergedChildEnv(extra map[string]string) []string {
+	if len(extra) == 0 {
+		return nil
+	}
+	base := os.Environ()
+	// Index the inherited entries by key so a per-call key overrides in place
+	// (preserving order) rather than appending a duplicate.
+	idx := make(map[string]int, len(base))
+	for i, kv := range base {
+		if k, _, ok := strings.Cut(kv, "="); ok {
+			idx[k] = i
+		}
+	}
+	for k, v := range extra {
+		entry := k + "=" + v
+		if i, ok := idx[k]; ok {
+			base[i] = entry
+		} else {
+			base = append(base, entry)
+		}
+	}
+	return base
+}
+
 func runCliSubcommand(ctx context.Context, executable string, req spec.CliRequest) spec.CliReply {
 	cmd := exec.Command(executable, req.Argv...)
 	cmd.Stdin = os.Stdin
+	// Merge the request's per-call env over the inherited environment: this is the
+	// placement-invariant carrier for isolation vars (CHARLY_REPO_OVERRIDE /
+	// CHARLY_DEPLOY_CONFIG / CHARLY_PREEMPT_LEASE) the caller would otherwise have
+	// to os.Setenv into its OWN process — which only works when caller and child
+	// share a process (compiled-in). Passing them here makes the child receive them
+	// identically whether the caller is compiled-in or runtime-loaded.
+	cmd.Env = mergedChildEnv(req.Env)
 	// The host CHILD being alive IS forward progress for the enclosing plugin call:
 	// a lifecycle rebuild runs a full unattended OS install here (~13min), and the
 	// idle guard must see it as progress for its whole duration, else a legitimate
