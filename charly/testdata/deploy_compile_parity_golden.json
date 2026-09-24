@@ -325,7 +325,7 @@
           ],
           "cache_mount": [
             {
-              "dst": "/tmp/npm-cache"
+              "dst": "/var/cache/charly/npm-cache"
             }
           ],
           "phase": {
@@ -371,15 +371,15 @@
           ],
           "cache_mount": [
             {
-              "dst": "/tmp/pixi-cache"
+              "dst": "/var/cache/charly/pixi-cache"
             },
             {
-              "dst": "/tmp/rattler-cache"
+              "dst": "/var/cache/charly/rattler-cache"
             }
           ],
           "env": {
-            "PIXI_CACHE_DIR": "/tmp/pixi-cache",
-            "RATTLER_CACHE_DIR": "/tmp/rattler-cache"
+            "PIXI_CACHE_DIR": "/var/cache/charly/pixi-cache",
+            "RATTLER_CACHE_DIR": "/var/cache/charly/rattler-cache"
           },
           "runtime_env": {
             "PIXI_CACHE_DIR": "~/.cache/pixi",

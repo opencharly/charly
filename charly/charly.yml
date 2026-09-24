@@ -298,9 +298,9 @@ aur:
         cache_mount:
             - dst: /var/cache/pacman/pkg
               sharing: locked
-            - dst: /tmp/aur-srcdest
+            - dst: /var/cache/charly/aur-srcdest
               owned: true
-            - dst: /tmp/aur-xdg-cache
+            - dst: /var/cache/charly/aur-xdg-cache
               owned: true
         phase:
             install:
@@ -331,7 +331,7 @@ cargo:
         requires_src_dir: true
         inline: true
         cache_mount:
-            - dst: /tmp/cargo-cache
+            - dst: /var/cache/charly/cargo-cache
         phase:
             install:
                 host: |
@@ -374,7 +374,7 @@ npm:
         detect_file:
             - package.json
         cache_mount:
-            - dst: /tmp/npm-cache
+            - dst: /var/cache/charly/npm-cache
         phase:
             install:
                 host: |
@@ -392,8 +392,8 @@ pixi:
             - pyproject.toml
             - environment.yml
         cache_mount:
-            - dst: /tmp/pixi-cache
-            - dst: /tmp/rattler-cache
+            - dst: /var/cache/charly/pixi-cache
+            - dst: /var/cache/charly/rattler-cache
         path_contribution:
             - ~/.pixi/bin
             - ~/.pixi/envs/default/bin
@@ -431,8 +431,8 @@ pixi:
             RUN grep -q 'system-requirements' {{.Manifest}} || printf '\n[system-requirements]\nlibc = { family = "glibc", version = "2.39" }\n' >> {{.Manifest}}
         build_script: build.sh
         env:
-            PIXI_CACHE_DIR: /tmp/pixi-cache
-            RATTLER_CACHE_DIR: /tmp/rattler-cache
+            PIXI_CACHE_DIR: /var/cache/charly/pixi-cache
+            RATTLER_CACHE_DIR: /var/cache/charly/rattler-cache
 alpine:
     distro:
         version: "3.24"
