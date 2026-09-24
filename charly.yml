@@ -4613,9 +4613,9 @@ push:
 #     loaded project over the reverse channel and enumerates kind:task entities);
 #   - `verb:task` composes a declared task into the bed's own plan (a `task:` verb
 #     step dispatching through the compiled-in provider).
-# Both run host-side; nothing is installed and no path outside the disposable
-# deploy's own bookkeeping is touched (the task writes only to a temp marker under
-# the bed's scratch, and its own `check:` step reads it back).
+# Both run host-side; nothing is installed and no repo path is touched (the task
+# writes only to a fixed /tmp marker via its declared SMOKE_DIR var, and its own
+# `check:` step reads it back).
 #
 # The task's `plan:` itself uses the same #Step grammar a candy plan does — here a
 # `run:` command writing a marker + a `check:` command reading it — so the bed also
