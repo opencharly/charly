@@ -98,3 +98,13 @@ jobs:
             ( cd "$d" && GOWORK=off "$(go env GOPATH)/bin/golangci-lint" run ./... ) || fail=1
           done
           exit $fail
+
+      # The opencode gate plugin is TypeScript, not Go, so the jobs above never
+      # see it: a V1-contract plugin (the exact defect this step was added for)
+      # loads as a WARN-only no-op in opencode >= 2.0 and every job here stays
+      # green while the git gates silently stop running. This loads the plugin
+      # with a stub V2 context and drives a blocked/benign command through it,
+      # failing on the V1 form. Pure Node — no opencode binary is installed on
+      # the runner, so the live-loader layer stays opt-in (LIVE_OPENCODE).
+      - name: opencode gate plugin contract
+        run: node scripts/check-opencode-plugin.mjs

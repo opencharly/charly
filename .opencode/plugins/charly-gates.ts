@@ -1,3 +1,17 @@
+/**
+ * charly-gates.ts — opencode plugin running the same mechanical gates as pi and
+ * Claude Code. Intercepts shell tool calls and runs
+ * `.claude/hooks/pre-commit-gate.sh` / `pre-push-gate.sh`; the gates exit 2 to
+ * BLOCK.
+ *
+ * opencode V2 plugin contract (measured against opencode 2.0.16): the default
+ * export is a definition `{ id, setup }`. V1's default-exported function
+ * returning a keyed hook map does NOT load — opencode logs
+ * "Plugin must export a default definition with an id and an effect or setup
+ * function" and keeps starting, leaving the gates silently unenforced. The shell
+ * tool is `"shell"` in V2 (V1's `"bash"`), and the hook is registered with
+ * `ctx.tool.hook("execute.before", …)`.
+ */
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 
@@ -39,18 +53,23 @@ function runGate(hooksDir, script, command) {
   });
 }
 
-export default async function charlyGates({ directory }) {
-  const hooksDir = join(directory, ".claude", "hooks");
-  return {
-    "tool.execute.before": async (input, output) => {
-      if (input.tool !== "bash") return;
-      const command = output.args?.command;
+export default {
+  id: "charly-gates",
+  async setup(ctx) {
+    const hooksDir = join(ctx.location.directory, ".claude", "hooks");
+    await ctx.tool.hook("execute.before", async (event) => {
+      if (event.tool !== "shell") return;
+      const input = event.input;
+      const command =
+        input && typeof input === "object" && "command" in input
+          ? input.command
+          : undefined;
       if (typeof command !== "string") return;
       for (const gate of GATES) {
         if (gate.match.test(command)) {
           await runGate(hooksDir, gate.script, command);
         }
       }
-    },
-  };
-}
+    });
+  },
+};
