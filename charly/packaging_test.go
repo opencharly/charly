@@ -408,7 +408,7 @@ func TestCharlyDevCandyDeclared(t *testing.T) {
 // (loader_threaded.go:395), so a relative `copy:` path resolves against the repo root.
 //
 // This is not a style detail. charly-dev's `copy: bin/charly` is the sole surviving
-// local-source install, and repo-root bin/charly is where `task build:binary` writes
+// local-source install, and repo-root bin/charly is where `scripts/bootstrap-charly.sh` writes
 // the binary. If inline candies ever anchored somewhere else, that copy would silently
 // read the wrong path — or nothing — and every check bed welding charly-dev would
 // install a stale or absent binary while still validating. The former

@@ -50,8 +50,11 @@ func (p *hvgTestProv) Invoke(_ context.Context, op *Operation) (*Result, error) 
 //     CONCRETE gate the closedness-only host check cannot express).
 func TestRunPluginKind_HostValueGatedTask(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
+	// The double is passed to runPluginKind DIRECTLY, so it need not be (and must
+	// not be) registered: candy/plugin-task is now compiled in via charly.yml
+	// `compiled_plugins:`, so its real kind:task provider already owns the registry
+	// key — a RegisterBuiltinProvider of the double would panic on the duplicate.
 	prov := &hvgTestProv{}
-	RegisterBuiltinProvider(prov)
 
 	good := singleParsedNode(t, `mytask:
   task:

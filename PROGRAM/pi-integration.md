@@ -119,7 +119,7 @@ the skip on the real credential (`LIVE_*` unset → skip, visibly reported).
 Validate labels, plans, configs, schemas at their actual boundary.
 
 ### R9 — Binary Equals Source
-Build with task build:binary, invoke through bin/, verify version.
+Build with scripts/bootstrap-charly.sh, invoke through bin/, verify version.
 
 ### R10 — Fresh Disposable Proof
 Verify on targets explicitly marked disposable: true only. Fresh rebuild

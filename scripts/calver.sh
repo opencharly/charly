@@ -2,7 +2,7 @@
 # charly_calver — the CalVer (YYYY.DDD.HHMM, UTC) that identifies a charly build.
 #
 # Single source of truth for the build-time version stamp, shared (R3) by:
-#   - taskfiles/Build.yml — `task build:binary` ldflags injection
+#   - scripts/bootstrap-charly.sh — `scripts/bootstrap-charly.sh` ldflags injection
 #   - the distro repos' packaging workflows — the release tag's CalVer is the
 #     version they package (the released binary already carries the stamp)
 #

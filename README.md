@@ -105,7 +105,7 @@ Clone the repository only if you are working *on* charly itself:
 ```bash
 git clone --recurse-submodules https://github.com/opencharly/charly.git
 cd charly
-task build:binary       # builds ./bin/charly, stamped with a CalVer (date-based) version
+scripts/bootstrap-charly.sh       # builds ./bin/charly, stamped with a CalVer (date-based) version
 ./bin/charly box build
 ```
 
