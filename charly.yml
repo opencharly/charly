@@ -4626,12 +4626,18 @@ check-task-smoke:
   task:
     description: the R10 smoke task — writes a marker, then checks it (proves the plan walk)
     dir: .
+    # The marker path is a declared task VAR, not a shell ${VAR:-default} idiom:
+    # the plan-step grammar expands ${NAME} through the task env (vars ← env ←
+    # resolved params), so the value flows through the SAME documented mechanism
+    # on both steps rather than a shell default.
+    vars:
+      SMOKE_DIR: /tmp/charly-task-smoke
     plan:
-      - run: write the marker (under the disposable bed's own scratch, never the repo)
-        command: "mkdir -p /tmp/charly-task-smoke && echo TASK-SMOKE-OK > /tmp/charly-task-smoke/marker"
+      - run: write the marker
+        command: "mkdir -p ${SMOKE_DIR} && echo TASK-SMOKE-OK > ${SMOKE_DIR}/marker"
         context: [deploy]
       - check: the marker is present
-        command: "test -f /tmp/charly-task-smoke/marker && cat /tmp/charly-task-smoke/marker"
+        command: "test -f ${SMOKE_DIR}/marker && cat ${SMOKE_DIR}/marker"
         stdout:
           - contains: TASK-SMOKE-OK
         context: [runtime]
