@@ -2708,6 +2708,16 @@ agentteams-worker:
         candy:
             - '@github.com/opencharly/layer-supervisord:v2026.240.0121'
             - '@github.com/opencharly/pod-agentteams-worker:v2026.239.1600'
+# agentteams-vm — the disposable VM substrate for the AgentTeams stack. The
+# check-agentteams-vm bed installs the agentteams top composition candy (all five
+# foundation candies) into this Arch cloud-image guest via add_candy, so the
+# services run as systemd units under uid 1000 (init polymorphism — no supervisord
+# in a VM). The controller candy's plan step sets up the rootless podman socket
+# (/run/user/1000/podman/podman.sock) gated on systemd, and the bed's host-side
+# cp-box steps deliver the pre-built manager/worker images into the guest's
+# rootless store — the controller then spawns them through the socket, exactly as
+# on the pod substrate. 8G RAM / 4 CPU / 40G disk: the full stack (minio, matrix,
+# element, higress ×5, controller) plus the spawned manager + worker containers.
 agentteams-vm:
     vm:
         source:
