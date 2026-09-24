@@ -171,8 +171,8 @@ func TestCueKinds_Corpus(t *testing.T) {
 			continue // layout may omit a file
 		}
 		// Register external deploy substrate words declared by this file's
-		// discovered candies, so a deploy/bed using such a word (e.g.
-		// check-exampledeploy -> exampledeploy) parses as an entity below — it
+		// discovered candies, so a deploy/bed using such a word (e.g. an
+		// exampledeploy deploy) parses as an entity below — it
 		// is validated via the loader/bed path, not the kept core value defs this
 		// test covers (the same exemption plugin KIND nodes get).
 		prescanDeclaredPluginWords(data, filepath.Dir(f))

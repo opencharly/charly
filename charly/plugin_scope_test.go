@@ -12,7 +12,7 @@ import (
 // a verb referenced in a candy run-step (check-pod's examplestep), a builder selected
 // via external_builder (check-pod's examplebuilder), a verb referenced inline in a bed
 // plan whose plugin was add_candy'd (check-local / a `spice:` step), a box-plan check
-// verb, and an external deploy substrate (check-exampledeploy) — against an UNREFERENCED
+// verb, and an external deploy substrate — against an UNREFERENCED
 // plugin candy that must be skipped.
 func TestCollectReferencedPluginWords_Scoping(t *testing.T) {
 	// Four external plugin candies. examplestep/examplebuilder/spice/exampledeploy are
