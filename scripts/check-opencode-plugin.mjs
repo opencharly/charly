@@ -23,7 +23,7 @@
 // Repo-agnostic by construction (auto-discovers the plugin, reads ids from the
 // module) so the identical file is shared, byte-for-byte, everywhere it is needed.
 //
-// Usage: node scripts/check-opencode-plugin.mjs [--plugin <path>] [--id <id>]
+// Usage: node scripts/check-opencode-plugin.mjs [--plugin <path>]
 //   --plugin  check one specific file instead of auto-discovering (used to prove
 //             the gate FAILS on the old V1 form).
 
@@ -117,16 +117,9 @@ for (const pluginPath of plugins) {
 // --- Layer B: the REAL gate scripts, with the plugin's own stdin payload -----
 const hooksDir = join(root, ".claude", "hooks");
 const payload = (command) => JSON.stringify({ tool_input: { command } });
+const commitGate = (command) =>
+  run("bash", [join(hooksDir, "pre-commit-gate.sh")], { input: payload(command) });
 
-let commitGate;
-try {
-  commitGate = (command) =>
-    run("bash", [join(hooksDir, "pre-commit-gate.sh")], {
-      input: payload(command),
-    });
-} catch {
-  /* handled below */
-}
 if (!existsSync(join(hooksDir, "pre-commit-gate.sh"))) {
   fail("gate script .claude/hooks/pre-commit-gate.sh is missing");
 } else {
