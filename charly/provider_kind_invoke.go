@@ -59,6 +59,21 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	if ck, ok := prov.(spec.CandyKindCarrier); ok && ck.IsCandyKind() {
 		return foldCandyKind(prov, pn, acc)
 	}
+	// GENERIC host-value-gated kind: a kind whose authored value is RICH +
+	// core-referencing (so it is validated HOST-SIDE against a KEPT #<Kind>Value
+	// def, auto-derived into spec.KindValueDefs) but which is NEITHER a deploy
+	// substrate (no DeployTraits) NOR the candy box⊻layer factory — the two
+	// rich-value cases handled above. Its decoded body folds opaquely into
+	// acc.PluginKinds[disc][name] (the same map every templated kind uses). The
+	// gate is DATA-DRIVEN off spec.KindValueDefs (CUE-derived, clause D): a new
+	// #<Kind>Value def joins this path with NO core edit, exactly as the
+	// substrate/candy dispatch reads registry-provided data rather than a
+	// kind-word switch. The current member is `task` (#TaskValue, whose
+	// plan: [...#Step] references the base grammar and so cannot be a
+	// self-contained plugin schema).
+	if _, gated := spec.KindValueDefs[pn.Disc]; gated {
+		return foldHostValueGatedKind(prov, pn, acc)
+	}
 	paramsJSON, err := requireProjectLoader().EntityBodyJSON(pn)
 	if err != nil {
 		return err
@@ -332,6 +347,50 @@ func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	// The SHARED set-body fold (parser consolidation F2.4) — the SAME fold spec.UnifiedFile.SetCandy
 	// performs; the former inline EncodeInlineCandy write is deleted.
 	acc.Candy = spec.SetCandyInto(acc.Candy, pn.Name, &spec.InlineCandy{CandyYAML: c})
+	return nil
+}
+
+// foldHostValueGatedKind decodes a HOST-VALUE-GATED kind node — a kind with a KEPT
+// #<Kind>Value def (auto-derived into spec.KindValueDefs) that is neither a deploy
+// substrate nor the candy factory. Its authored value is rich + core-referencing
+// (e.g. `task`'s #Task, whose `plan: [...#Step]` references the base grammar), so it
+// is validated HOST-SIDE against the kept def and its decoded body folds opaquely
+// into acc.PluginKinds[disc][name] — the SAME map every templated kind uses. The
+// dispatch is DATA-DRIVEN off spec.KindValueDefs (CUE-derived; clause D / the
+// kind-blind boundary law), so a new #<Kind>Value def joins this path with no core
+// edit. The host: (1) closedness-gates the authored value against the kept def
+// (typo rejection); (2) dispatches the plugin's declared deep OpValidate
+// (Validates:true) — the CONCRETE gate the closedness-only check cannot express
+// (missing required fields); (3) Invokes OpLoad and folds the echoed body into
+// PluginKinds. Members are rejected (a non-structural host-value-gated kind has no
+// member tree — the flat-arm contract).
+func foldHostValueGatedKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
+	if err := validateKindValueCUE(pn); err != nil {
+		return fmt.Errorf("node %q: %w", pn.Name, err)
+	}
+	paramsJSON, err := requireProjectLoader().EntityBodyJSON(pn)
+	if err != nil {
+		return err
+	}
+	// The deep OpValidate (concrete + kind-semantic checks) — shared kind-blindly
+	// with the flat/substrate arms (R3).
+	if err := dispatchKindOpValidate(prov, pn, paramsJSON); err != nil {
+		return err
+	}
+	if len(pn.Children) > 0 {
+		return fmt.Errorf("node %q: kind %q is not structural — it cannot nest resource-member children (%q)", pn.Name, pn.Disc, pn.Children[0].Name)
+	}
+	out, err := prov.Invoke(context.Background(), &Operation{Reserved: pn.Disc, Op: ops.OpLoad, Params: paramsJSON})
+	if err != nil {
+		return fmt.Errorf("node %q: host-value-gated kind %q: %w", pn.Name, pn.Disc, err)
+	}
+	if acc.PluginKinds == nil {
+		acc.PluginKinds = map[string]map[string]json.RawMessage{}
+	}
+	if acc.PluginKinds[pn.Disc] == nil {
+		acc.PluginKinds[pn.Disc] = map[string]json.RawMessage{}
+	}
+	acc.PluginKinds[pn.Disc][pn.Name] = out.JSON
 	return nil
 }
 
