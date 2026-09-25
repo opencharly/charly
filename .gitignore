@@ -74,6 +74,14 @@ deploy.local.yml
 # version-controlled source.
 scratchpad/
 
+# Per-session linked feature worktrees (`AGENTS.md` "Hard Cutover by Default"
+# mandates `.claude/worktrees/<slug>/`). Per-session, per-machine ephemeral
+# state — like `.check/` and `scratchpad/`, it lives in the project tree but
+# stays OUT of git; without this entry `git status` reports the tree dirty on
+# every session that follows the worktree convention, which `task verify`
+# (`scripts/verify-pins.sh`) then fails on.
+.claude/worktrees/
+
 # OpenCharly build artifacts
 .build/
 bin/
