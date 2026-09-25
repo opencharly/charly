@@ -295,21 +295,24 @@ tests, schemas, generated artifacts, documentation, and changelogs synchronized.
 Remove every old identifier and sibling claim in one phase; do not leave shims,
 dual paths, TODOs, or deferred cleanup.
 
-Use a linked feature worktree from current protected `origin/main` and
-preserve the operator's checkout. **Every session works in its OWN worktree
-under `.claude/worktrees/<slug>/`, branched off fresh `origin/main`; the main
-tree stays on `main`.** Create the worktree at session start and remove it
-(worktree + branch) after the change lands, so parallel sessions never collide
-on one checkout. (In the orchestrator+teammates model the orchestrator owns the
-worktrees of the agents it spawns; a standalone session owns its own —
-`/charly-internals:agents` "Worktree lifecycle and validator identity".) Verify
-status, HEAD,
-merge-base, submodule lineage, and remote base before implementation and again
-before landing. Existing normal caches may be used only through the runtime's
-approved boundary; never manufacture alternate homes, caches, clones, or
-validator workspaces to make a command pass. A denied required action is
-`BLOCKED`. *Detail:* `/charly-internals:git-workflow` (B1 step 0, B4 "Worktree
-hygiene", B7).
+**The session/worktree model is owned by the umbrella `AGENTS.md`.** This file
+owns charly's TECHNICAL rules; it does NOT restate where a session roots or how
+its worktree is laid out. OpenCharly development is umbrella-centric and
+harness-independent: the session roots at the umbrella checkout, and every
+repository it edits — `charly` included — is checked out as that session's own
+git worktree under the umbrella (`<umbrella>/.worktrees/<slug>/<repo>/`, branched
+off fresh `origin/main`). The tracked `charly/` submodule checkout stays on its
+recorded gitlink and clean, so `charly task verify` keeps passing. Read the
+umbrella `AGENTS.md` for the full model, the per-session ownership rule, and the
+multi-session concurrency contract. *Detail:* `/charly-internals:git-workflow`
+(B1 step 0, B4 "Worktree hygiene", B7), `/charly-internals:agents` (worktree
+lifecycle and validator identity).
+
+Regardless of where the worktree sits, verify status, HEAD, merge-base, submodule
+lineage, and remote base before implementation and again before landing. Existing
+normal caches may be used only through the runtime's approved boundary; never
+manufacture alternate homes, caches, clones, or validator workspaces to make a
+command pass. A denied required action is `BLOCKED`.
 
 ## Post-Execution Policies
 
@@ -325,11 +328,14 @@ After the final gate:
 4. Only PASS may post `charly/pr-validator`, generate the merge-time CalVer,
    squash-merge with the bound head, tag the merge, and clean the branch and
    worktree (orchestrator-owned in the orchestrator+teammates model; the owning
-   session's own in a standalone session — `/charly-internals:agents` "Worktree
-   lifecycle and validator identity"). A changed head, warning, anomaly, or live
-   unfinished bed revokes PASS.
+   session's own in a standalone session). A changed head, warning, anomaly, or
+   live unfinished bed revokes PASS.
 5. After `main` advances, update interacting PRs and run a risk-proportional
    delta gate. Never guess across divergent submodule lineage.
+
+The worktree LAYOUT (where a session roots, how its worktree is placed, and how
+parallel sessions share the umbrella) is owned by the umbrella `AGENTS.md`, not
+restated here.
 
 Changes requested during review use append-only commits on the same PR. Never
 bypass branch protection, use admin/force, rewrite pushed history, move a
@@ -452,7 +458,8 @@ second copy of them.
 - `VISION.md`: thesis and direction.
 - `PROGRAM/`: binding program north-star documents (one file per program, named in every spawn brief).
 - `AGENTS.md`: complete current harness-neutral mandates and dispatcher.
-- `CLAUDE.md`: complete harness adapter with equivalent overall policy.
+- `CLAUDE.md`: a **symlink** to `AGENTS.md` — one rulebook, no hand-kept copy to
+  drift (the former hand-synced mirror had already diverged).
 - the opencharly/marketplace repo's `<family>/skills/<skill>/SKILL.md`: detailed
   procedures and technical ownership (the harness loads it; read it directly from
   the marketplace repo).
