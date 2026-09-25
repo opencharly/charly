@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
@@ -58,7 +57,7 @@ var (
 )
 
 // pluginActivity is one call's forward-progress clock. A nil *pluginActivity is safe:
-// touch is a no-op and idleFor reports 0, so a server without a clock never trips.
+// touch is a no-op and the clock is never watched, so a server without a clock never trips.
 //
 // TWO activity sources feed it:
 //   - touch() from the host reverse legs (host-visible work), and
@@ -71,7 +70,6 @@ var (
 //     descendants' CPU, so a retry loop (ssh every few seconds) advances it while a
 //     futex-wedged plugin (no work, no children) leaves it frozen.
 type pluginActivity struct {
-	nanos atomic.Int64
 	// pid is the peer plugin process whose CPU counts as progress; 0 = no polling
 	// (an in-proc/builtin peer on the host legs only, or an unplumbed pid).
 	pid int
@@ -86,9 +84,8 @@ type pluginActivity struct {
 }
 
 // newPluginActivity builds a call's activity clock with its wake channel initialized.
-// The zero value remains safe for a nil clock (touch is a no-op, idleFor reports 0),
-// but a clock actually watched by idleBoundedContext must be built here so touch() can
-// signal the event.
+// The zero value remains safe for a nil clock (touch is a no-op), but a clock actually
+// watched by idleBoundedContext must be built here so touch() can signal the event.
 func newPluginActivity(pid int) *pluginActivity {
 	return &pluginActivity{pid: pid, wake: make(chan struct{}, 1)}
 }
@@ -97,7 +94,6 @@ func (a *pluginActivity) touch() {
 	if a == nil {
 		return
 	}
-	a.nanos.Store(time.Now().UnixNano())
 	// Signal the progress EVENT (non-blocking; a full buffer already holds a pending
 	// reset, which is equivalent to this one).
 	if a.wake != nil {
@@ -116,17 +112,6 @@ func (a *pluginActivity) cpu() uint64 {
 		return 0
 	}
 	return procCPUTicks(a.pid)
-}
-
-func (a *pluginActivity) idleFor() time.Duration {
-	if a == nil {
-		return 0
-	}
-	last := a.nanos.Load()
-	if last == 0 {
-		return 0
-	}
-	return time.Since(time.Unix(0, last))
 }
 
 // pluginActivityKey carries the per-call clock on the invoke context, so the reverse
