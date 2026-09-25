@@ -36,12 +36,12 @@ import (
 )
 
 // kindSwitchVocabulary is the deploy-substrate + entity kind-word vocabulary this gate
-// polices, per the W5 brief: the 5 deploy substrates plus the 3 entity/verb words whose
+// polices, per the W5 brief: the 6 deploy substrates plus the 3 entity/verb words whose
 // accidental re-introduction as a dispatch key would also be a kernel/plugin boundary
 // violation (candy/deploy). The former 4th word "group" DIED with the group-kind
 // removal (Cutover C task 1) — it is no longer a kind word in any vocabulary.
 var kindSwitchVocabulary = map[string]bool{
-	"pod": true, "vm": true, "kubernetes": true, "local": true, "android": true,
+	"pod": true, "vm": true, "kubernetes": true, "local": true, "android": true, "kubevirt": true,
 	"candy": true, "deploy": true,
 }
 

@@ -30,7 +30,7 @@ import (
 // consult file trips this gate.
 func TestNoSubstrateWordSwitchInDeployConsult(t *testing.T) {
 	substrateWords := map[string]bool{
-		"pod": true, "vm": true, "local": true, "kubernetes": true, "android": true,
+		"pod": true, "vm": true, "local": true, "kubernetes": true, "android": true, "kubevirt": true,
 	}
 	// Allowlisted files: reading the substrate WORD here is classification / validation /
 	// status-reporting, NOT a substrate-behaviour branch. Keep this list tight — a new deploy

@@ -89,7 +89,7 @@ func TestExternalDeploySubstratePluginRef(t *testing.T) {
 		}
 	}
 	// Every externalized substrate MUST have a plugin ref (else a submodule can't discover
-	// it). ALL FIVE substrates are externalized now, so this covers the whole set.
+	// it). ALL SIX substrates are externalized now, so this covers the whole set.
 	for word := range externalizedDeploySubstrates {
 		if _, ok := externalDeploySubstratePluginRef(word); !ok {
 			t.Errorf("externalized substrate %q has no plugin-candy ref", word)
