@@ -129,7 +129,7 @@ k3s-vm:
             # (yaml:"port_forwards"). The host side is the `auto` sentinel: the host
             # port is auto-allocated at vm-create (persisted in vm_state, the sibling
             # of ssh.port_auto), so the two beds sharing this entity (check-k3s-vm +
-            # check-k8s-deploy-cluster) never collide on a hardcoded host port — the
+            # check-k8s-deploy) never collide on a hardcoded host port — the
             # concurrent host-port collision this feature removed. k3s_post rewrites the
             # retrieved kubeconfig's :6443 to the allocated host port from vm_state automatically.
             port_forwards:
@@ -570,7 +570,7 @@ alpine-repo-box:
               exit_status: 0
               command: cat /etc/alpine-release
 # check-k3s-vm-ctx / check-k8s-deploy-cluster-ctx — per-BED kind:kubernetes cluster templates (task #18
-# rework). check-k3s-vm and check-k8s-deploy-cluster both `from: k3s-vm` (the SAME shared kind:vm
+# rework). check-k3s-vm and check-k8s-deploy (the group root's own vm:) both `from: k3s-vm` (the SAME shared kind:vm
 # entity), so their kubeconfig contexts are now per-deploy-DOMAIN-scoped, not shared by entity (see
 # candy/plugin-deploy-vm/lifecycle.go's OpArtifactKey + candy/plugin-kube/k3s_post.go) — each bed's
 # k3sPostProvision merge lands under kit.SanitizeDeployName("vm:"+vmshared.VmDomainIdentity(<bed>)),
@@ -589,14 +589,14 @@ check-k3s-vm-ctx:
         box: ""
         kubeconfig_context: vm-check-k3s-vm
 # check-k8s-deploy-workload's `target: kubernetes` deploy (`kubernetes: {from: check-k8s-deploy-cluster-ctx}`)
-# ALSO consumes this profile — it deploys to the SAME cluster the check-k8s-deploy-cluster
+# ALSO consumes this profile — it deploys to the SAME cluster the check-k8s-deploy group root's
 # sibling member stood up, so both intentionally share this one entity.
 check-k8s-deploy-cluster-ctx:
     kubernetes:
         box: ""
         kubeconfig_context: vm-check-k8s-deploy
 # check-helm-vm-ctx — the check-helm-vm bed's OWN kind:kubernetes profile (task #18
-# pattern): it shares the k3s-vm entity with check-k3s-vm / check-k8s-deploy-cluster,
+# pattern): it shares the k3s-vm entity with check-k3s-vm / the check-k8s-deploy group root,
 # so its kubeconfig context is per-deploy-DOMAIN-scoped (vm-check-helm-vm), never
 # shared by entity. The bed's kube: readiness steps name this profile by LITERAL
 # string — independent of the DEPLOY_NAME mechanism entirely.
@@ -968,7 +968,7 @@ check-k8s-deploy-app:
 # check-k8s-deploy — disposable proof of the EXTERNALIZED deploy:kubernetes SUBSTRATE
 # (F1, candy/plugin-kube serving deploy:kubernetes beside verb:kube). A GROUP bed (the
 # proven sibling-member shape — cf. box/fedora check-cross-pod-cdp) with two members
-# brought up name-sorted: check-k8s-deploy-cluster (a libvirt k3s VM reusing the
+# brought up: check-k8s-deploy (the group root's own vm:, a libvirt k3s VM reusing the
 # SAME k3s-vm entity + k3s-server candy check-k3s-vm proves) comes up FIRST and
 # merges its kubeconfig to context vm-check-k8s-deploy (its own per-deploy
 # domain identity, task #18 — collision-free from check-k3s-vm's OWN context even
@@ -1055,7 +1055,7 @@ check-k8s-deploy:
         disposable: true
         lifecycle: dev
         description: >-
-            R10 for the EXTERNALIZED deploy:kubernetes substrate (F1) — `target: kubernetes` resolves out-of-process to candy/plugin-kube's deploy:kubernetes provider over the E3b reverse channel, not a compiled-in deploy target. A group bed with two name-sorted sibling members: check-k8s-deploy-cluster (a disposable libvirt k3s VM, the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) brings up a control plane and merges kubeconfig to context vm-check-k8s-deploy (its own per-deploy domain identity, task #18 — collision-free from check-k3s-vm's own context despite sharing the k3s-vm entity); check-k8s-deploy-workload (a target:kubernetes deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-check-k8s-deploy apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
+            R10 for the EXTERNALIZED deploy:kubernetes substrate (F1) — `target: kubernetes` resolves out-of-process to candy/plugin-kube's deploy:kubernetes provider over the E3b reverse channel, not a compiled-in deploy target. A group bed whose control-plane member is the group root's own vm: body (check-k8s-deploy, a disposable libvirt k3s VM over the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) and merges kubeconfig to context vm-check-k8s-deploy (its own per-deploy domain identity, task #18 — collision-free from check-k3s-vm's own context despite sharing the k3s-vm entity); check-k8s-deploy-workload (a target:kubernetes deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-check-k8s-deploy apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
     # MEMBER 2 (name-sorts second) — the target:kubernetes workload. check-k8s-deploy-app is built
     # locally by the group bed's member-build arm (box build check-k8s-deploy-app), so the host
     # preresolver's ExtractMetadata reads its OCI labels. `from: check-k8s-deploy-cluster-ctx`
