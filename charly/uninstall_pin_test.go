@@ -15,7 +15,7 @@ import (
 // on rpm) so the install RUN text changes on a version bump and invalidates
 // exactly the install layer. But the SAME `.Packages` list feeds each format's
 // `uninstall_template`, and pacman/apk REJECT a versioned spec for removal
-// (`pacman -Rs charly=2026.267.2134` -> "target not found"). Each uninstall
+// (`pacman -Rs charly=2026.268.1917` -> "target not found"). Each uninstall
 // template therefore renders `{{pkgName .}}` to strip the pin back to the bare
 // name. This test FAILS without that strip.
 //
@@ -44,10 +44,10 @@ func TestUninstallTemplatesStripVersionPin(t *testing.T) {
 		pinned  string
 		wantSub string // the rendered uninstall must contain this bare form
 	}{
-		{"apk", "charly=2026.267.2134", "apk del charly"},
-		{"pac", "charly=2026.267.2134", "pacman -Rs --noconfirm charly"},
-		{"deb", "charly=2026.267.2134", "apt-get purge -y charly"},
-		{"rpm", "charly-2026.267.2134-1", "dnf remove -y charly"},
+		{"apk", "charly=2026.268.1917", "apk del charly"},
+		{"pac", "charly=2026.268.1917", "pacman -Rs --noconfirm charly"},
+		{"deb", "charly=2026.268.1917", "apt-get purge -y charly"},
+		{"rpm", "charly-2026.268.1917-1", "dnf remove -y charly"},
 	}
 
 	raw, err := os.ReadFile("charly.yml")
