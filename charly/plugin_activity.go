@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
@@ -58,7 +57,7 @@ var (
 )
 
 // pluginActivity is one call's forward-progress clock. A nil *pluginActivity is safe:
-// touch is a no-op and idleFor reports 0, so a server without a clock never trips.
+// touch is a no-op and the clock is never watched, so a server without a clock never trips.
 //
 // TWO activity sources feed it:
 //   - touch() from the host reverse legs (host-visible work), and
@@ -71,17 +70,38 @@ var (
 //     descendants' CPU, so a retry loop (ssh every few seconds) advances it while a
 //     futex-wedged plugin (no work, no children) leaves it frozen.
 type pluginActivity struct {
-	nanos atomic.Int64
 	// pid is the peer plugin process whose CPU counts as progress; 0 = no polling
 	// (an in-proc/builtin peer on the host legs only, or an unplumbed pid).
 	pid int
+	// wake is the PROGRESS EVENT channel: touch() signals it non-blockingly and the
+	// idle watchdog RESETS its deadline on each signal. This is what makes the guard
+	// event-driven rather than sample-driven — a progress event arriving before the
+	// deadline resets it, so there is NO race between the producer's touch cadence and
+	// the watchdog's check cadence (the sampled form compared a stale timestamp against
+	// the full window and false-tripped whenever the two cadences were equal under
+	// load). Buffered size 1: coalesces bursts to a single pending reset.
+	wake chan struct{}
+}
+
+// newPluginActivity builds a call's activity clock with its wake channel initialized.
+// The zero value remains safe for a nil clock (touch is a no-op), but a clock actually
+// watched by idleBoundedContext must be built here so touch() can signal the event.
+func newPluginActivity(pid int) *pluginActivity {
+	return &pluginActivity{pid: pid, wake: make(chan struct{}, 1)}
 }
 
 func (a *pluginActivity) touch() {
 	if a == nil {
 		return
 	}
-	a.nanos.Store(time.Now().UnixNano())
+	// Signal the progress EVENT (non-blocking; a full buffer already holds a pending
+	// reset, which is equivalent to this one).
+	if a.wake != nil {
+		select {
+		case a.wake <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // cpu reads the plugin process's monotonic CPU ticks (utime+stime+cutime+cstime) from
@@ -92,17 +112,6 @@ func (a *pluginActivity) cpu() uint64 {
 		return 0
 	}
 	return procCPUTicks(a.pid)
-}
-
-func (a *pluginActivity) idleFor() time.Duration {
-	if a == nil {
-		return 0
-	}
-	last := a.nanos.Load()
-	if last == 0 {
-		return 0
-	}
-	return time.Since(time.Unix(0, last))
 }
 
 // pluginActivityKey carries the per-call clock on the invoke context, so the reverse
@@ -161,35 +170,71 @@ func pluginInvokeNoProgress() time.Duration {
 // second covers work the plugin does entirely locally (virsh/ssh children). NO
 // wall-clock cap (see the file header). Applied only when the caller supplied no
 // deadline of its own.
+//
+// EVENT-DRIVEN, not sampled: the watchdog arms a deadline of `noProgress` and RESETS
+// it whenever a progress event arrives on a.wake (a host-leg touch) or the peer's CPU
+// advances. Because a progress event that arrives before the deadline always resets
+// it, there is NO race between the producer's touch cadence and this watchdog's check
+// cadence — the failure a fixed sample interval cannot avoid (it compared a timestamp
+// against the full window at its own tick, so equal cadences under load false-tripped).
+// CPU is still polled (it has no event source), but a CPU advance also resets the
+// deadline, and the poll interval is a small fraction of the window so a busy peer is
+// never mistaken for idle.
 func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *pluginActivity) (context.Context, context.CancelFunc) {
 	a.touch() // the dispatch itself is baseline activity
+	// Guarantee a live PROGRESS EVENT channel before the watcher starts: a clock not
+	// built by newPluginActivity would otherwise have a nil wake, and `case <-a.wake`
+	// would then never fire — silently reverting the guard to a bare timer that
+	// false-kills a progressing call (the exact bug this rewrite fixes). The clock is
+	// armed here BEFORE the call is dispatched, so no concurrent touch races this
+	// assignment (touches only happen on reverse legs during the in-flight call).
+	if a.wake == nil {
+		a.wake = make(chan struct{}, 1)
+	}
+	wake := a.wake
 	cctx, cancel := context.WithCancelCause(ctx)
 	stop := make(chan struct{})
 	go func() {
-		interval := noProgress / 4
-		if interval < 10*time.Millisecond {
-			interval = 10 * time.Millisecond
+		timer := time.NewTimer(noProgress)
+		defer timer.Stop()
+		// CPU poll cadence — a fraction of the window; the CPU signal has no event
+		// source, so it must be sampled, unlike the host-leg touch.
+		poll := noProgress / 4
+		if poll < 10*time.Millisecond {
+			poll = 10 * time.Millisecond
 		}
-		t := time.NewTicker(interval)
-		defer t.Stop()
+		cpu := time.NewTicker(poll)
+		defer cpu.Stop()
 		lastCPU := a.cpu()
+		reset := func() {
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(noProgress)
+		}
 		for {
 			select {
 			case <-stop:
 				return
 			case <-cctx.Done():
 				return
-			case <-t.C:
-				// CPU advancing is progress: refresh the activity clock and the CPU
-				// high-water, so a plugin busy on its own children never trips.
+			case <-wake:
+				// A host-leg touch is a progress EVENT: reset the deadline.
+				reset()
+			case <-cpu.C:
+				// CPU advancing is progress: refresh the clock + high-water and reset
+				// the deadline, so a plugin busy on its own children never trips.
 				if cur := a.cpu(); cur > lastCPU {
 					lastCPU = cur
 					a.touch()
+					reset()
 				}
-				if a.idleFor() >= noProgress {
-					cancel(errPluginCallIdle)
-					return
-				}
+			case <-timer.C:
+				cancel(errPluginCallIdle)
+				return
 			}
 		}
 	}()

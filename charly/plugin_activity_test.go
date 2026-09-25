@@ -71,7 +71,7 @@ func TestIdleBoundedContext_TripsOnlyWhenIdle(t *testing.T) {
 	defer func() { pluginInvokeNoProgressOverride = old }()
 
 	// Idle: no touches → cancelled with the sentinel.
-	a := &pluginActivity{}
+	a := newPluginActivity(0)
 	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
 	select {
 	case <-ctx.Done():
@@ -84,7 +84,7 @@ func TestIdleBoundedContext_TripsOnlyWhenIdle(t *testing.T) {
 	stop()
 
 	// Progressing: a toucher every 50ms (< the 150ms window) → never cancelled.
-	b := &pluginActivity{}
+	b := newPluginActivity(0)
 	ctx2, stop2 := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), b)
 	touchStop := make(chan struct{})
 	go func() {
@@ -131,7 +131,7 @@ func TestIdleBoundedContext_PluginLocalCPUIsProgress(t *testing.T) {
 
 	// The clock polls the BURNER's pid directly (standing in for the plugin pid: the
 	// plugin's own CPU is what we must observe).
-	a := &pluginActivity{pid: cmd.Process.Pid}
+	a := newPluginActivity(cmd.Process.Pid)
 	// Baseline via procCPUTicks DIRECTLY (not a.cpu()) so this test still exercises the
 	// idle guard's CPU source: with cpu() disabled the guard would idle-kill below and
 	// the test would FAIL, which is the regression it guards.
@@ -188,7 +188,7 @@ func TestIdleBoundedContext_LongHostLegIsProgress(t *testing.T) {
 	pluginInvokeNoProgressOverride = 300 * time.Millisecond
 	defer func() { pluginInvokeNoProgressOverride = old }()
 
-	a := &pluginActivity{} // no pid: the CPU source is silent, only the leg heartbeat can act
+	a := newPluginActivity(0) // no pid: the CPU source is silent, only the leg heartbeat can act
 	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
 	// A host leg running 1s — >3x the window — wrapped by the heartbeat.
 	done := make(chan error, 1)
@@ -234,4 +234,43 @@ func TestProcessPid_NilSafeAndLive(t *testing.T) {
 	if got := providerPid(gp); got != cmd.Process.Pid {
 		t.Fatalf("providerPid = %d, want %d", got, cmd.Process.Pid)
 	}
+}
+
+// TestIdleBoundedContext_NilWakeLiteralStillResets pins the nil-wake hazard: a clock
+// built as a bare &pluginActivity{} literal (nil wake) must STILL have its deadline
+// reset by a touch — idleBoundedContext arms the event channel before watching, so
+// the guard can never silently revert to a bare timer and false-kill a progressing
+// call. This FAILS if the arming is removed (the touch would never signal).
+func TestIdleBoundedContext_NilWakeLiteralStillResets(t *testing.T) {
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 150 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
+
+	a := &pluginActivity{} // deliberately a bare literal: wake is nil
+	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+	defer stop()
+	// Touch every 50ms (< the 150ms window) from a separate goroutine; if the event
+	// channel were nil, each touch would never signal and the timer would fire at
+	// 150ms and cancel a call that is plainly progressing.
+	done := make(chan struct{})
+	go func() {
+		tk := time.NewTicker(50 * time.Millisecond)
+		defer tk.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tk.C:
+				a.touch()
+			}
+		}
+	}()
+	select {
+	case <-ctx.Done():
+		close(done)
+		t.Fatalf("a bare-literal clock's touch must reset the deadline, got %v", context.Cause(ctx))
+	case <-time.After(400 * time.Millisecond):
+		// good: outlived 2.6x the window because the touches reset it
+	}
+	close(done)
 }
