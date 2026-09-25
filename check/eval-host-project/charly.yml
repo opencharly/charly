@@ -21,7 +21,7 @@
 # NOT discovered by the superproject — `check/` is not on its `discover:` path. The candy
 # closure is pinned in this file, so there is no lockstep with a superproject directory
 # list to keep any more — that coupling is what the pins remove.
-version: 2026.240.1943
+version: 2026.261.1747
 check-local-app:
     local:
         description: |-

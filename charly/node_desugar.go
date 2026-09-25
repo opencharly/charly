@@ -29,6 +29,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 )
 
 // pluginPrimaries maps a plugin verb word to its declared PRIMARY input field —
@@ -44,7 +45,14 @@ import (
 // universe the same registration hook serves; the expected set is now a PARITY
 // ASSERTION in node_desugar_test.go, so a drift between the served primaries and
 // the parse-time expectation fails a test, never silently desugars wrong.
-var pluginPrimaries = map[string]string{}
+// A concurrent roster (many bed runs in one charly process, each re-loading the
+// project and re-registering primaries at connect) mutates this table from multiple
+// goroutines while loaderThreaded() reads it — an unguarded map raced with
+// "concurrent map writes". The mutex serializes registration AND the projection.
+var (
+	pluginPrimariesMu sync.RWMutex
+	pluginPrimaries   = map[string]string{}
+)
 
 // init seeds the parse-time desugar table from the COMPILED-IN declared capability primaries
 // (parser consolidation F2.6): the platform live-container verbs' `method` primary is carried
@@ -59,6 +67,8 @@ func init() {
 		VerbPrimaries map[string]string `yaml:"verb_primaries"`
 	}
 	unmarshalEmbeddedDefaults(&doc)
+	pluginPrimariesMu.Lock()
+	defer pluginPrimariesMu.Unlock()
 	for w, f := range doc.VerbPrimaries {
 		if f != "" {
 			pluginPrimaries[w] = f
@@ -73,7 +83,9 @@ func registerPluginPrimary(word, field string) error {
 	if authoredOpFieldSet[word] {
 		return fmt.Errorf("plugin verb word %q collides with an authored #Op field — pick a non-colliding word", word)
 	}
+	pluginPrimariesMu.Lock()
 	pluginPrimaries[word] = field
+	pluginPrimariesMu.Unlock()
 	return nil
 }
 
@@ -81,8 +93,23 @@ func registerPluginPrimary(word, field string) error {
 // plugin-load schema gate's primary cross-check (a host-side registry consult,
 // distinct from the deploy-state writer's resugar, which reads primaries as DATA).
 func pluginPrimaryFor(word string) (string, bool) {
+	pluginPrimariesMu.RLock()
+	defer pluginPrimariesMu.RUnlock()
 	f, ok := pluginPrimaries[word]
 	return f, ok
+}
+
+// snapshotPluginPrimaries returns a COPY of the table for thread-safe projection
+// into spec.Threaded (loaderThreaded copies it per parse; a plain range over the
+// live map raced concurrent registration).
+func snapshotPluginPrimaries() map[string]string {
+	pluginPrimariesMu.RLock()
+	defer pluginPrimariesMu.RUnlock()
+	out := make(map[string]string, len(pluginPrimaries))
+	for w, f := range pluginPrimaries {
+		out[w] = f
+	}
+	return out
 }
 
 // (resugarPlan — the save-side desugar inverse — moved to deploykit.MarshalDeployNode's own

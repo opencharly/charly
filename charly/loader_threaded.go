@@ -208,7 +208,7 @@ func loaderThreaded() spec.Threaded {
 			t.StructuralKinds[k] = true
 		}
 	}
-	for w, f := range pluginPrimaries {
+	for w, f := range snapshotPluginPrimaries() {
 		t.Primaries[w] = f
 	}
 	// K1-LOADER RELOCATION: snapshot each recognized kind/substrate word's DECLARED #DeployTraits

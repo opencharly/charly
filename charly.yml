@@ -649,7 +649,12 @@ kimi:
 # check live → fresh update (R10 gate) → tear down — with:
 #
 #     charly check run <bed>          # one bed
-#     charly check run --all-beds     # every bed, name-sorted
+#     charly check run <roster>       # every bed a `check-roster` entity selects, in parallel
+#
+# A whole-roster run is declared by a `check-roster` entity (candy/plugin-check):
+# it enumerates the disposable beds (namespace-qualified), runs them at the entity's
+# `lanes` parallelism, serializes exclusive-resource token groups, and aggregates
+# honest exit codes.
 #
 # `disposable: true` is the SOLE authorization for that unattended destroy +
 # rebuild (see /charly-internals:disposable). Naming: check-<descriptor>-<kind>,
@@ -694,6 +699,9 @@ check-k3s-vm:
     vm:
         from: k3s-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Sole deterministic proof of the external-vm-deploy->kubernetes end-to-end path and the full 13-method kubernetes probe surface against a real k3s control plane, and the R10 for ssh.port_auto. A disposable libvirt Arch cloud VM (an auto-allocated host->guest 6443 forward, charly installed post-boot via the vm substrate (EnsureCharlyInGuest)) overlays k3s-server over SSH, then runs guest command/process/port/file probes plus the full kubernetes suite (nodes/wait-nodes/pods/wait-ready/addons/ingressclass/storageclass/raw/service) against its own dedicated per-deploy-domain-scoped cluster context (cluster: "check-k3s-vm-ctx" — task #18: each bed sharing the k3s-vm entity gets its OWN kind:kubernetes profile pinned to its OWN collision-free kubeconfig context, since DEPLOY_NAME cannot distinguish sibling VM beds sharing one entity), an agent-check matching probe, and a host-side charly status --json (status-shows-vm).
@@ -853,6 +861,9 @@ check-helm-vm:
     vm:
         from: k3s-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Sole deterministic proof of the out-of-tree plugin-helm end-to-end path: a disposable libvirt Arch cloud VM overlaying k3s-server + the kubernetes toolchain candy (helm at /usr/bin/helm) + the helm-chart candy installs a real chart via the external:helm-release install step (a deploy-context `run: helm-release:` step in the helm-chart candy's plan, lowered to the F3 external step-kind, Invoked over the E3b reverse channel IN-VENUE against the guest's own k3s kubeconfig) and asserts it deployed via the EXEC-based verb:helm (release-exists/status/revision). The kube: readiness steps run against this bed's OWN per-deploy-domain cluster context (cluster: "check-helm-vm-ctx" — task #18: each bed sharing the k3s-vm entity gets its OWN kind:kubernetes profile pinned to its OWN collision-free kubeconfig context).
@@ -1053,6 +1064,9 @@ check-k8s-deploy:
               stdout: {contains: "web-pushgateway-prometheus-pushgateway"}
               context: [runtime]
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             R10 for the EXTERNALIZED deploy:kubernetes substrate (F1) — `target: kubernetes` resolves out-of-process to candy/plugin-kube's deploy:kubernetes provider over the E3b reverse channel, not a compiled-in deploy target. A group bed whose control-plane member is the group root's own vm: body (check-k8s-deploy, a disposable libvirt k3s VM over the shared k3s-vm + k3s-server stack, an auto-allocated host->guest 6443 forward) and merges kubeconfig to context vm-check-k8s-deploy (its own per-deploy domain identity, task #18 — collision-free from check-k3s-vm's own context despite sharing the k3s-vm entity); check-k8s-deploy-workload (a target:kubernetes deploy of check-k8s-deploy-app) is brought up second — its host preresolver generates an egress-validated Kustomize tree and its out-of-process plugin runs `kubectl --context vm-check-k8s-deploy apply -k`. The kube: checks (wait-nodes + raw deployments GET + pods) prove the Deployment object landed on the cluster — the externalized substrate applied the workload end-to-end. The pod is not asserted Ready (the local box image is absent from the VM's containerd; image-into-cluster delivery is orthogonal to the substrate).
@@ -1302,6 +1316,9 @@ check-local-vm:
     vm:
         from: eval-host-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Guest-as-host proof of the kind:local layer-application path via ShellExecutor + HostDeployTarget, run INSIDE the disposable eval-host-vm guest (off the operator's workstation). Boots eval-host-vm, welds charly-dev (add_candy:[charly-dev] → copy: bin/charly), rsyncs the pruned check-local project (check/eval-host-project/charly.yml alone — its candy closure is pinned by @github ref and resolved by the guest, as the sdk + spec contract modules already were) into the guest, then runs `charly --host charly-check-local-vm check run check-local`: the guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies check-local-layer to its OWN host: local (guest ShellExecutor + HostDeployTarget), dropping /etc/check-local-marker + the examplestep /tmp markers in the GUEST. ALSO the witness for the STEP DEPLOY-EXECUTE leg of external plugin execution (ExternalPluginStep → InvokeWithExecutor(OpExecute) over the E3b reverse channel): the guest builds the out-of-tree examplestep + deploy:local plugins in-guest (their go.mods resolve the sdk contract module from the module proxy at the pinned require version). exit 0 from the nested run proves the kind:local path end-to-end; every side-effect is confined to the disposable guest.
@@ -1358,6 +1375,9 @@ check-builder-vm:
     vm:
         from: eval-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Sole proof of the builder DEPLOY leg (runVenueBuilderStep → runVenueHomeArtifactBuilder) applying a built-in npm detection-builder candy to a venue, run INSIDE the disposable eval VM (off the operator's workstation). Nests check-builder-local-app (composing check-builder-npm, a package.json declaring the tiny zero-dep is-number) under the vm node via kit.NestedExecutor: at deploy charly compiles the npm global prefix in the fedora.fedora-builder image HOST-SIDE (the host-engine builder leg over RunHostStep) and ships ~/.npm-global onto the GUEST venue; the nested member's marker check asserts ~/.npm-global/lib/node_modules/is-number in the GUEST home, never the operator's. The builder image is pinned via the member's install_opts.builder_image (a kind:local template has no base-distro builder wiring). The C1.3 pod-overlay BUILD-emit is proven separately by the real-chain unit tests + the live check-addcandy-pod pod-overlay dispatch.
@@ -1404,6 +1424,9 @@ check-group:
     vm:
         from: eval-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             R10 witness for the POST-MIGRATE member-tree bed shape with an IN-SUBSTRATE nested member (the group-kind removal's unroll-group-deploy target spelling, Cutover C task 1): the former targetless `group:` node was unrolled by `charly migrate` — the first member (check-group-vm) became this vm: primary carrying the group scalars, and the bed's structure is otherwise unchanged. The nested check-group-member (a kind:local deploy of check-group-app) stays INSIDE the vm node — tree position, no `host:` field — so it lands INSIDE the disposable eval VM via kit.NestedExecutor and the marker is written on the GUEST filesystem, never the operator's workstation. The marker check is authored on the MEMBER'S OWN node plan: a composed candy's `plan:` is NEVER surfaced to a deploy-scope check runner for a non-image deploy, so a check authored only in check-group-layer silently never ran (this bed printed "No plan steps to run." and asserted NOTHING before that fix). NOTE: a nested child runs on NestedExecutor over the guest venue, NOT ShellExecutor; the host-side ShellExecutor + HostDeployTarget arm is witnessed by check-local running INSIDE the guest-as-host VM (the check-local-vm bed) — the guest's charly applies check-local to the GUEST'S OWN host:local via the guest ShellExecutor + HostDeployTarget, still ShellExecutor, just off the operator's workstation (see /charly-core:deploy "Deploy-into nesting").
@@ -1512,6 +1535,9 @@ check-substrate:
     vm:
         from: eval-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Sole R10 witness of the externalized substrate structural kinds (candy/plugin-substrate, C2-substrate), run inside the disposable eval VM: a BARE `local:` TEMPLATE (check-substrate-app, template shape → uf.Local) plus a nested `local:` DEPLOY member (check-substrate-member, deploy shape → uf.Deploy), BOTH decoded out of core through the compiled-in plugin-substrate. runPluginKind → foldSubstrateKind pre-decodes each node via the core loader, validates its value against the KEPT #LocalValue def, threads the canonical result to plugin-substrate's OpLoad, and folds the ECHO into uf.Local / uf.Deploy. The nested member applies check-substrate-layer INSIDE the guest via kit.NestedExecutor, and the marker check asserts /etc/check-substrate-marker in the GUEST — proving both substrate shapes reconstruct + deploy end-to-end off the operator's workstation, byte-equivalent to the former in-proc standaloneKind.
@@ -1599,6 +1625,9 @@ check-charly-vm:
     vm:
         from: charly-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Proves the charly-dev candy installs the in-development binary on a disposable Arch cloud VM via the `copy: bin/charly` run step (the OS-tracked package install lives in the `charly` candy — this is the local-source variant for charly check beds). One command probe asserts charly resolves to /usr/bin/charly and charly version runs (CHARLY-BINARY-OK).
@@ -1707,6 +1736,9 @@ check-arch-repo:
     vm:
         from: arch-repo-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Proves the repo-based install from the published charly-arch pacman repo (opencharly.github.io/charly-arch) — the R10 acceptance for the nFPM packaging cutover's Arch leg. Boots the disposable Arch cloud-image VM (arch-repo-vm, ssh.port_auto so it never collides with check-arch-vm's fixed port 2224), imports + locally signs the charly GPG key, adds the [charly] repo, `pacman -S charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, then removes charly and installs the `charly-minimal` variant, asserting its minimal plugin set dispatches.
@@ -1808,6 +1840,9 @@ check-fedora-repo:
     vm:
         from: fedora-repo-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Proves the repo-based install from the published charly-fedora dnf repo (opencharly.github.io/charly-fedora) — the R10 acceptance for the nFPM packaging cutover's Fedora leg. Boots the disposable Fedora Cloud 43 VM, adds the charly .repo, `dnf install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
@@ -1868,6 +1903,9 @@ check-debian-repo:
     vm:
         from: debian-repo-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Proves the repo-based install from the published charly-debian apt repo (opencharly.github.io/charly-debian) — the R10 acceptance for the nFPM packaging cutover's Debian leg. Boots the disposable Debian 13 (trixie) cloud-image VM (debian-repo-vm), installs the charly GPG key + adds the apt repo, `apt install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
@@ -1950,6 +1988,9 @@ check-ubuntu-repo:
     vm:
         from: ubuntu-repo-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             Proves the repo-based install from the published charly-ubuntu apt repo (opencharly.github.io/charly-ubuntu) — the R10 acceptance for the nFPM packaging cutover's Ubuntu leg. Boots the disposable Ubuntu 24.04 (noble) cloud-image VM (ubuntu-repo-vm), installs the charly GPG key + adds the apt repo, `apt install charly`, asserts the PACKAGED /usr/bin/charly reports the same version the package manager recorded for the installed package, and proves the welded command plugins dispatch project-less from /tmp.
@@ -4028,6 +4069,9 @@ check-agentteams-vm:
     vm:
         from: agentteams-vm
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             R10 bed for the AgentTeams stack on the VM substrate. The add_candy model installs the agentteams top composition (minio, matrix, element, higress, controller) into the Arch cloud-image guest, where the services run as systemd units under uid 1000 (init polymorphism — no supervisord in a VM). The controller's rootless podman socket is set up by the controller candy's plan step; the bed's host-side cp-box steps deliver the pre-built manager/worker images into the guest's rootless store, and the controller spawns the manager + a worker from them through the rootless socket — proving the full controller-spawns-manager → create-worker → room sequence in-guest.
@@ -4317,6 +4361,9 @@ check-r10-two-vm:
         from: r10-vm
         parallel: true
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             CC R10 CASE 1: two-VM-MEMBER bed — the bed root is the PRIMARY VM (member A),
@@ -4356,6 +4403,9 @@ check-r10-two-vm-fail:
         from: r10-vm
         parallel: true
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             CC R10 CASE 2: the FORCED-FAILURE DRAIN twin of check-r10-two-vm. Member A
@@ -4410,6 +4460,9 @@ check-r10-stage:
         from: r10-vm
         parallel: true
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             CC R10 CASE 3 (positive): the stage: CROSS-VENUE ORDERING case. Member A
@@ -4462,6 +4515,9 @@ check-r10-stage-race:
         from: r10-vm
         parallel: true
         disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
         lifecycle: dev
         description: >-
             CC R10 CASE 3 (negative control, deterministic): identical member pair to

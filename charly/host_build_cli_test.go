@@ -153,3 +153,35 @@ printf 'to-stderr\n' >&2`)
 		t.Fatalf("Stdout = %q, want only the stdout line", reply.Stdout)
 	}
 }
+
+// TestMergedChildEnv_OverridesAndInherits pins the per-call env merge: a req key
+// REPLACES the inherited value in place (no duplicate); an absent req key leaves
+// the inherited value; an empty req env returns nil (inherit the host env
+// unchanged, byte-identical to the pre-env behavior).
+func TestMergedChildEnv_OverridesAndInherits(t *testing.T) {
+	t.Setenv("MERGED_TEST_KEEP", "orig")
+	t.Setenv("MERGED_TEST_OVR", "old")
+
+	got := mergedChildEnv(map[string]string{"MERGED_TEST_OVR": "new", "MERGED_TEST_ADD": "added"})
+	vals := map[string]int{}
+	for _, kv := range got {
+		k := kv[:strings.IndexByte(kv, '=')]
+		vals[k]++
+		if k == "MERGED_TEST_OVR" && kv != "MERGED_TEST_OVR=new" {
+			t.Fatalf("override did not win: %q", kv)
+		}
+	}
+	if vals["MERGED_TEST_OVR"] != 1 {
+		t.Fatalf("override produced %d entries for MERGED_TEST_OVR, want 1 (in-place)", vals["MERGED_TEST_OVR"])
+	}
+	if vals["MERGED_TEST_KEEP"] != 1 {
+		t.Fatalf("inherited var lost (MERGED_TEST_KEEP not present once)")
+	}
+	if vals["MERGED_TEST_ADD"] != 1 {
+		t.Fatalf("added var missing")
+	}
+
+	if mergedChildEnv(nil) != nil {
+		t.Fatal("empty env must return nil (inherit host env unchanged)")
+	}
+}
