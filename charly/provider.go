@@ -170,6 +170,10 @@ type PluginSchema struct {
 type PluginUnit struct {
 	Providers []Provider
 	Schema    PluginSchema
+	// Requires is the unit's declared inter-plugin dependencies (F-A3), lifted from
+	// the wire Capabilities.requires. The host resolves every one before the unit is
+	// treated as loaded (registerPluginUnitRequires) — identically in every placement.
+	Requires []Requirement
 }
 
 // Operation selectors (op.Op) are read directly off github.com/opencharly/spec/ops

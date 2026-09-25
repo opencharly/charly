@@ -1,0 +1,98 @@
+package main
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	pb "github.com/opencharly/spec/proto"
+)
+
+// zzReqProv is a minimal in-proc provider that satisfies the registry (a distinct
+// class+word per test so registrations never collide across the suite).
+type zzReqProv struct {
+	class ProviderClass
+	word  string
+}
+
+func (p zzReqProv) Reserved() string                                   { return p.word }
+func (p zzReqProv) Class() ProviderClass                               { return p.class }
+func (p zzReqProv) Invoke(context.Context, *Operation) (*Result, error) { return &Result{}, nil }
+
+// A declared, already-registered peer resolves with no work: the gate passes and the
+// unit is not blocked. This is the common case (a peer in the same project/registry).
+func TestRegisterPluginUnitRequires_PeerAlreadyRegistered(t *testing.T) {
+	providerRegistry.register(zzReqProv{ClassVerb, "zzreqpresent"}, "test")
+	unit := &PluginUnit{
+		Providers: []Provider{zzReqProv{ClassVerb, "zzreqconsumer"}},
+		Requires:  []Requirement{{Class: string(ClassVerb), Word: "zzreqpresent"}},
+	}
+	if err := registerPluginUnitRequires("zzreqconsumer", unit); err != nil {
+		t.Fatalf("declared+registered peer must resolve, got %v", err)
+	}
+}
+
+// An unresolvable NON-optional requirement is a hard error NAMING the plugin and the
+// peer (the loud-at-load contract, mirroring the schema gate).
+func TestRegisterPluginUnitRequires_MissingPeerFailsLoud(t *testing.T) {
+	unit := &PluginUnit{
+		Providers: []Provider{zzReqProv{ClassVerb, "zzreqmissconsumer"}},
+		Requires:  []Requirement{{Class: string(ClassVerb), Word: "zzreqabsent-peer"}},
+	}
+	err := registerPluginUnitRequires("zzreqmissconsumer", unit)
+	if err == nil {
+		t.Fatal("a missing non-optional peer must fail the load, got nil")
+	}
+	if !strings.Contains(err.Error(), "zzreqmissconsumer") || !strings.Contains(err.Error(), "zzreqabsent-peer") {
+		t.Fatalf("error must name both the plugin and the missing peer, got %q", err.Error())
+	}
+}
+
+// An absent OPTIONAL requirement is a skip, not a failure.
+func TestRegisterPluginUnitRequires_OptionalMissingSkips(t *testing.T) {
+	unit := &PluginUnit{
+		Providers: []Provider{zzReqProv{ClassVerb, "zzreqoptconsumer"}},
+		Requires:  []Requirement{{Class: string(ClassVerb), Word: "zzreq-opt-absent", Optional: true}},
+	}
+	if err := registerPluginUnitRequires("zzreqoptconsumer", unit); err != nil {
+		t.Fatalf("an absent optional peer must skip, got %v", err)
+	}
+}
+
+// A declared dependency CYCLE is rejected with the chain named, rather than recursing
+// or hanging. Simulated by marking B as in-flight (as if B were mid-load) while A
+// requires B.
+func TestRegisterPluginUnitRequires_CycleRejected(t *testing.T) {
+	requiresGateMu.Lock()
+	requiresInFlight[provKey(ClassVerb, "zzreqcycle-b")] = "zzreqcycle-b-provider"
+	requiresGateMu.Unlock()
+	defer func() {
+		requiresGateMu.Lock()
+		delete(requiresInFlight, provKey(ClassVerb, "zzreqcycle-b"))
+		requiresGateMu.Unlock()
+	}()
+
+	unit := &PluginUnit{
+		Providers: []Provider{zzReqProv{ClassVerb, "zzreqcycle-a"}},
+		Requires:  []Requirement{{Class: string(ClassVerb), Word: "zzreqcycle-b"}},
+	}
+	err := registerPluginUnitRequires("zzreqcycle-a", unit)
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Fatalf("a declared cycle must be rejected naming the cycle, got %v", err)
+	}
+}
+
+// liftRequirements rejects a malformed requirement (unknown class / empty word) with
+// the SAME closed class vocabulary the capability lift uses.
+func TestLiftRequirements_RejectsMalformed(t *testing.T) {
+	if _, err := liftRequirements([]*pb.PluginRequirement{{Class: "bogus", Word: "x"}}, "test"); err == nil {
+		t.Error("an unknown class must be rejected")
+	}
+	if _, err := liftRequirements([]*pb.PluginRequirement{{Class: "verb", Word: ""}}, "test"); err == nil {
+		t.Error("an empty word must be rejected")
+	}
+	if rs, err := liftRequirements(nil, "test"); err != nil || rs != nil {
+		t.Errorf("no requirements must lift to (nil,nil), got (%v,%v)", rs, err)
+	}
+}
+

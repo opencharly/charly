@@ -70,9 +70,14 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 	if err != nil {
 		return nil, err
 	}
+	requires, err := liftRequirements(caps.GetRequires(), "compiled-in plugin")
+	if err != nil {
+		return nil, err
+	}
 	return &PluginUnit{
 		Providers: providers,
 		Schema:    PluginSchema{CueSource: caps.GetSchemaCue(), InputDefs: inputDefs},
+		Requires:  requires,
 	}, nil
 }
 
