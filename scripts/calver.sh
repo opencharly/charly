@@ -32,7 +32,7 @@ charly_calver() {
 }
 
 # Direct execution (`bash calver.sh`) prints the value — convenient for the
-# Taskfile to capture in a $(...) without sourcing into its own shell.
+# bootstrap build to capture in a $(...) without sourcing into its own shell.
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
 	charly_calver
 fi
