@@ -49,8 +49,8 @@ match, load ALL their skills before doing anything.
 | Disposable-flag semantics / `disposable: true` authorization / preemptible-flag / `requires_exclusive:` / `charly preempt` / exclusive host-resource arbitration (GPU passthrough contention) | `/charly-core:deploy` |
 | Disposable-flag semantics / `disposable: true` authorization / preemptible-flag / `requires_exclusive:` / `charly preempt` / exclusive host-resource arbitration (GPU passthrough contention) | `/charly-internals:disposable` |
 | Editing `local.yml` / authoring `kind: local` templates | `/charly-local:local-spec` |
-| Editing `spec/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:go` |
-| Editing `spec/schema/*.cue` / `task cue:gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:plugin` |
+| Editing `spec/schema/*.cue` / `charly task cue-gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:go` |
+| Editing `spec/schema/*.cue` / `charly task cue-gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike | `/charly-internals:plugin` |
 | Editing a box (`box/<name>/charly.yml` — boxes live in the `box/<distro>` submodules; main owns none), box composition | `/charly-image:image` |
 | Editing a candy (`candy/<name>/charly.yml`), candy authoring, candy tasks/services | `/charly-image:layer` |
 | Egress config validation — validating/generating the config files charly WRITES to a system (`plugin-fleet/candy/plugin-fleet/egress.go`, `ValidateEgress`, the CUE egress schemas at `plugin-egress/candy/plugin-egress/egress-schemas/` (cloud-init, crabbox, k8s, ledger, libvirt-XML, text, traefik)) | `/charly-internals:egress` |
@@ -165,7 +165,7 @@ errors, timeouts, and failed grading fail the step.
 ## Schema Driven Design (SDD)
 
 Define authored configuration and host/plugin wire shapes in CUE before code.
-Generate Go with `task cue:gen`; never hand-transcribe schema-shaped wire
+Generate Go with `charly task cue-gen`; never hand-transcribe schema-shaped wire
 structs. Validation, migration, plugin inputs, and egress derive from the same
 schema. Clean regeneration is a no-op. Any generation exception requires RCA
 and a live schema spike under the owning skill.

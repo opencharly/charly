@@ -3088,7 +3088,7 @@ check-doctor-local:
 # (sdk/kit/yaml.go). None uses a hidden core command — proving the externalized commands end-to-end.
 # NOTE: `charly version` is a DELIBERATE value/risk EXCEPTION kept core — NOT "unfixable". RDD (2026-07-01)
 # refuted the chicken-and-egg claim (the CalVer is already
-# Taskfile-computed via scripts/calver.sh, so externalizing IS feasible), but it sheds ZERO deps and would
+# computed by the bootstrap build via scripts/calver.sh, so externalizing IS feasible), but it sheds ZERO deps and would
 # make R9's canonical identity command depend on the plugin subsystem across 3 package repos — worst-value,
 # highest-blast-radius; operator-decided to keep it a core command. Not exercised here (covered by
 # candy/charly's own version check).

@@ -98,7 +98,7 @@ type CLI struct {
 
 	// `charly version` is a DELIBERATE value/risk EXCEPTION kept core (the Version field below) — NOT
 	// an "unfixable" one. RDD (2026-07-01) refuted the old chicken-and-egg claim:
-	// `bin/charly version` is only a convenience (the CalVer is already Taskfile-computed via
+	// `bin/charly version` is only a convenience (the CalVer is already computed by the bootstrap build via
 	// scripts/calver.sh, and reading it from a sidecar / recomputing at the superproject root
 	// sidesteps the submodule mismatch), so externalizing IS feasible. It is excluded because it sheds
 	// ZERO deps, removes ~5 core lines, and would make R9's canonical identity command depend on the
