@@ -99,8 +99,8 @@ github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3
 github.com/nlpodyssey/gopickle v0.3.0/go.mod h1:f070HJ/yR+eLi5WmM1OXJEGaTpuJEUiib19olXgYha0=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
 github.com/openai/openai-go/v3 v3.61.0/go.mod h1:ufI1+K+t0ijRB3gk8eztiw1crcDpsBuxRQL4sbLIrts=
-github.com/opencharly/plugin-task/candy/plugin-task v0.2026267.2043 h1:SEtJKrIoePiG29wktLznRJoMRvUbi9ngDGbNTB5oyzY=
-github.com/opencharly/plugin-task/candy/plugin-task v0.2026267.2043/go.mod h1:QktfTESS3KTxlzESYJ2ImS1njOZPWOqKuJ+doAIfSvo=
+github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.104 h1:78ubxrCiazQvE7+zRMCOuxfyFvdsXF538327MNfcNj8=
+github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.104/go.mod h1:QktfTESS3KTxlzESYJ2ImS1njOZPWOqKuJ+doAIfSvo=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026251.1105/go.mod h1:c928FYEmTDs7rvFibYc7+mpijKbMogaYyA/BZF01Kgw=
 github.com/opencharly/sdk v0.2026253.1947 h1:8LRFQ135eupkEFPfFJvQzeax9AiSAONi3tUPYvFym2Q=
 github.com/opencharly/sdk v0.2026253.1947/go.mod h1:bHkz9iCZVrpRQ1GjmsqnnOZYkk6bidLqzmikJivJbrU=
