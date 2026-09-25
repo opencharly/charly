@@ -126,7 +126,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 	// long prepare-venue was false-killed (measured).
 	var activity *pluginActivity
 	if _, ok := ctx.Deadline(); !ok {
-		activity = &pluginActivity{pid: providerPid(prov)}
+		activity = newPluginActivity(providerPid(prov))
 		var cancel context.CancelFunc
 		ctx, cancel = idleBoundedContext(ctx, pluginInvokeNoProgress(), activity)
 		defer cancel()
