@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 // TestPluginPrimaries_ParseTimeParity — the frozen 11-entry shorthand table expectation, now a
 // PARITY ASSERTION (parser consolidation F2.6): the parse-time desugar set for the 11
@@ -21,5 +24,27 @@ func TestPluginPrimaries_ParseTimeParity(t *testing.T) {
 		if !ok || got != want {
 			t.Errorf("parse-time primary for %q = %q (present=%v), want %q — the live-container shorthand determinism broke; update the embedded verb_primaries declaration and this assertion together", word, got, ok, want)
 		}
+	}
+}
+
+// TestPluginPrimaries_ConcurrentAccessNoRace exercises the concurrent access the
+// roster exposed: many goroutines registering primaries while others project a
+// snapshot. Run with -race; the unguarded map panicked "concurrent map writes".
+func TestPluginPrimaries_ConcurrentAccessNoRace(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(2)
+		go func(n int) {
+			defer wg.Done()
+			_ = registerPluginPrimary("raceword"+string(rune('a'+n%26)), "field")
+		}(i)
+		go func() {
+			defer wg.Done()
+			_ = snapshotPluginPrimaries()
+		}()
+	}
+	wg.Wait()
+	if _, ok := pluginPrimaryFor("raceworda"); !ok {
+		t.Fatal("registered primary missing after concurrent access")
 	}
 }

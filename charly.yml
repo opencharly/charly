@@ -649,7 +649,12 @@ kimi:
 # check live → fresh update (R10 gate) → tear down — with:
 #
 #     charly check run <bed>          # one bed
-#     charly check run --all-beds     # every bed, name-sorted
+#     charly check run <roster>       # every bed a `check-roster` entity selects, in parallel
+#
+# A whole-roster run is declared by a `check-roster` entity (candy/plugin-check):
+# it enumerates the disposable beds (namespace-qualified), runs them at the entity's
+# `lanes` parallelism, serializes exclusive-resource token groups, and aggregates
+# honest exit codes.
 #
 # `disposable: true` is the SOLE authorization for that unattended destroy +
 # rebuild (see /charly-internals:disposable). Naming: check-<descriptor>-<kind>,
