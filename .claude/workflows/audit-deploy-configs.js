@@ -1,7 +1,7 @@
 export const meta = {
   name: 'audit-deploy-configs',
   description:
-    'Evaluate deployment configs — for AI agents and human operators. Runs `charly box validate` once (config correctness), then per target a read-only deploy-verifier pass (`charly check box` for built images, `charly check live` + `charly status` for running deploys) and aggregates a health report. NON-destructive: never builds, deploys, rebuilds, or tears down. For the destructive R10 bed gate use /verify-beds instead.',
+    'Evaluate deployment configs — for AI agents and human operators. Runs `charly box validate` once (config correctness), then per target a read-only deploy-verifier pass (`charly check box` for built images, `charly check live` + `charly status` for running deploys) and aggregates a health report. NON-destructive: never builds, deploys, rebuilds, or tears down. For the destructive R10 bed gate use `charly check run <roster>` (a `kind:check-roster` entity) instead.',
   phases: [
     { title: 'Validate', detail: 'charly box validate — config + warnings' },
     { title: 'Discover', detail: 'enumerate target images/deploys to audit' },
