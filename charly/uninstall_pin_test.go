@@ -16,12 +16,15 @@ import (
 // exactly the install layer. But the SAME `.Packages` list feeds each format's
 // `uninstall_template`, and pacman/apk REJECT a versioned spec for removal
 // (`pacman -Rs charly=2026.267.2134` -> "target not found"). Each uninstall
-// template therefore renders `{{splitFirst . "="}}` to strip the pin back to the
-// bare name. This test FAILS without that strip.
+// template therefore renders `{{pkgName .}}` to strip the pin back to the bare
+// name. This test FAILS without that strip.
 //
 // It lives HERE (the repo that owns the templates) and renders the discovered
-// template with the stdlib engine over a local `splitFirst` — charly core must
-// not import sdk/buildkit, so that helper is not reachable from here.
+// template with the stdlib engine over a local `pkgNameForTest` mirror — charly
+// core must not import sdk/buildkit, so the shared helper is not reachable from
+// here. `pkgName` itself is REGISTERED in the runtime `TemplateFuncs` of
+// `sdk/buildkit/render.go` (merged to `sdk` `origin/main` as
+// opencharly/sdk#284, 2026-09-25T00:05:01Z), so the production render resolves it.
 func TestUninstallTemplatesStripVersionPin(t *testing.T) {
 	funcs := template.FuncMap{
 		"pkgName": pkgNameForTest,
