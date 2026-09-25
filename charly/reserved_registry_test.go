@@ -58,7 +58,7 @@ func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 }
 
 // TestReservedWordRegistry_DeployBijection proves the F1 substrate-kind-plugin dispatch
-// seam: the deploy-target bijection ACCEPTS every canonical substrate (ALL SIX now
+// seam: the deploy-target bijection ACCEPTS every canonical substrate (ALL SEVEN now
 // externalized — android, kubernetes, kubevirt, local, pod, vm) having NO in-proc DeployTargetProvider —
 // served out-of-process by candy/plugin-adb (android) / candy/plugin-kube (kubernetes) /
 // candy/plugin-kubevirt (kubevirt) / candy/plugin-deploy-local (local) / candy/plugin-deploy-pod (pod) /
@@ -66,13 +66,13 @@ func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 // builtin NOR externalized (the in-proc XOR externalized invariant — never neither).
 func TestReservedWordRegistry_DeployBijection(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
-	// Positive: the live registry (all six externalized, none in-proc) passes — the same
+	// Positive: the live registry (all seven externalized, none in-proc) passes — the same
 	// gate the init() bijection runs at process start.
 	if err := checkDeployProviderBijection(); err != nil {
 		t.Fatalf("live deploy-target bijection is broken: %v", err)
 	}
 
-	// ALL SIX are externalized substrates: in externalizedDeploySubstrates AND
+	// ALL SEVEN are externalized substrates: in externalizedDeploySubstrates AND
 	// INTENTIONALLY without an in-proc DeployTargetProvider. pluginDeployTarget (S3b) reads
 	// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider — there is no separate
 	// per-substrate lifecycle registry left to assert against.
