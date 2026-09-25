@@ -97,12 +97,13 @@ var externalizedDeploySubstrates = setFromSlice(deployTargetWords)
 // itself CUE-derived from spec.ResourceKinds; only the VALUES (literal candy path strings) are
 // hand-written, and they have no generated source to drift from.
 var externalDeploySubstratePlugins = map[string]string{
-	"local":      "github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local",
-	"vm":         "github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
-	"pod":        "github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
-	"android":    "github.com/opencharly/plugin-adb/candy/plugin-adb",
-	"kubernetes": "github.com/opencharly/plugin-kube/candy/plugin-kube",
-	"kubevirt":   "github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt",
+	"local":       "github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local",
+	"vm":          "github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
+	"pod":         "github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
+	"android":     "github.com/opencharly/plugin-adb/candy/plugin-adb",
+	"kubernetes":  "github.com/opencharly/plugin-kube/candy/plugin-kube",
+	"kindcluster": "github.com/opencharly/plugin-kube/candy/plugin-kube",
+	"kubevirt":    "github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt",
 }
 
 // externalDeploySubstratePluginRef returns the canonical @github ref to the candy serving an
