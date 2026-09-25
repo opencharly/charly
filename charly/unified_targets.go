@@ -8,7 +8,7 @@ package main
 // generic ops.OpDeployDispatch envelope, see candy/plugin-fleet/deploy_target.go and
 // CHANGELOG/2026.203.0212.md for the full migration narrative), and the ResolveTarget dispatcher.
 // ALL SEVEN substrates
-// (local/vm/pod/kubernetes/android) are EXTERNAL — each resolves to pluginDeployTarget, which holds ONLY
+// (local/vm/pod/kubernetes/android/kindcluster/kubevirt) are EXTERNAL — each resolves to pluginDeployTarget, which holds ONLY
 // plain data (name/word/hasLifecycle/hasPreresolve/node) and a live venue executor, never a
 // core-private *grpcProvider (that type is constructed at plugin-CONNECT time — clause-M, cannot
 // move — so nothing holding one can live in a plugin). Every method dispatches to

@@ -59,8 +59,8 @@ func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 
 // TestReservedWordRegistry_DeployBijection proves the F1 substrate-kind-plugin dispatch
 // seam: the deploy-target bijection ACCEPTS every canonical substrate (ALL SEVEN now
-// externalized — android, kubernetes, kubevirt, local, pod, vm) having NO in-proc DeployTargetProvider —
-// served out-of-process by candy/plugin-adb (android) / candy/plugin-kube (kubernetes) /
+// externalized — android, kindcluster, kubernetes, kubevirt, local, pod, vm) having NO in-proc DeployTargetProvider —
+// served out-of-process by candy/plugin-adb (android) / candy/plugin-kube (kindcluster + kubernetes) /
 // candy/plugin-kubevirt (kubevirt) / candy/plugin-deploy-local (local) / candy/plugin-deploy-pod (pod) /
 // candy/plugin-deploy-vm (vm), whose grpcProvider connects at plugin-load time; and FAILS when a word is NEITHER
 // builtin NOR externalized (the in-proc XOR externalized invariant — never neither).
@@ -76,7 +76,7 @@ func TestReservedWordRegistry_DeployBijection(t *testing.T) {
 	// INTENTIONALLY without an in-proc DeployTargetProvider. pluginDeployTarget (S3b) reads
 	// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider — there is no separate
 	// per-substrate lifecycle registry left to assert against.
-	for _, w := range []string{"android", "kubernetes", "kubevirt", "local", "pod", "vm"} {
+	for _, w := range []string{"android", "kindcluster", "kubernetes", "kubevirt", "local", "pod", "vm"} {
 		if !externalizedDeploySubstrates[w] {
 			t.Fatalf("%s must be in externalizedDeploySubstrates (the F1 source of truth)", w)
 		}

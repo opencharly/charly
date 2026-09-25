@@ -41,7 +41,7 @@ import (
 // violation (candy/deploy). The former 4th word "group" DIED with the group-kind
 // removal (Cutover C task 1) — it is no longer a kind word in any vocabulary.
 var kindSwitchVocabulary = map[string]bool{
-	"pod": true, "vm": true, "kubernetes": true, "local": true, "android": true, "kubevirt": true,
+	"pod": true, "vm": true, "kubernetes": true, "local": true, "android": true, "kindcluster": true, "kubevirt": true,
 	"candy": true, "deploy": true,
 }
 
