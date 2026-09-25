@@ -18,7 +18,7 @@ require (
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026266.1435
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026237.1416
-	github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.616
+	github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.1841
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026266.2221
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026237.1417
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026244.617
@@ -35,7 +35,7 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026237.1421
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026242.2145
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026266.1111
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026254.600
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026237.1423
@@ -102,7 +102,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026267.2238 // indirect
+	github.com/opencharly/sdk v0.2026268.1823 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
@@ -130,7 +130,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.1402
-	github.com/opencharly/spec v0.2026268.642
+	github.com/opencharly/spec v0.2026268.1800
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
