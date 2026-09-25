@@ -1,7 +1,7 @@
 export const meta = {
   name: 'verify-status',
   description:
-    'Substrate-coverage PLAN for the unified `charly status` surface. It runs NO beds: every substrate bed (pod check-pod, vm check-k3s-vm, android check-android-emulator-pod, local check-local) is either a LONG bed (vm/android substrate, or measured >=600s) or HOST-LOCAL (check-local applies candies to the operator workstation), and an ephemeral agent() sub-agent cannot own either — force-terminating one orphans a libvirt domain or pod container. So it emits, per substrate, the exact `charly check run <bed>` command, the summary.yml path to read, and the `status-shows-*` deploy-scope assertion that bed proves; the PERSISTENT session owns each run as a run_in_background task. The local substrate bed must run inside the disposable eval VM, never on this host. gateComplete is false by construction. The bed-safety classifier lives in /verify-beds (R3) and is not duplicated here.',
+    'Substrate-coverage PLAN for the unified `charly status` surface. It runs NO beds: every substrate bed (pod check-pod, vm check-k3s-vm, android check-android-emulator-pod, local check-local) is either a LONG bed (vm/android substrate, or measured >=600s) or HOST-LOCAL (check-local applies candies to the operator workstation), and an ephemeral agent() sub-agent cannot own either — force-terminating one orphans a libvirt domain or pod container. So it emits, per substrate, the exact `charly check run <bed>` command, the summary.yml path to read, and the `status-shows-*` deploy-scope assertion that bed proves; the PERSISTENT session owns each run as a run_in_background task. The local substrate bed must run inside the disposable eval VM, never on this host. gateComplete is false by construction. The bed-safety classifier (host-local refusal + long-bed handling) now lives in the native `charly check run <roster>` roster engine (`kind:check-roster`, candy/plugin-check), not an agent workflow.',
   phases: [
     { title: 'Discover', detail: 'confirm each substrate bed exists in config' },
     { title: 'Plan', detail: 'emit per-substrate command + summary.yml path + status-shows-* assertion; run nothing' },
@@ -117,7 +117,7 @@ if (!beds.length) {
 // An `agent()` sub-agent is EPHEMERAL: it returns synchronously, its background
 // children die with it, and its one foreground `charly check run` is Bash-capped at
 // 600s. So it cannot own a bed that outlives its turn (/charly-internals:agents:
-// "NEVER the sub-agent /verify-beds workflow for >600s beds"). Driving one anyway
+// long bed cannot be owned by an ephemeral agent). Driving one anyway
 // force-terminates the orchestrator: no verdict, and an ORPHANED libvirt domain or
 // pod container.
 //
@@ -132,7 +132,7 @@ if (!beds.length) {
 // the PERSISTENT session owns each run as a `run_in_background` task, reading the
 // verdict from `<dir>/.check/<bed>/<calver>/summary.yml`.
 //
-// The bed-safety classifier lives in ONE place, `/verify-beds` (R3): delegate there
+// The bed-safety classifier lives in ONE place, the native `kind:check-roster` roster engine: delegate there
 // when you want it applied. This workflow never re-implements it.
 phase('Plan')
 const plan = beds.map((b) => ({
@@ -161,5 +161,5 @@ return {
     'PLAN ONLY — no bed was run. Each planned[].cmd must be launched by the PERSISTENT session as a ' +
     'run_in_background task; read planned[].summaryPath for the verdict and confirm planned[].proves. ' +
     'The `local` substrate bed is HOST-LOCAL and must run inside the disposable eval VM, never on this host. ' +
-    'The bed-safety classifier lives in /verify-beds (R3); this workflow does not duplicate it.',
+    'The bed-safety classifier lives in the native kind:check-roster roster engine (candy/plugin-check); this workflow does not duplicate it.',
 }
