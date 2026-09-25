@@ -182,6 +182,16 @@ func pluginInvokeNoProgress() time.Duration {
 // never mistaken for idle.
 func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *pluginActivity) (context.Context, context.CancelFunc) {
 	a.touch() // the dispatch itself is baseline activity
+	// Guarantee a live PROGRESS EVENT channel before the watcher starts: a clock not
+	// built by newPluginActivity would otherwise have a nil wake, and `case <-a.wake`
+	// would then never fire — silently reverting the guard to a bare timer that
+	// false-kills a progressing call (the exact bug this rewrite fixes). The clock is
+	// armed here BEFORE the call is dispatched, so no concurrent touch races this
+	// assignment (touches only happen on reverse legs during the in-flight call).
+	if a.wake == nil {
+		a.wake = make(chan struct{}, 1)
+	}
+	wake := a.wake
 	cctx, cancel := context.WithCancelCause(ctx)
 	stop := make(chan struct{})
 	go func() {
@@ -211,7 +221,7 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 				return
 			case <-cctx.Done():
 				return
-			case <-a.wake:
+			case <-wake:
 				// A host-leg touch is a progress EVENT: reset the deadline.
 				reset()
 			case <-cpu.C:
