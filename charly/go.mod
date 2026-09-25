@@ -67,7 +67,7 @@ require (
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026237.1429
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026237.1430
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026242.2148
-	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026260.1314
+	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026266.1235
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.61.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -138,3 +138,5 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 )
+
+replace github.com/opencharly/plugin-check/candy/plugin-check => ../../plugin-check/candy/plugin-check
