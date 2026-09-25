@@ -18,7 +18,7 @@ require (
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026266.1435
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026237.1416
-	github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.55
+	github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.616
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026266.2221
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026237.1417
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026244.617
@@ -129,7 +129,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.104
+	github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.534
 	github.com/opencharly/spec v0.2026267.2224
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
@@ -138,5 +138,3 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 )
-
-replace github.com/opencharly/plugin-check/candy/plugin-check => ../../plugin-check/candy/plugin-check
