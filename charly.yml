@@ -4732,3 +4732,80 @@ check-task:
           task: check-task-smoke
         context:
           - runtime
+
+# =============================================================================
+# check-kindcluster — the R10 bed for the deploy:kindcluster substrate (the
+# local Kubernetes-in-Docker cluster provisioned by kubernetes-sigs/kind). It is
+# a target:kindcluster deploy of a local-cluster template; the live cluster is
+# addressed by the kubeconfig context kind writes (kind-<cluster>), and the bed
+# runs the `kube:` probe suite the k3s beds use — NOT `addons` (kind ships
+# kindnet, no Traefik/ServiceLB). disposable: true authorizes destroy+rebuild.
+# =============================================================================
+check-kindcluster-cluster:
+    kindcluster:
+        box: ""
+        engine: podman
+        node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+        nodes:
+            - role: control-plane
+check-kindcluster:
+    kindcluster:
+        from: check-kindcluster-cluster
+        disposable: true
+        lifecycle: dev
+        add_candy:
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.268.2341'
+        description: >-
+            Sole R10 witness of the externalized deploy:kindcluster substrate: a disposable local
+            Kubernetes-in-Docker cluster provisioned by kind on the operator's container engine
+            (podman), then probed with the `kube:` check verb against the context kind writes
+            (kind-check-kindcluster). Proves the preresolve (render + egress-validate the kind
+            Cluster config), the create (kind create cluster), and the kubeconfig path end to end;
+            teardown is `kind delete cluster`.
+        plan:
+            - check: the kind binary the substrate drives is installed and reports the pinned version
+              id: kc-kind-binary
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "kind v0.33.0"
+              command: kind version
+            - check: the kind cluster exists on the podman engine
+              id: kc-cluster-exists
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster"
+              command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters'
+            - check: the cluster reports at least one Ready node
+              id: kc-node-ready
+              context:
+                - runtime
+              kube:
+                method: wait-nodes
+                kube_context: kind-check-kindcluster
+                kube_count: 1
+              timeout: 180s
+              stdout:
+                - contains: "Ready"
+            - check: the local-path StorageClass kind installs is present
+              id: kc-storageclass
+              context:
+                - runtime
+              kube:
+                method: storageclass
+                kube_context: kind-check-kindcluster
+              stdout:
+                - contains: "standard"
+            - check: raw — the raw escape hatch lists the cluster's namespaces
+              id: kc-raw-namespaces
+              context:
+                - runtime
+              kube:
+                method: raw
+                kube_context: kind-check-kindcluster
+                kube_resource: namespaces
+              stdout:
+                - contains: kube-system
