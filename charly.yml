@@ -499,6 +499,16 @@ check-helm-vm-ctx:
     kubernetes:
         box: ""
         kubeconfig_context: vm-check-helm-vm
+# check-kubevirt-operator-ctx — the check-kubevirt-operator bed's OWN
+# kind:kubernetes profile (the task #18 pattern). The bed's root is the shared
+# k3s-vm entity, so its kubeconfig context is per-deploy-DOMAIN-scoped
+# (vm-check-kubevirt-operator) — never shared by entity. The bed's own host-side
+# `kubevirt:` readiness probe names this profile by LITERAL string.
+check-kubevirt-operator-ctx:
+    kubernetes:
+        box: ""
+        kubeconfig_context: vm-check-kubevirt-operator
+
 claude:
     agent:
         description: Anthropic Claude Code CLI — autonomous coding agent.
@@ -840,6 +850,118 @@ check-helm-vm:
                 release: web-pushgateway
                 namespace: web
                 revision: 1
+# =============================================================================
+# check-kubevirt-operator — disposable R10 for the KubeVirt + CDI platform install
+# (candy/layer-kubevirt-operator). A disposable libvirt Arch k3s VM (the shared
+# k3s-vm entity + k3s-server, an auto-allocated host->guest 6443 forward) overlays
+# kubevirt-operator over SSH: the candy's IN-VENUE run: steps (context: [deploy])
+# fetch the pinned KubeVirt/CDI manifests with curl and apply them with the GUEST's
+# own kubectl against the GUEST's own kubeconfig (/etc/rancher/k3s/k3s.yaml) — the
+# layer-helm-chart precedent (a kube: verb is host-side and cannot reach a guest
+# cluster). The bed's own plan then runs the HOST-side `kubevirt:` readiness probe
+# against its OWN per-deploy-domain profile (check-kubevirt-operator-ctx) — the
+# partition: install in-venue, probe host-side on the side that can name a profile.
+#
+# This is the platform leg of the kubevirt-check-beds batch; the full guest-VM leg
+# (`check-kubevirt-vm`, booting a charly-built VM box as a containerDisk) is the
+# next leg of that batch, not part of this bed.
+# =============================================================================
+check-kubevirt-operator:
+    vm:
+        from: k3s-vm
+        disposable: true
+        cpu: 2
+        ram: 4G
+        lifecycle: dev
+        description: >-
+            R10 for candy/layer-kubevirt-operator — the KubeVirt + CDI platform install on a disposable libvirt Arch k3s VM (the shared k3s-vm entity + k3s-server, an auto-allocated host->guest 6443 forward). The candy's IN-VENUE run: steps (context: [deploy]) fetch the pinned KubeVirt operator + CR manifests and the CDI operator + CR manifests with curl and apply them with the GUEST's own kubectl against the GUEST's own kubeconfig (/etc/rancher/k3s/k3s.yaml) — the layer-helm-chart precedent, the platform install owned by the venue it lands in. The bed's own plan then asserts the platform HOST-side over the managed port-forward (its own per-deploy-domain profile, cluster: check-kubevirt-operator-ctx): the VirtualMachine + VirtualMachineInstance CRDs are Established, the virt-handler DaemonSet is Ready on the node, and the KubeVirt CR + the CDI CR report Deployed via the `kubevirt: wait-ready` platform arm. Proves the whole platform leg end-to-end from a real cluster, no mocks.
+        add_candy:
+            - k3s-server
+            - '@github.com/opencharly/layer-kubevirt-operator:v2026.269.1736' # the standalone repo (kind-prefixed naming)
+            - '@github.com/opencharly/layer-kubevirt:v2026.269.0037' # virtctl (the client candy)
+            # The verb providers the bed's plan dispatches: plugin-kube serves `kube:`
+            # (the kindcluster bed add_candy's it for the same reason); plugin-kubevirt
+            # serves `kubevirt:`. Neither is compiled into charly, so the bed must
+            # reference them or the verb resolves "no provider registered".
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.268.2341'
+            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.269.1640'
+        env:
+            K3S_SERVER_HOSTNAME: 127.0.0.1
+        install_opts:
+            with_service: true
+            allow_repo_changes: true
+            skip_incompatible: true
+            verify: true
+        plan:
+            # --- guest-side sanity: the cluster came up under the VM -------------
+            - check: the k3s control plane reports a Ready node before the KubeVirt probes
+              id: kvo-wait-nodes
+              kube:
+                method: wait-nodes
+                cluster: "check-kubevirt-operator-ctx"
+                kube_count: 1
+              timeout: "300s"
+              stdout: {contains: "Ready"}
+              context: [runtime]
+            # --- the KubeVirt platform landed (host-side probes) ------------------
+            - check: the KubeVirt VirtualMachine CRD is Established (the operator registered the virtualization API)
+              id: kvo-crds-established
+              kube:
+                method: raw
+                cluster: "check-kubevirt-operator-ctx"
+                kube_resource: customresourcedefinitions
+                kube_group: apiextensions.k8s.io
+                kube_version: v1
+                name: virtualmachines.kubevirt.io
+              stdout: {contains: "virtualmachines.kubevirt.io"}
+              context: [runtime]
+            - check: the KubeVirt VirtualMachineInstance CRD is Established (the operator registered the VMI API)
+              id: kvo-vmi-crd-established
+              kube:
+                method: raw
+                cluster: "check-kubevirt-operator-ctx"
+                kube_resource: customresourcedefinitions
+                kube_group: apiextensions.k8s.io
+                kube_version: v1
+                name: virtualmachineinstances.kubevirt.io
+              stdout: {contains: "virtualmachineinstances.kubevirt.io"}
+              context: [runtime]
+            # The `kubevirt: wait-ready` platform arm: with the CR's canonical install
+            # namespace selected (namespace: kubevirt / cdi), the verb polls that CR's
+            # status.phase to Deployed — the plan's `kubevirt: wait-ready` on the
+            # KubeVirt CR + the CDI CR, in one method (the verb self-resolves the
+            # kube_context exactly as the `kube:` probes do).
+            - check: the KubeVirt CR reports the Deployed phase — the operator finished reconciling
+              id: kvo-kubevirt-cr-deployed
+              kubevirt:
+                method: wait-ready
+                namespace: kubevirt
+                cluster: "check-kubevirt-operator-ctx"
+              timeout: "600s"
+              context: [runtime]
+            - check: the virt-handler DaemonSet is Ready on the node — the per-node virtualization agent is up
+              id: kvo-virt-handler-ready
+              kube:
+                method: wait-ready
+                cluster: "check-kubevirt-operator-ctx"
+                kube_kind: DaemonSet
+                namespace: kubevirt
+                name: virt-handler
+              timeout: "600s"
+              context: [runtime]
+            - check: the CDI CR reports the Deployed phase — the DataVolume import platform is up
+              id: kvo-cdi-cr-deployed
+              kubevirt:
+                method: wait-ready
+                namespace: cdi
+                cluster: "check-kubevirt-operator-ctx"
+              timeout: "600s"
+              context: [runtime]
+            - check: the installed virtctl CLI reports its version - the client the kubevirt verb and charly kubevirt CLI shell out to
+              id: kvo-virtctl-version
+              stdout: {contains: "Client Version"}
+              context: [runtime]
+              command: /usr/bin/virtctl version --client
 # check-k8s-deploy-app — the check-k8s-deploy bed's target:kubernetes WORKLOAD fixture.
 # A minimal Fedora base box composed from LOCAL pure-rpm candies (supervisord +
 # os-layer; no builder, no @github candy refs), so it builds from the root project —
