@@ -87,7 +87,7 @@ func TestExplainUnresolvedPluginWordNamesTheCause(t *testing.T) {
 			t.Cleanup(func() { pluginScopedOut = saved })
 
 			tc.setup(t)
-			got := explainUnresolvedPluginWord(ClassVerb, "wl")
+			got := explainUnresolvedPluginWord(ClassVerb, "wl", "")
 
 			// The symptom must still be reported — callers and beds match on it.
 			if !strings.Contains(got, `no provider registered for plugin verb "wl"`) {
@@ -116,7 +116,7 @@ func TestExplainUnresolvedPluginWordDistinguishesCauses(t *testing.T) {
 	render := func(name string, prep func(t *testing.T)) {
 		pluginScopedOut = map[string]string{}
 		prep(t)
-		got := explainUnresolvedPluginWord(ClassVerb, "wl")
+		got := explainUnresolvedPluginWord(ClassVerb, "wl", "")
 		if prev, dup := seen[got]; dup {
 			t.Errorf("%q and %q render the SAME message — the caller cannot tell them apart:\n%s",
 				name, prev, got)

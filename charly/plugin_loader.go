@@ -537,13 +537,13 @@ func discoverBakedPluginWords() {
 			}
 			binPath := filepath.Join(dir, strings.TrimSuffix(e.Name(), ".providers"))
 			for _, line := range strings.Split(string(data), "\n") {
-				class, word, ok := splitCapability(strings.TrimSpace(line))
+				class, word, parent, ok := splitCapability(strings.TrimSpace(line))
 				if !ok {
 					continue
 				}
 				switch class {
 				case ClassCommand:
-					registerDeclaredExternalCommand(word)
+					registerDeclaredExternalCommand(word, parent)
 				case ClassVerb:
 					registerDeclaredExternalVerb(word)
 				default:
@@ -552,8 +552,8 @@ func discoverBakedPluginWords() {
 				// FIRST dir wins (CHARLY_PLUGIN_DIR ahead of the FHS path) — consistent with
 				// bakedPluginBinary's first-hit lookup. Precedence only: a word baked under the
 				// FHS path is still discovered when $CHARLY_PLUGIN_DIR lacks it.
-				if _, seen := bakedPluginBinaries[provKey(class, word)]; !seen {
-					bakedPluginBinaries[provKey(class, word)] = binPath
+				if _, seen := bakedPluginBinaries[providerKey(class, word, parent)]; !seen {
+					bakedPluginBinaries[providerKey(class, word, parent)] = binPath
 				}
 			}
 		}
@@ -595,13 +595,13 @@ func loadBakedPluginBinary(bin string) bool {
 // whether to fall through to a project-source build (connectPluginByWord) or fail. Shared by the
 // `plugin:` verb runtime (runPluginVerb) AND the credential store's verb:credential resolve, so a
 // baked plugin resolves with NO project scan (R3).
-func connectBakedPlugin(class ProviderClass, word string) (Provider, bool) {
-	if p, ok := providerRegistry.resolve(class, word); ok {
+func connectBakedPlugin(class ProviderClass, word, parent string) (Provider, bool) {
+	if p, ok := providerRegistry.resolveIdentity(class, word, parent); ok {
 		return p, true
 	}
-	if bin, ok := bakedPluginBinaries[provKey(class, word)]; ok {
+	if bin, ok := bakedPluginBinaries[providerKey(class, word, parent)]; ok {
 		if loadBakedPluginBinary(bin) {
-			if p, ok := providerRegistry.resolve(class, word); ok {
+			if p, ok := providerRegistry.resolveIdentity(class, word, parent); ok {
 				return p, true
 			}
 		}
@@ -637,7 +637,7 @@ func connectPluginByWord(class ProviderClass, word string) (Provider, bool) {
 // the plain connectPluginByWord. The ONE on-demand plugin-connect entry point for a word that
 // appears in NO plan step (the credential/vm/kube host out-calls + any future host adapter).
 func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provider, bool) {
-	if p, ok := connectBakedPlugin(class, word); ok {
+	if p, ok := connectBakedPlugin(class, word, ""); ok {
 		return p, true
 	}
 	dir, err := os.Getwd()
@@ -956,7 +956,7 @@ func collectReferencedPluginWords(candies map[string]spec.CandyReader, boxes spe
 // mismatch. A malformed capability string is skipped (validate flags it elsewhere).
 func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) bool {
 	for _, capability := range providers {
-		if _, word, ok := splitCapability(capability); ok {
+		if _, word, _, ok := splitCapability(capability); ok {
 			if _, hit := refs[word]; hit {
 				return true
 			}
@@ -1265,11 +1265,11 @@ func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader
 func pluginAlreadyConnected(name string, source string, providers []string) (bool, error) {
 	connected := false
 	for _, capability := range providers {
-		class, word, ok := splitCapability(capability)
+		class, word, parent, ok := splitCapability(capability)
 		if !ok {
 			continue
 		}
-		origin, found := providerRegistry.registeredOrigin(class, word)
+		origin, found := providerRegistry.registeredOrigin(class, word, parent)
 		if !found {
 			continue
 		}
@@ -1286,7 +1286,7 @@ func pluginAlreadyConnected(name string, source string, providers []string) (boo
 			continue
 		}
 		if origin != source {
-			return false, fmt.Errorf("plugin %q provider %s:%s collides with one already registered from %q", name, class, word, origin)
+			return false, fmt.Errorf("plugin %q provider %s collides with one already registered from %q", name, providerKey(class, word, parent), origin)
 		}
 		connected = true
 	}
@@ -1320,18 +1320,21 @@ var pluginScopedOut = map[string]string{}
 // recordScopedOutPlugin notes every provider word a perf-scoped-out candy would have served.
 func recordScopedOutPlugin(candyName string, providers []string) {
 	for _, p := range providers {
-		class, word, ok := splitCapability(strings.TrimSpace(p))
+		class, word, parent, ok := splitCapability(strings.TrimSpace(p))
 		if !ok {
 			continue
 		}
-		if _, seen := pluginScopedOut[provKey(class, word)]; !seen {
-			pluginScopedOut[provKey(class, word)] = candyName
+		k := providerKey(class, word, parent)
+		if _, seen := pluginScopedOut[k]; !seen {
+			pluginScopedOut[k] = candyName
 		}
 	}
 }
 
 // explainUnresolvedPluginWord renders the failure for a plugin word that resolved to no
-// provider, naming the CAUSE rather than only the symptom.
+// provider, naming the CAUSE rather than only the symptom. `parent` is the command parent
+// for a nested-command miss (empty otherwise), so the identity key matches the one the
+// registry and the baked manifests use.
 //
 // Four different situations reach this point and used to be indistinguishable:
 //
@@ -1342,10 +1345,16 @@ func recordScopedOutPlugin(candyName string, providers []string) {
 //
 // The bare "no provider registered" message reads as "the plugin is broken", when the common
 // cause is "charly never looked where the plugin is" or "charly chose not to load it".
-func explainUnresolvedPluginWord(class ProviderClass, word string) string {
-	key := provKey(class, word)
+func explainUnresolvedPluginWord(class ProviderClass, word, parent string) string {
+	key := providerKey(class, word, parent)
 	var b strings.Builder
-	fmt.Fprintf(&b, "no provider registered for plugin %s %q", class, word)
+	// Keep the legacy symptom substring (`plugin <class> "<word>"`) callers and beds match on;
+	// append the parent only when the word is a nested command, so its full identity is named.
+	if parent == "" {
+		fmt.Fprintf(&b, "no provider registered for plugin %s %q", class, word)
+	} else {
+		fmt.Fprintf(&b, "no provider registered for plugin %s %q (identity %s)", class, word, key)
+	}
 
 	// 1. A project candy declares it, but nothing referenced it, so it was never loaded.
 	// This is the cause the old message hid most completely: the plugin is fine.
@@ -1384,12 +1393,12 @@ func explainUnresolvedPluginWord(class ProviderClass, word string) string {
 			}
 			bin := filepath.Join(d, strings.TrimSuffix(e.Name(), ".providers"))
 			for _, line := range strings.Split(string(data), "\n") {
-				c, w, ok := splitCapability(strings.TrimSpace(line))
+				c, w, parent, ok := splitCapability(strings.TrimSpace(line))
 				if !ok {
 					continue
 				}
-				words = append(words, provKey(c, w)+" -> "+filepath.Base(bin))
-				if provKey(c, w) == key {
+				words = append(words, providerKey(c, w, parent)+" -> "+filepath.Base(bin))
+				if providerKey(c, w, parent) == key {
 					if _, statErr := os.Stat(bin); statErr != nil {
 						foundWord = fmt.Sprintf("declared by %s but its binary %s is missing",
 							e.Name(), bin)

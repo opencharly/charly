@@ -1,148 +1,89 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/opencharly/spec/spec"
+	"strings"
 )
 
-// deployTargetWords is the canonical deploy-target set (the cross-ref-inferred
-// node.Target values) — DERIVED from spec.ResourceKinds (R3: no hand-duplicated list to
-// drift from the CUE vocabulary). The former minus-"group" special case DIED with the
-// group-kind removal (Cutover C task 1): the targetless deploy group is no longer a
-// #ResourceKind entry, so the derivation is the PLAIN resource-kinds list. Every word
-// is asserted served by an external out-of-process plugin
-// (externalizedDeploySubstrates) — ALL FIVE substrates externalize today; there is no
-// in-proc DeployTargetProvider concept left (the former interface + its ResolveTarget
-// type-assertion branch in unified_targets.go were confirmed dead — zero implementers,
-// `git grep 'func.*ResolveTarget(node \*spec.DeployNode'` matches only the package-level
-// dispatcher itself — and deleted).
-var deployTargetWords = append([]string(nil), spec.ResourceKinds...)
+// externalizedDeploySubstrates is the set of deploy words served by a plugin — DERIVED
+// from the generated provider-ref index (pluginProviderRefs, the projection of every
+// plugin repo's own `plugin:` block), never from a compiled-in per-kind map or a closed
+// vocabulary (boundary-law clause D). A word in this set has NO in-proc builtin: its
+// provider registers at plugin-load time (or is declared by a project), and ResolveTarget
+// (unified_targets.go) routes target:<word> to the generic pluginDeployTarget (S3b), a
+// thin data-only proxy that dispatches EVERY verb (Add/Del/Test/Update/Start/Stop/
+// Status/Logs/Shell/Attach/Rebuild) to candy/plugin-fleet's Invoke(OpDeployDispatch),
+// which reaches the substrate's own out-of-process provider via
+// sdk.Executor.InvokeProvider — never a direct call from core.
+//
+// It is OPEN by construction: the deploy provider set is whatever plugins declare. A
+// canonical substrate (deploy:pod/vm/kubernetes/local/android), a plugin-only example
+// target (deploy:exampledeploy), and a third party's own word (declared by its project)
+// are all the same kind of fact — a plugin serves the word. This is why the former
+// `checkDeployProviderBijection` is gone: there is no closed deploy vocabulary to check a
+// plugin-declared word against, so a plugin can add a deploy target with ZERO core edits.
+//
+// Per-substrate behaviour is DECLARED, never a branch here: each plugin reports its own
+// #DeployTraits (P9), so deployTraitsFor reads the traits off the resolved provider; a
+// substrate's preresolve/lifecycle legs are its own provider's InvokeProvider ops
+// (candy/plugin-adb + candy/plugin-kube register preresolve; candy/plugin-deploy-vm and
+// candy/plugin-deploy-pod own lifecycles) — reached the SAME generic way as every other
+// substrate, with no separate core-side registry.
+var externalizedDeploySubstrates = deploySubstrateWords()
 
-// externalizedDeploySubstrates is THE single source of truth for which canonical
-// deploy-substrate kinds are served by an EXTERNAL out-of-process plugin instead
-// of a compiled-in DeployTargetProvider (F1 — the substrate-kind-plugin dispatch
-// seam). A word listed here has NO in-proc builtin: its grpcProvider registers at
-// plugin-load time and ResolveTarget (unified_targets.go) routes target:<word> to
-// the generic pluginDeployTarget (S3b), a thin data-only proxy that dispatches
-// EVERY verb (Add/Del/Test/Update/Start/Stop/Status/Logs/Shell/Attach/Rebuild) to
-// candy/plugin-fleet's Invoke(OpDeployDispatch), which reaches the substrate's own
-// out-of-process provider via sdk.Executor.InvokeProvider — never a direct E3b call
-// from core. Both checkDeployProviderBijection (in-proc XOR externalized) and
-// isExternalDeploySubstrate (a substrate kind is external iff listed here) consult
-// it — so the two gates can never disagree. GENERAL for all 5 — ALL FIVE substrates
-// now externalize; the ONLY substrate-specific piece is each one's registered
-// preresolver body (F6, FINAL/K5 unit 6a — candy/plugin-adb/preresolve.go /
-// candy/plugin-kube/preresolve.go, dispatched by candy/plugin-fleet's
-// preresolveSubstrate via InvokeProvider(OpPreresolve), S3b — the core-side
-// deploy_preresolve.go:wireDeployPreresolver registry it used to route through is
-// dissolved, since the caller is itself a plugin now) OR lifecycle hook
-// (lifecycleStartPlanHooks/lifecycleStopPlanHooks/lifecycleAttachPlanHooks,
-// pod_lifecycle_dispatch.go — pod only; vm registers none, see below), never a
-// branch in the generic dispatch. local needs NEITHER — its plan walk + executor
-// selection are the generic pluginDeployTarget path (the executor is Shell for
-// host:local, SSH for host:user@machine — see ResolveTarget), so the plan VIEWS
-// the host marshals already carry everything the candy/plugin-deploy-local plugin
-// needs.
-//
-// vm is served by candy/plugin-deploy-vm (kit.WalkPlans over the GUEST SSHExecutor).
-// Unlike local/android/kubernetes it owns a real venue LIFECYCLE, implemented ENTIRELY
-// in the plugin (candy/plugin-deploy-vm/lifecycle.go): boots the domain, builds
-// the guest SSHExecutor the reverse channel serves, runs the nested pod-in-guest
-// orchestration, and owns Start/Stop/Status/Logs/Shell/Rebuild — reached the SAME
-// generic way as every other substrate (pluginDeployTarget → OpDeployDispatch →
-// InvokeProvider), no separate core-side lifecycle registry. The
-// arbiter-claim bracket around vm's own `charly vm start`/`stop` reentry is vm's
-// OWN concern (never double-bracketed by the Q1 resource-arbiter bracket in
-// candy/plugin-fleet's runLifecycleBracket, which is gated on the DECLARED
-// bracketed_lifecycle trait — pod-only, see deployTraitsFor's doc comment); the
-// ssh-config / charly.yml-entry / ephemeral
-// teardown bookkeeping is the vm plugin's OWN deploy-ledger persist path
-// (candy/plugin-vm/vm_host_persist.go — #55 coneC-dsh β2: the config-persist host-builder is deleted;
-// the plugin calls deploykit.SaveVmDeployState/RemoveVmDeployEntry directly).
-//
-// pod is served by candy/plugin-deploy-pod, but unlike vm its plugin WALKS NOTHING: pod bakes
-// its install steps INTO the image at build time, so its PrepareVenue (podPrepareVenue) builds
-// the overlay container image HOST-SIDE via HostBuild("overlay") → the core prep+resolve seam
-// (build_overlay.go) + the candy's own deploykit.OCITarget render, and owns the container
-// lifecycle (config/start/remove + the `charly update` rebuild gate) — reached the same generic
-// OpDeployDispatch path, with its Start/Stop/Attach further routing through pod_lifecycle_dispatch.go's
-// registered plan hooks (arbiter-bracketed by candy/plugin-fleet's runLifecycleBracket, gated on
-// pod's declared bracketed_lifecycle trait, S3b). The prep+resolve stays core, the render is in
-// the candy.
-// Derived from deployTargetWords (itself CUE-derived from spec.ResourceKinds), not a hand-written
-// literal (deploy-cone cutover 1, task #21): a hardcoded per-kind Go map is an un-gameable-self-test
-// R-item leak even when every entry happens to be true today — the boundary law's clause-D bucket is
-// CUE/config-loaded data, never a compiled-in literal. setFromSlice's map[string]bool result stays
-// mutable, so reserved_registry_test.go's delete/restore probe of one entry still works unchanged.
-var externalizedDeploySubstrates = setFromSlice(deployTargetWords)
-
-// externalDeploySubstratePlugins maps each first-party EXTERNALIZED deploy-substrate word
-// to the STANDALONE repo + candy subpath of the plugin that serves it. The candy
-// de-submodule cutover (Phase 4) moved every candy/plugin-deploy-* out of the main repo
-// into its own kind-prefixed repo (opencharly/plugin-deploy-{local,vm,pod}, plugin-adb,
-// plugin-kube), so the canonical ref is now the STANDALONE repo path — NOT
-// github.com/opencharly/charly/candy/… (that path no longer exists; a stale ref there
-// leaves the substrate provider unconnected and every vm:/local:/kubernetes: bed fails
-// at deploy-add with "target %q is a known substrate but its deploy provider is not
-// connected").
-//
-// SDD CUE-sourcing spike (K1-α, settled — do not re-open without new evidence): this map does
-// NOT need CUE-sourcing. It is neither authored config (no user ever writes it in a charly.yml)
-// nor a wire type (nothing marshals it across a host<->plugin boundary), so it falls outside the
-// SDD mandate's scope entirely — the same bucket as sdk/spec's documented hand-written exceptions
-// (charly_names.go aliases, devices.go's devicePatterns), not a `cue exp gengotypes` candidate.
-// Its one drift-relevant property — these KEYS matching the real deploy-substrate vocabulary — is
-// ALREADY live-gated at process init() by checkDeployProviderBijection against deployTargetWords,
-// itself CUE-derived from spec.ResourceKinds; only the VALUES (literal candy path strings) are
-// hand-written, and they have no generated source to drift from.
-var externalDeploySubstratePlugins = map[string]string{
-	"local":      "github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local",
-	"vm":         "github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
-	"pod":        "github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
-	"android":    "github.com/opencharly/plugin-adb/candy/plugin-adb",
-	"kubernetes": "github.com/opencharly/plugin-kube/candy/plugin-kube",
+// deploySubstrateWords projects the generated provider-ref index onto the deploy class —
+// the DEPLOY subset of "which plugin serves which word". setFromSlice-style mutable map
+// (the reserved_registry test's delete/restore probe still works).
+func deploySubstrateWords() map[string]bool {
+	out := map[string]bool{}
+	for key := range pluginProviderRefs {
+		class, word, ok := splitProviderKey(key)
+		if ok && ProviderClass(class) == ClassDeployTarget {
+			out[word] = true
+		}
+	}
+	return out
 }
 
 // externalDeploySubstratePluginRef returns the canonical @github ref to the candy serving an
-// externalized deploy SUBSTRATE word, and whether the word is a first-party externalized
-// substrate. A box/<distro> SUBMODULE's beds reference the substrate plugin nowhere in their
-// own candy closure — a main-repo project discovers it from candy/ directly (its `discover:`
-// scans candy/*), but a submodule scans only its own + imported candies — so the deploy/check
-// plugin-load paths auto-inject this ref (via ExtraCandyRefs) ONLY in a submodule context, so
-// the substrate word resolves to its out-of-process provider. In a submodule bed
-// CHARLY_REPO_OVERRIDE redirects it to the local superproject under development — the SAME
-// host-side-plugin pattern as vmPluginCandyRef for verb:libvirt (vm_plugin_client.go, R3).
+// externalized deploy SUBSTRATE word, read from the GENERATED provider-ref index
+// (pluginProviderRefs — a projection of each plugin repo's own `plugin:` block, see
+// pluginsgen). There is NO kernel map: the word->provider fact lives in the plugin repo,
+// so a new substrate costs a plugin manifest entry, never a charly code change
+// (boundary-law clause D). A box/<distro> SUBMODULE's beds reference the substrate plugin
+// nowhere in their own candy closure — a main-repo project discovers it from candy/
+// directly (its `discover:` scans candy/*), but a submodule scans only its own + imported
+// candies — so the deploy/check plugin-load paths auto-inject this ref (via ExtraCandyRefs)
+// ONLY in a submodule context, so the substrate word resolves to its out-of-process
+// provider. In a submodule bed CHARLY_REPO_OVERRIDE redirects it to the local superproject
+// under development.
 func externalDeploySubstratePluginRef(word string) (string, bool) {
-	sub, ok := externalDeploySubstratePlugins[word]
+	ref, ok := pluginProviderRef("deploy:" + word)
 	if !ok {
 		return "", false
 	}
-	return "@" + sub, true
+	return "@" + ref, true
 }
 
-// checkDeployProviderBijection: every canonical deploy-target word is served by an
-// EXTERNAL out-of-process plugin (externalizedDeploySubstrates) that also names its
-// canonical plugin candy (externalDeploySubstratePlugins), so a box/<distro> submodule
-// can auto-inject the ref and resolve the substrate word. There is no in-proc
-// DeployTargetProvider concept anymore — the former interface + its ResolveTarget
-// type-assertion branch in unified_targets.go were confirmed dead (zero implementers)
-// and deleted; ALL FIVE substrates externalize today. Run in the same init() that
-// registers (after registration), avoiding the alphabetical race. An externalized word
-// legitimately has NO provider at process start (its grpcProvider connects later at load).
-func checkDeployProviderBijection() error {
-	var problems []string
-	for _, w := range deployTargetWords {
-		if !externalizedDeploySubstrates[w] {
-			problems = append(problems, w+" (deployTargetWords entry not marked externalized — no in-proc DeployTargetProvider concept exists to serve it instead)")
-			continue
-		}
-		if _, ok := externalDeploySubstratePlugins[w]; !ok {
-			problems = append(problems, w+" (externalized substrate has no externalDeploySubstratePlugins entry — a submodule can't discover its plugin candy)")
-		}
+// pluginProviderRef returns the canonical candy ref for a capability identity
+// "<class>:<word>[:<parent>]", read from the GENERATED provider-ref index. THE one place a
+// word resolves to a plugin ref (boundary-law clause D: kind-recognition Data consulted by
+// word, never a compiled-in per-kind Go map). Shared by every class — a substrate
+// (deploy:vm) and a verb (verb:libvirt) resolve through the same table, no special-casing.
+func pluginProviderRef(key string) (string, bool) {
+	ref, ok := pluginProviderRefs[key]
+	if !ok || ref == "" {
+		return "", false
 	}
-	if len(problems) > 0 {
-		return fmt.Errorf("reserved-word registry: deploy-target provider bijection broken: %v", problems)
+	return ref, true
+}
+
+// splitProviderKey splits a "<class>:<word>[:<parent>]" index key into its class + word.
+// Kept tiny + local (R3: the one place the key grammar is parsed in core). The optional
+// command parent is irrelevant to a deploy/verb-class caller, so it is dropped here.
+func splitProviderKey(key string) (class, word string, ok bool) {
+	parts := strings.Split(key, ":")
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
 	}
-	return nil
+	return parts[0], parts[1], true
 }

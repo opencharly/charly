@@ -54,7 +54,7 @@ const validateWordSetsBuilderKind = "validate-word-sets"
 // (CandyView.IsPlugin / PluginSource / PluginProviders) and sends them instead.
 func hostBuildValidateWordSets(_ context.Context, req spec.ValidateWordSetsRequest, _ buildEngineContext) (spec.ValidateWordSetsReply, error) {
 	for _, capability := range req.ExternalProviders {
-		class, word, ok := splitCapability(capability)
+		class, word, _, ok := splitCapability(capability)
 		if !ok {
 			continue
 		}
@@ -68,7 +68,7 @@ func hostBuildValidateWordSets(_ context.Context, req spec.ValidateWordSetsReque
 
 	var reply spec.ValidateWordSetsReply
 	for _, p := range providerRegistry.allProviders() {
-		reply.ProviderCapabilities = append(reply.ProviderCapabilities, string(p.Class())+":"+p.Reserved())
+		reply.ProviderCapabilities = append(reply.ProviderCapabilities, providerIdentity(p))
 	}
 
 	seen := map[string]bool{}

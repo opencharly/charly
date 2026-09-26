@@ -68,13 +68,16 @@ var (
 	// declaredExternalCommand holds the external (out-of-tree) COMMAND words a project's candy
 	// plugin declarations name — learned by the SAME byte-gated prescan, but consumed EARLY
 	// (in main, before kong.Parse) so an external command plugin's CLI word reaches the Kong
-	// grammar before the provider is connected. The connect is LAZY: only when the user
-	// actually invokes `charly <word>` does dispatchExternalCommand build+connect the plugin
-	// (collectExternalCommandPlugins builds a grammar holder from the prescanned word; the
-	// dispatch entry carries the word and lazy-connects). Additive/best-effort: a project
-	// with no command plugins registers nothing, so the grammar is byte-for-byte unchanged.
-	// Shares declaredDeployMu (the one lock).
-	declaredExternalCommand = map[string]bool{}
+	// grammar before the provider is connected. Keyed by the capability IDENTITY
+	// (providerKey) → the command's PARENT ("" for a top-level command, e.g. "box" for
+	// `charly box generate`), because a nested command and its top-level same-word twin are
+	// distinct capabilities and the grammar must nest each correctly. The connect is LAZY:
+	// only when the user actually invokes `charly <word>` does dispatchExternalCommand
+	// build+connect the plugin (collectExternalCommandPlugins builds a grammar holder from
+	// the prescanned word; the dispatch entry carries the word + parent and lazy-connects).
+	// Additive/best-effort: a project with no command plugins registers nothing, so the
+	// grammar is byte-for-byte unchanged. Shares declaredDeployMu (the one lock).
+	declaredExternalCommand = map[string]string{}
 	// declaredKind holds the external (out-of-tree) KIND words a project's candy plugin
 	// declarations name — learned by the SAME byte-gated prescan (F4). It lets the loader
 	// RECOGNIZE a `kind: <plugin-word>` discriminator at PARSE time (classifyDisc) before the
@@ -349,27 +352,30 @@ func registerDeclaredExternalStep(word string) {
 	declaredDeployMu.Unlock()
 }
 
-// registerDeclaredExternalCommand records one declared external command word.
-func registerDeclaredExternalCommand(word string) {
+// registerDeclaredExternalCommand records one declared external command word with its
+// PARENT ("" for a top-level command; e.g. "box" for `charly box generate`), keyed by the
+// capability identity so a nested command and its top-level same-word twin coexist.
+func registerDeclaredExternalCommand(word, parent string) {
 	if word == "" {
 		return
 	}
 	declaredDeployMu.Lock()
-	declaredExternalCommand[word] = true
+	declaredExternalCommand[providerKey(ClassCommand, word, parent)] = parent
 	declaredDeployMu.Unlock()
 }
 
-// declaredExternalCommandWords returns a snapshot of the prescanned external command
-// words — the grammar holders collectExternalCommandPlugins builds before any provider
-// is connected, so `charly <word>` parses; the connect is deferred to dispatch.
-func declaredExternalCommandWords() []string {
+// declaredExternalCommandIdentities returns a snapshot of the prescanned external command
+// capability identities → their parent — the grammar holders collectExternalCommandPlugins
+// builds before any provider is connected, so `charly <word>` (and `charly <parent> <word>`)
+// parses; the connect is deferred to dispatch.
+func declaredExternalCommandIdentities() map[string]string {
 	declaredDeployMu.RLock()
 	defer declaredDeployMu.RUnlock()
-	words := make([]string, 0, len(declaredExternalCommand))
-	for w := range declaredExternalCommand {
-		words = append(words, w)
+	out := make(map[string]string, len(declaredExternalCommand))
+	for k, parent := range declaredExternalCommand {
+		out[k] = parent
 	}
-	return words
+	return out
 }
 
 // The former registerExternalVerbsFromCandies lived here: it re-walked the host's SCANNED candy map
@@ -652,7 +658,7 @@ func prescanPluginManifest(path string) {
 	collectPluginProviders(root, &providers)
 	collectPluginPrimaries(root)
 	for _, p := range providers {
-		class, word, ok := splitCapability(p)
+		class, word, parent, ok := splitCapability(p)
 		if !ok {
 			continue
 		}
@@ -660,7 +666,7 @@ func prescanPluginManifest(path string) {
 		case ClassDeployTarget:
 			registerDeclaredDeploySubstrate(word)
 		case ClassCommand:
-			registerDeclaredExternalCommand(word)
+			registerDeclaredExternalCommand(word, parent)
 		case ClassKind:
 			registerDeclaredKind(word)
 		}

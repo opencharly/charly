@@ -57,40 +57,54 @@ func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 	}
 }
 
-// TestReservedWordRegistry_DeployBijection proves the F1 substrate-kind-plugin dispatch
-// seam: the deploy-target bijection ACCEPTS every canonical substrate (ALL FIVE now
-// externalized — android, kubernetes, local, pod, vm) having NO in-proc DeployTargetProvider —
-// served out-of-process by candy/plugin-adb (android) / candy/plugin-kube (kubernetes) /
-// candy/plugin-deploy-local (local) / candy/plugin-deploy-pod (pod) / candy/plugin-deploy-vm
-// (vm), whose grpcProvider connects at plugin-load time; and FAILS when a word is NEITHER
-// builtin NOR externalized (the in-proc XOR externalized invariant — never neither).
-func TestReservedWordRegistry_DeployBijection(t *testing.T) {
+// TestReservedWordRegistry_DeploySubstrates proves the F1 substrate-kind-plugin dispatch
+// seam under the OPEN deploy-provider model: the deploy provider set is the generated
+// provider-ref index (every deploy word a plugin declares), NOT a closed vocabulary and NOT
+// an in-proc provider. The five canonical substrates (android, kubernetes, local, pod, vm)
+// are served out-of-process by candy/plugin-adb / candy/plugin-kube /
+// candy/plugin-deploy-local / candy/plugin-deploy-pod / candy/plugin-deploy-vm, whose
+// providers register at plugin-load time; a plugin-ONLY word (exampledeploy / examplelifecycle,
+// declared by the example plugins and NOT in spec.ResourceKinds) is a first-class deploy
+// substrate too — that is what "anyone can create any kind of plugin with zero core changes"
+// means, and why the former checkDeployProviderBijection (which validated against the closed
+// spec.ResourceKinds vocabulary) is GONE.
+func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
-	// Positive: the live registry (all five externalized, none in-proc) passes — the same
-	// gate the init() bijection runs at process start.
-	if err := checkDeployProviderBijection(); err != nil {
-		t.Fatalf("live deploy-target bijection is broken: %v", err)
-	}
 
-	// ALL FIVE are externalized substrates: in externalizedDeploySubstrates AND
+	// The five canonical substrates are externalized: recognized as deploy substrates AND
 	// INTENTIONALLY without an in-proc DeployTargetProvider. pluginDeployTarget (S3b) reads
 	// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider — there is no separate
 	// per-substrate lifecycle registry left to assert against.
 	for _, w := range []string{"android", "kubernetes", "local", "pod", "vm"} {
 		if !externalizedDeploySubstrates[w] {
-			t.Fatalf("%s must be in externalizedDeploySubstrates (the F1 source of truth)", w)
+			t.Fatalf("%s must be in externalizedDeploySubstrates (the generated deploy-provider set)", w)
 		}
 		if _, ok := providerRegistry.resolve(ClassDeployTarget, w); ok {
 			t.Fatalf("%s must NOT have an in-proc DeployTargetProvider — it is externalized", w)
 		}
 	}
 
-	// Negative: a substrate that is NEITHER externalized NOR backed by an in-proc provider
-	// violates the bijection and must FAIL the gate. Temporarily de-list pod (which has no
-	// in-proc deploy-target provider) → it is now neither → fail.
-	delete(externalizedDeploySubstrates, "pod")
-	defer func() { externalizedDeploySubstrates["pod"] = true }()
-	if err := checkDeployProviderBijection(); err == nil {
-		t.Fatal("expected bijection to FAIL when a substrate is NEITHER externalized NOR an in-proc provider")
+	// The set is OPEN: a plugin-declared word outside spec.ResourceKinds is a deploy substrate
+	// with no core edit. This FAILS on the pre-change code, whose externalizedDeploySubstrates
+	// was derived from the closed spec.ResourceKinds list.
+	for _, w := range []string{"exampledeploy", "examplelifecycle"} {
+		if !externalizedDeploySubstrates[w] {
+			t.Errorf("%s (a plugin-only deploy word) must be a recognized deploy substrate — the set is plugin-declared, not a closed vocabulary", w)
+		}
+	}
+
+	// A deploy word is recognized WITHOUT an in-proc provider by its plugin declaration
+	// (recognizedDeploySubstrate's declared-before-connected leniency) — the third-party path.
+	if recognizedDeploySubstrate("some-third-party-deploy-word") {
+		t.Fatal("an undeclared/undeclared word must NOT be recognized")
+	}
+	registerDeclaredDeploySubstrate("some-third-party-deploy-word")
+	defer func() {
+		declaredDeployMu.Lock()
+		delete(declaredDeploySubstrate, "some-third-party-deploy-word")
+		declaredDeployMu.Unlock()
+	}()
+	if !recognizedDeploySubstrate("some-third-party-deploy-word") {
+		t.Fatal("a project-declared deploy word must be recognized with no core change")
 	}
 }

@@ -96,7 +96,8 @@ func substrateFallbackRef(class ProviderClass, word, extraRef string) string {
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
-	prov, ok := providerRegistry.resolve(class, word)
+	parent := req.GetCommandParent()
+	prov, ok := providerRegistry.resolveIdentity(class, word, parent)
 	if !ok {
 		// S3b: an optional canonical-ref fallback (Pass-2) for a target NOT declared in the
 		// calling project's own candy closure (Pass-1, connectPluginByWordRef's default empty
@@ -113,7 +114,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		prov, ok = connectPluginByWordRef(class, word, substrateFallbackRef(class, word, req.GetExtraRef()))
 	}
 	if !ok {
-		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, word)
+		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, providerKey(class, word, parent))
 	}
 	// Fail fast on a hung PLUGIN→PLUGIN call, mirroring the host→plugin guard in
 	// invokeTyped: the broker context a plugin passes back to the host carries no

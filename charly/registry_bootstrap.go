@@ -168,7 +168,6 @@ func init() {
 	}
 	for _, gate := range []func() error{
 		func() error { return checkVerbProviderBijection(spec.OpVerbs) },
-		checkDeployProviderBijection,
 		checkStepProviderBijection,
 	} {
 		if err := gate(); err != nil {

@@ -14,7 +14,7 @@ import (
 // the CUE-gen path.
 func TestPluginsGenReproducible(t *testing.T) {
 	root := filepath.Join("..", "..", "..") // charly/internal/pluginsgen -> repo root
-	genGo, genWork, err := generate(root, filepath.Join("charly", "charly.yml"))
+	genGo, genWork, _, err := generate(root, filepath.Join("charly", "charly.yml"), filepath.Join("charly", "plugin_corpus.txt"))
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}

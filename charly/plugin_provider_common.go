@@ -33,7 +33,7 @@ type capMeta struct {
 	phase            string                   // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
 	primary          string                   // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
 	traits           *spec.DeployTraits       // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
-	cmdParent        string                   // set ONLY for a COMPILED-IN class:command capability nesting under a parent command word (e.g. "box" for `charly box generate`); "" → a top-level command
+	cmdParent        string                   // set for a class:command capability NESTING under a parent command word (e.g. "box" for `charly box generate`), read from the DECLARED wire ProvidedCapability.command_parent; "" → a top-level command
 	subcmds          []climodel.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
 	commandModel     *spec.CLIModel           // set ONLY for class:command; CUE-generated reflected leaf grammar
 	commandModelJSON []byte                   // exact validated transport payload, preserved across relays
@@ -42,13 +42,12 @@ type capMeta struct {
 func (m capMeta) Reserved() string     { return m.word }
 func (m capMeta) Class() ProviderClass { return m.class }
 
-// CommandParent implements NestedCommandProvider (provider_command_external.go) — the parent
-// command word this command nests UNDER (e.g. "box" for `charly box generate`), or "" for a
-// top-level command. Both provider twins EMBED capMeta, so both satisfy NestedCommandProvider via
-// promotion; the VALUE is set only for a COMPILED-IN class:command capability whose provider
-// declares it via the optional CommandParent() interface (buildUnitInProc). Every other capability
-// — and every OUT-OF-PROCESS command — returns "" (top-level; no live out-of-process nested command
-// exists), so collectExternalCommandPlugins's `parent != ""` guard is what actually gates nesting.
+// CommandParent returns the parent command word this command nests UNDER (e.g. "box" for
+// `charly box generate`), or "" for a top-level command. Both provider twins EMBED capMeta, so
+// both satisfy NestedCommandProvider via promotion; the VALUE comes from the DECLARED wire
+// ProvidedCapability.command_parent (set by buildCapMeta on every placement, compiled-in and
+// out-of-process alike), never from a plugin-code interface — a nested command and its
+// top-level same-word twin are distinct identities in either placement.
 func (m capMeta) CommandParent() string { return m.cmdParent }
 
 // CommandModel returns a defensive copy of the plugin-published generated
@@ -151,9 +150,19 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	// collectExternalCommandPlugins builds a REAL nested Kong holder from it instead of the flat
 	// pass-through, and buildCLIModel synthesizes a "<word>.<name>" leaf per entry for MCP.
 	if m.class == ClassCommand {
+		// The command's PARENT — part of its identity — travels on the wire
+		// (ProvidedCapability.command_parent), DECLARED by the plugin exactly like every other
+		// capability fact, so a nested command keys at command:<word>:<parent> identically in
+		// both placements (no plugin-code sniffing, no out-of-process gap). A parent on a
+		// non-command capability is off-grammar (only commands nest) and rejected here.
+		if p := c.GetCommandParent(); p != "" {
+			m.cmdParent = p
+		}
 		for _, sc := range c.GetSubcommands() {
 			m.subcmds = append(m.subcmds, climodel.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp(), Hidden: sc.GetHidden()})
 		}
+	} else if c.GetCommandParent() != "" {
+		return capMeta{}, fmt.Errorf("capability %s:%s carries command_parent outside class=command", m.class, m.word)
 	}
 	// A SUBSTRATE class:kind capability may declare #DeployTraits (P9): kit.StampDescent stamps
 	// them onto node.Descent so the deploy behaviour is consulted BY TRAIT, not by kind word.
