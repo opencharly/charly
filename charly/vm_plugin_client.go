@@ -36,22 +36,9 @@ func invokeVmPlugin(vmOp, vmName, uri string) (json.RawMessage, bool) {
 	return invokeVmPluginEnv(spec.VmPluginEnv{VmOp: vmOp, VmName: vmName, URI: uri})
 }
 
-// vmPluginCandyRef is the canonical @github ref to the external VM plugin candy, read from
-// the GENERATED provider-ref index (pluginProviderRefs — the verb:libvirt provider's own
-// declared `source:`), never a kernel literal (boundary-law clause D: the word->provider
-// fact lives in the plugin repo). Empty string when no plugin declares verb:libvirt — the
-// caller then degrades gracefully (ok=false), exactly as before.
-func vmPluginCandyRef() string {
-	ref, _ := pluginProviderRef("verb:libvirt")
-	if ref == "" {
-		return ""
-	}
-	return "@" + ref
-}
-
 // invokeVmPluginEnv is the full-env variant (lifecycle ops carry Force/DeleteDisk).
 func invokeVmPluginEnv(env spec.VmPluginEnv) (json.RawMessage, bool) {
-	prov, ok := connectPluginByWordRef(ClassVerb, "libvirt", vmPluginCandyRef())
+	prov, ok := connectPluginByWordRef(ClassVerb, "libvirt", "", canonicalProviderRef(ClassVerb, "libvirt", "", ""))
 	if !ok {
 		return nil, false
 	}

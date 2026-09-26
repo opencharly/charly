@@ -625,19 +625,30 @@ func connectBakedPlugin(class ProviderClass, word, parent string) (Provider, boo
 // (ClassDeployTarget) for a `charly shell`/`cmd`/`logs` on an unconfigured image — so `class` genuinely
 // varies and needs no unparam suppression.
 func connectPluginByWord(class ProviderClass, word string) (Provider, bool) {
-	return connectPluginByWordRef(class, word, "")
+	return connectPluginByWordRef(class, word, "", "")
 }
 
-// connectPluginByWordRef is connectPluginByWord with an optional CANONICAL candy ref appended to
-// the source scan (spec.ResolveOpts.ExtraCandyRefs) — for a host out-call to a plugin whose candy the
-// project's closure references NOWHERE (e.g. a box/<distro> project that RPCs verb:libvirt but
-// vendors no candy requiring candy/plugin-vm). connectBakedPlugin's registry-resolve-first check
-// makes it idempotent: after the first connect, every subsequent call returns the registered
-// provider without re-scanning (so it replaces the bespoke per-client sync.Once). extraRef "" is
-// the plain connectPluginByWord. The ONE on-demand plugin-connect entry point for a word that
-// appears in NO plan step (the credential/vm/kube host out-calls + any future host adapter).
-func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provider, bool) {
-	if p, ok := connectBakedPlugin(class, word, ""); ok {
+// connectPluginByWordRef is THE one on-demand plugin-connect entry point. A capability
+// IDENTITY (class:word[:parent]) resolves by a single rule (plan §4):
+//
+//  1. already registered, or served by a BAKED binary → return it (no scan);
+//  2. else the candy ref is the caller's explicit extraRef when set, else the GENERATED
+//     provider-ref index's canonical ref for THIS identity — and the project's candy
+//     closure is scanned ONCE with that ref, then the referenced plugins are connected;
+//  3. else the identity is genuinely unavailable → (nil,false), surfaced loudly by the caller.
+//
+// No second pass, no default ref, no per-kind map, no special case for a substrate vs a verb:
+// a `deploy:pod` substrate and a `verb:libvirt` verb resolve through the SAME table. The
+// identity's PARENT is threaded through every leg (`providerKey`), so a nested
+// `command:<word>:<parent>` miss connects the candy serving THAT identity — never a bare-word
+// twin (the former code dropped the parent here and re-resolved the top-level word).
+//
+// The project closure is scanned WITH the canonical ref in ONE pass; the loader's version
+// arbitration makes a LOCAL candy of the same name win over the remote ref (shadowing is
+// effective, not advisory), so a project that vendors the candy locally still uses its own
+// copy — the remote ref only pays off when the closure references the word nowhere.
+func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) (Provider, bool) {
+	if p, ok := connectBakedPlugin(class, word, parent); ok {
 		return p, true
 	}
 	dir, err := os.Getwd()
@@ -648,29 +659,22 @@ func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provide
 	if cerr != nil {
 		return nil, false
 	}
-	// Pass 1: the project's OWN candy closure (local candy/ dir — network-free). Pass 2 (ONLY when
-	// a canonical ref is given AND pass 1 did not connect): pull the plugin candy in by its ref for
-	// a project whose closure references it nowhere (a box/<distro> VM bed). This local-first order
-	// keeps the common case network-free — adding the remote ref unconditionally would make a local
-	// op (e.g. `charly vm list` in the main repo) attempt a github fetch even when candy/plugin-vm
-	// is local. Mirrors the deleted ensureVmPluginConnected two-pass.
-	passes := []spec.ResolveOpts{{}}
-	if extraRef != "" {
-		passes = append(passes, spec.ResolveOpts{ExtraCandyRefs: []string{extraRef}})
-	}
-	for _, opts := range passes {
-		candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts)
-		if scanErr != nil || candyMap == nil {
-			continue
+	ref := extraRef
+	if ref == "" {
+		if r, ok := pluginProviderRef(providerKey(class, word, parent)); ok {
+			ref = "@" + r
 		}
+	}
+	opts := spec.ResolveOpts{}
+	if ref != "" {
+		opts = spec.ResolveOpts{ExtraCandyRefs: []string{ref}}
+	}
+	if candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts); scanErr == nil && candyMap != nil {
 		if perr := loadProjectPlugins(context.Background(), candyMap, map[string]struct{}{word: {}}); perr != nil {
 			fmt.Fprintf(os.Stderr, "warning: plugin load (%s:%s): %v\n", class, word, perr)
 		}
-		if p, ok := providerRegistry.resolve(class, word); ok {
-			return p, true
-		}
 	}
-	return providerRegistry.resolve(class, word)
+	return providerRegistry.resolveIdentity(class, word, parent)
 }
 
 // pluginArtifactID renders the identity of the bytes at bin: the CONTENT stamp recorded beside
