@@ -73,47 +73,41 @@ type executorInvoker interface {
 	InvokeWithExecutor(ctx context.Context, op *Operation, exec spec.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error)
 }
 
-// substrateFallbackRef returns the canonical candy ref for the S3b lazy-connect Pass-2: the
-// caller's own extraRef when set (the general escape hatch — an arbitrary out-of-tree candy the
-// project references nowhere), else — ONLY for a deploy-class word naming a known externalized
-// substrate — the host's own substrate→plugin ref (externalDeploySubstratePluginRef). The
-// known-substrate default is what lets a box/<distro> project (whose candy closure is empty —
-// it vendors no candies) resolve deploy:pod / deploy:kubernetes / … for `charly config` and
-// the deploy from-box legs; `charly deploy add` already reaches those via deployNodePluginContext's
-// auto-inject, so only the config/from-box dispatch needs this default. Any other class or word
-// keeps "" — byte-identical S2/S3b behavior.
-func substrateFallbackRef(class ProviderClass, word, extraRef string) string {
-	if extraRef != "" {
-		return extraRef
+// canonicalProviderRef returns the canonical @github candy ref for a capability IDENTITY,
+// read from the GENERATED provider-ref index — THE one word→ref lookup, class-agnostic (a
+// deploy:pod substrate and a verb:libvirt verb resolve through the same table; boundary-law
+// clause D). It replaces the former `substrateFallbackRef`, whose `class != ClassDeployTarget`
+// branch was a "special case for a substrate vs a verb" (plan §4): the "known-substrate
+// default" was never substrate-specific — it was simply "the index knows this identity". The
+// caller's own ref still wins (the general escape hatch for an arbitrary out-of-tree candy the
+// project references nowhere); "" means the index does not know the identity (nothing to
+// connect).
+func canonicalProviderRef(class ProviderClass, word, parent, callerRef string) string {
+	if callerRef != "" {
+		return callerRef
 	}
-	if class != ClassDeployTarget {
+	ref, ok := pluginProviderRef(providerKey(class, word, parent))
+	if !ok || ref == "" {
 		return ""
 	}
-	ref, _ := externalDeploySubstratePluginRef(word)
-	return ref
+	return "@" + ref
 }
 
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
-	prov, ok := providerRegistry.resolve(class, word)
+	parent := req.GetCommandParent()
+	prov, ok := providerRegistry.resolveIdentity(class, word, parent)
 	if !ok {
-		// S3b: an optional canonical-ref fallback (Pass-2) for a target NOT declared in the
-		// calling project's own candy closure (Pass-1, connectPluginByWordRef's default empty
-		// extraRef) — e.g. an out-of-tree builder a box/<distro> deploy needs but the calling
-		// project never references directly. Empty/absent — byte-identical S2 behavior. For a
-		// DEPLOY-class word naming a known externalized substrate with an empty caller extraRef,
-		// the host defaults the ref from its OWN substrate→plugin map (substrateFallbackRef →
-		// externalDeploySubstratePluginRef — the same auto-inject deployNodePluginContext uses
-		// for deploy-add), so a candy-less box/<distro> project reaches an externalized substrate
-		// provider for `charly config` and the deploy from-box legs too — which, unlike `charly
-		// deploy add`, never run loadDeployPlugins' auto-inject. Restores the connect the deleted
-		// pod-config seam threaded explicitly (deployPodPluginCandyRef →
-		// connectPluginByWordRef(ClassDeployTarget, "pod", ref)).
-		prov, ok = connectPluginByWordRef(class, word, substrateFallbackRef(class, word, req.GetExtraRef()))
+		// A registry MISS lazily connects the peer by its ONE identity (class:word[:parent]).
+		// The canonical ref comes from the generated index (canonicalProviderRef) — the SAME
+		// table every other class reads, no per-class branch — so a nested `command:<word>:box`
+		// miss connects the candy that serves THAT identity, never a bare-word twin. The caller's
+		// own ExtraRef still wins when set. This is the single on-demand connect entry point.
+		prov, ok = connectPluginByWordRef(class, word, parent, canonicalProviderRef(class, word, parent, req.GetExtraRef()))
 	}
 	if !ok {
-		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, word)
+		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", providerKey(class, word, parent))
 	}
 	// Fail fast on a hung PLUGIN→PLUGIN call, mirroring the host→plugin guard in
 	// invokeTyped: the broker context a plugin passes back to the host carries no

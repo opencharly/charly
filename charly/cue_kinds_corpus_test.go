@@ -151,7 +151,7 @@ func TestCueKinds_Corpus(t *testing.T) {
 	// C2-candy: every authoring kind is externalized — #Node is an OPEN struct with NO arms, so
 	// KindWords is EMPTY and the #NodeDoc per-entity grammar is structural-only (validating a node
 	// against it is now vacuous). The corpus VALUE gate moved to the KEPT per-kind value defs
-	// (spec.KindValueDefs: candy → #CandyValue, pod/vm/kubernetes/local/android → #<Kind>Value) — the SAME
+	// (spec.KindValueDefs: candy → #CandyValue, pod/vm/kubernetes/local/android/kindcluster/kubevirt → #<Kind>Value) — the SAME
 	// host-side gate the loader runs (validateKindValueCUE). So this corpus test validates each
 	// node's inline discriminator value against its kept value def (non-concrete closedness),
 	// proving the whole real corpus passes the host-side gate. Plugin kinds without a kept value
@@ -171,8 +171,8 @@ func TestCueKinds_Corpus(t *testing.T) {
 			continue // layout may omit a file
 		}
 		// Register external deploy substrate words declared by this file's
-		// discovered candies, so a deploy/bed using such a word (e.g.
-		// check-exampledeploy -> exampledeploy) parses as an entity below — it
+		// discovered candies, so a deploy/bed using such a word (e.g. an
+		// exampledeploy deploy) parses as an entity below — it
 		// is validated via the loader/bed path, not the kept core value defs this
 		// test covers (the same exemption plugin KIND nodes get).
 		prescanDeclaredPluginWords(data, filepath.Dir(f))

@@ -420,6 +420,44 @@ func TestCollectExternalCommandPlugins_NestedCarriesParent(t *testing.T) {
 	}
 }
 
+// TestConnectPluginByWordRef_ParentedIdentityResolvesNested is the gate on the ON-DEMAND CONNECT
+// path's parent threading (§3 of the one-resolution refactor). `connectPluginByWordRef` ends in a
+// registry resolve; before the fix it resolved `(class, word)` — the BARE word — so a connect for a
+// nested identity `command:<word>:<parent>` returned the top-level same-word twin instead of the
+// nested provider. The fix threads the parent into both legs (connectBakedPlugin + resolveIdentity).
+//
+// It drives the REAL entry point (connectPluginByWordRef) against a registry holding BOTH a
+// top-level `command:zzfeature` and a nested `command:zzfeature:zzbox`. The nested identity must
+// resolve the NESTED provider; the bare (parentless) identity must resolve the TOP-LEVEL one. The
+// final `resolveIdentity` leg is what makes this fail on the pre-fix `resolve(class, word)`.
+func TestConnectPluginByWordRef_ParentedIdentityResolvesNested(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
+	saved := providerRegistry
+	r := newRegistry()
+	defer func() { providerRegistry = saved }()
+
+	top := &fakeCommandProvider{word: "zzfeature"}
+	nested := &fakeNestedCommandProvider{fakeCommandProvider: fakeCommandProvider{word: "zzfeature"}, parent: "zzbox"}
+	if err := r.register(top, "test-top"); err != nil {
+		t.Fatalf("register top: %v", err)
+	}
+	if err := r.register(nested, "test-nested"); err != nil {
+		t.Fatalf("register nested: %v", err)
+	}
+	providerRegistry = r
+
+	// The nested identity connects the NESTED provider — NOT the top-level twin.
+	got, ok := connectPluginByWordRef(ClassCommand, "zzfeature", "zzbox", "")
+	if !ok || got != Provider(nested) {
+		t.Fatalf("connectPluginByWordRef(command, zzfeature, zzbox) = %v ok=%v — want the NESTED provider (pre-fix it returned the top-level twin)", got, ok)
+	}
+	// The parentless identity is unchanged: it connects the TOP-LEVEL provider.
+	got, ok = connectPluginByWordRef(ClassCommand, "zzfeature", "", "")
+	if !ok || got != Provider(top) {
+		t.Fatalf("connectPluginByWordRef(command, zzfeature, \"\") = %v ok=%v — want the top-level provider", got, ok)
+	}
+}
+
 // TestDispatchCommand_NestedInvocationReachesNestedCapability is the gate on the line that ACTUALLY
 // FIXES THE BUG. The chain has three load-bearing links and each needs its own gate, because
 // reverting any ONE of them alone restores the defect while the other two stay green:

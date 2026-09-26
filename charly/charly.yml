@@ -7,12 +7,12 @@ version: 2026.261.1747
 # its own dedicated plugin_<class>_<name>.go file (the externalizable
 # dedicated-provider pattern — e.g. deploy:local, builder:cargo, step:Reboot)
 # self-registers from that file and is intentionally NOT listed here. Every deploy
-# target (local/pod/vm/kubernetes/android) and every builder (aur/pixi/cargo/npm) is now
-# externalized this way, so those two lists are empty by design. EVERY KIND is likewise
-# dedicated-file-registered (Phase 2 complete): the tier-1 build-vocab/calamares kinds as
-# schema-carrying plugin units; the 6 deploy-shape kinds group/pod/vm/kubernetes/local/android and
-# candy (the box⊻layer factory arm) as in-proc dedicated-builtin KindProviders, so the kind
-# list is empty by design too.
+# target (local/pod/vm/kubernetes/android/kindcluster/kubevirt) and every builder (aur/pixi/cargo/npm)
+# is now externalized this way, so those two lists are empty by design. EVERY KIND is likewise
+# externalized (C2-candy/C2-substrate complete): the tier-1 build-vocab/calamares kinds and
+# the deploy-shape kinds pod/vm/kubernetes/local/android/kindcluster/kubevirt + candy (the
+# box⊻layer factory arm) are all externalized plugin candies routed through runPluginKind,
+# so the kind list is empty by design too.
 providers:
     kind: []
     verb: [plugin]

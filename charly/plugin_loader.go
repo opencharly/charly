@@ -537,13 +537,13 @@ func discoverBakedPluginWords() {
 			}
 			binPath := filepath.Join(dir, strings.TrimSuffix(e.Name(), ".providers"))
 			for _, line := range strings.Split(string(data), "\n") {
-				class, word, ok := splitCapability(strings.TrimSpace(line))
+				class, word, parent, ok := splitCapability(strings.TrimSpace(line))
 				if !ok {
 					continue
 				}
 				switch class {
 				case ClassCommand:
-					registerDeclaredExternalCommand(word)
+					registerDeclaredExternalCommand(word, parent)
 				case ClassVerb:
 					registerDeclaredExternalVerb(word)
 				default:
@@ -552,8 +552,8 @@ func discoverBakedPluginWords() {
 				// FIRST dir wins (CHARLY_PLUGIN_DIR ahead of the FHS path) — consistent with
 				// bakedPluginBinary's first-hit lookup. Precedence only: a word baked under the
 				// FHS path is still discovered when $CHARLY_PLUGIN_DIR lacks it.
-				if _, seen := bakedPluginBinaries[provKey(class, word)]; !seen {
-					bakedPluginBinaries[provKey(class, word)] = binPath
+				if _, seen := bakedPluginBinaries[providerKey(class, word, parent)]; !seen {
+					bakedPluginBinaries[providerKey(class, word, parent)] = binPath
 				}
 			}
 		}
@@ -595,13 +595,13 @@ func loadBakedPluginBinary(bin string) bool {
 // whether to fall through to a project-source build (connectPluginByWord) or fail. Shared by the
 // `plugin:` verb runtime (runPluginVerb) AND the credential store's verb:credential resolve, so a
 // baked plugin resolves with NO project scan (R3).
-func connectBakedPlugin(class ProviderClass, word string) (Provider, bool) {
-	if p, ok := providerRegistry.resolve(class, word); ok {
+func connectBakedPlugin(class ProviderClass, word, parent string) (Provider, bool) {
+	if p, ok := providerRegistry.resolveIdentity(class, word, parent); ok {
 		return p, true
 	}
-	if bin, ok := bakedPluginBinaries[provKey(class, word)]; ok {
+	if bin, ok := bakedPluginBinaries[providerKey(class, word, parent)]; ok {
 		if loadBakedPluginBinary(bin) {
-			if p, ok := providerRegistry.resolve(class, word); ok {
+			if p, ok := providerRegistry.resolveIdentity(class, word, parent); ok {
 				return p, true
 			}
 		}
@@ -625,19 +625,34 @@ func connectBakedPlugin(class ProviderClass, word string) (Provider, bool) {
 // (ClassDeployTarget) for a `charly shell`/`cmd`/`logs` on an unconfigured image — so `class` genuinely
 // varies and needs no unparam suppression.
 func connectPluginByWord(class ProviderClass, word string) (Provider, bool) {
-	return connectPluginByWordRef(class, word, "")
+	return connectPluginByWordRef(class, word, "", "")
 }
 
-// connectPluginByWordRef is connectPluginByWord with an optional CANONICAL candy ref appended to
-// the source scan (spec.ResolveOpts.ExtraCandyRefs) — for a host out-call to a plugin whose candy the
-// project's closure references NOWHERE (e.g. a box/<distro> project that RPCs verb:libvirt but
-// vendors no candy requiring candy/plugin-vm). connectBakedPlugin's registry-resolve-first check
-// makes it idempotent: after the first connect, every subsequent call returns the registered
-// provider without re-scanning (so it replaces the bespoke per-client sync.Once). extraRef "" is
-// the plain connectPluginByWord. The ONE on-demand plugin-connect entry point for a word that
-// appears in NO plan step (the credential/vm/kube host out-calls + any future host adapter).
-func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provider, bool) {
-	if p, ok := connectBakedPlugin(class, word); ok {
+// connectPluginByWordRef is THE one on-demand plugin-connect entry point for a capability
+// IDENTITY (class:word[:parent]) — the SAME chain every host out-call and every peer invoke uses.
+//
+// The RESOLUTION RULE is one, with no fallback chain: resolve the identity in the registry; on a
+// miss, its canonical ref comes from the caller's explicit extraRef when set, else the GENERATED
+// provider-ref index (canonicalProviderRef — the ONE word→ref lookup, class-agnostic: a deploy:pod
+// substrate and a verb:libvirt verb resolve through the SAME table, no per-class branch); then the
+// project closure is connected. There is no default ref, no per-kind map, no special case.
+//
+// The SCAN runs local-first in up to TWO passes — pass 1 over the project's OWN closure
+// (network-free), and ONLY if the identity is still unresolved, pass 2 with the canonical ref
+// appended (spec.ResolveOpts.ExtraCandyRefs). This is NOT a second resolution path (both passes
+// run the identical scan+connect, differing only by one ref) and NOT a fallback chain: it is a
+// correctness requirement, established in review (charly#677). Appending the ref makes the scan
+// fetch it and resolve its latest tag, work that can ERROR on an unreachable repo; a project that
+// VENDORS the candy locally must still load it in that case, so the network-free pass 1 runs
+// first and answers without ever needing the ref. Collapsing this to a single ref-bearing scan
+// (the original plan §4 row) made a fetch error a HARD connect failure for a locally-vendored
+// candy — a regression, so the local-first order is kept and the plan row corrected.
+//
+// The identity's PARENT is threaded through every leg (`providerKey`), so a nested
+// `command:<word>:<parent>` connect reaches the provider serving THAT identity — never a
+// bare-word twin (the former code dropped the parent here and re-resolved the top-level word).
+func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) (Provider, bool) {
+	if p, ok := connectBakedPlugin(class, word, parent); ok {
 		return p, true
 	}
 	dir, err := os.Getwd()
@@ -648,15 +663,13 @@ func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provide
 	if cerr != nil {
 		return nil, false
 	}
-	// Pass 1: the project's OWN candy closure (local candy/ dir — network-free). Pass 2 (ONLY when
-	// a canonical ref is given AND pass 1 did not connect): pull the plugin candy in by its ref for
-	// a project whose closure references it nowhere (a box/<distro> VM bed). This local-first order
-	// keeps the common case network-free — adding the remote ref unconditionally would make a local
-	// op (e.g. `charly vm list` in the main repo) attempt a github fetch even when candy/plugin-vm
-	// is local. Mirrors the deleted ensureVmPluginConnected two-pass.
+	ref := extraRef
+	if ref == "" {
+		ref = canonicalProviderRef(class, word, parent, "")
+	}
 	passes := []spec.ResolveOpts{{}}
-	if extraRef != "" {
-		passes = append(passes, spec.ResolveOpts{ExtraCandyRefs: []string{extraRef}})
+	if ref != "" {
+		passes = append(passes, spec.ResolveOpts{ExtraCandyRefs: []string{ref}})
 	}
 	for _, opts := range passes {
 		candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts)
@@ -666,11 +679,11 @@ func connectPluginByWordRef(class ProviderClass, word, extraRef string) (Provide
 		if perr := loadProjectPlugins(context.Background(), candyMap, map[string]struct{}{word: {}}); perr != nil {
 			fmt.Fprintf(os.Stderr, "warning: plugin load (%s:%s): %v\n", class, word, perr)
 		}
-		if p, ok := providerRegistry.resolve(class, word); ok {
+		if p, ok := providerRegistry.resolveIdentity(class, word, parent); ok {
 			return p, true
 		}
 	}
-	return providerRegistry.resolve(class, word)
+	return providerRegistry.resolveIdentity(class, word, parent)
 }
 
 // pluginArtifactID renders the identity of the bytes at bin: the CONTENT stamp recorded beside
@@ -956,7 +969,7 @@ func collectReferencedPluginWords(candies map[string]spec.CandyReader, boxes spe
 // mismatch. A malformed capability string is skipped (validate flags it elsewhere).
 func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) bool {
 	for _, capability := range providers {
-		if _, word, ok := splitCapability(capability); ok {
+		if _, word, _, ok := splitCapability(capability); ok {
 			if _, hit := refs[word]; hit {
 				return true
 			}
@@ -1072,9 +1085,9 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 			// resolve to its provider without the auto-inject. Inject the canonical ref via
 			// ExtraCandyRefs UNCONDITIONALLY (both contexts). In a check bed CHARLY_REPO_OVERRIDE
 			// redirects the ref to the local superproject under development. The SAME
-			// host-side-plugin pattern as vmPluginCandyRef (verb:libvirt), generalized to every
-			// external substrate (R3).
-			if ref, ok := externalDeploySubstratePluginRef(n.Target); ok {
+			// host-side-plugin pattern as the verb:libvirt case, generalized to every external
+			// substrate — the ONE class-agnostic provider-ref lookup (R3).
+			if ref := canonicalProviderRef(ClassDeployTarget, n.Target, "", ""); ref != "" {
 				addCandy = append(addCandy, ref)
 			}
 		}
@@ -1265,11 +1278,11 @@ func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader
 func pluginAlreadyConnected(name string, source string, providers []string) (bool, error) {
 	connected := false
 	for _, capability := range providers {
-		class, word, ok := splitCapability(capability)
+		class, word, parent, ok := splitCapability(capability)
 		if !ok {
 			continue
 		}
-		origin, found := providerRegistry.registeredOrigin(class, word)
+		origin, found := providerRegistry.registeredOrigin(class, word, parent)
 		if !found {
 			continue
 		}
@@ -1286,7 +1299,7 @@ func pluginAlreadyConnected(name string, source string, providers []string) (boo
 			continue
 		}
 		if origin != source {
-			return false, fmt.Errorf("plugin %q provider %s:%s collides with one already registered from %q", name, class, word, origin)
+			return false, fmt.Errorf("plugin %q provider %s collides with one already registered from %q", name, providerKey(class, word, parent), origin)
 		}
 		connected = true
 	}
@@ -1320,18 +1333,21 @@ var pluginScopedOut = map[string]string{}
 // recordScopedOutPlugin notes every provider word a perf-scoped-out candy would have served.
 func recordScopedOutPlugin(candyName string, providers []string) {
 	for _, p := range providers {
-		class, word, ok := splitCapability(strings.TrimSpace(p))
+		class, word, parent, ok := splitCapability(strings.TrimSpace(p))
 		if !ok {
 			continue
 		}
-		if _, seen := pluginScopedOut[provKey(class, word)]; !seen {
-			pluginScopedOut[provKey(class, word)] = candyName
+		k := providerKey(class, word, parent)
+		if _, seen := pluginScopedOut[k]; !seen {
+			pluginScopedOut[k] = candyName
 		}
 	}
 }
 
 // explainUnresolvedPluginWord renders the failure for a plugin word that resolved to no
-// provider, naming the CAUSE rather than only the symptom.
+// provider, naming the CAUSE rather than only the symptom. `parent` is the command parent
+// for a nested-command miss (empty otherwise), so the identity key matches the one the
+// registry and the baked manifests use.
 //
 // Four different situations reach this point and used to be indistinguishable:
 //
@@ -1342,10 +1358,16 @@ func recordScopedOutPlugin(candyName string, providers []string) {
 //
 // The bare "no provider registered" message reads as "the plugin is broken", when the common
 // cause is "charly never looked where the plugin is" or "charly chose not to load it".
-func explainUnresolvedPluginWord(class ProviderClass, word string) string {
-	key := provKey(class, word)
+func explainUnresolvedPluginWord(class ProviderClass, word, parent string) string {
+	key := providerKey(class, word, parent)
 	var b strings.Builder
-	fmt.Fprintf(&b, "no provider registered for plugin %s %q", class, word)
+	// Keep the legacy symptom substring (`plugin <class> "<word>"`) callers and beds match on;
+	// append the parent only when the word is a nested command, so its full identity is named.
+	if parent == "" {
+		fmt.Fprintf(&b, "no provider registered for plugin %s %q", class, word)
+	} else {
+		fmt.Fprintf(&b, "no provider registered for plugin %s %q (identity %s)", class, word, key)
+	}
 
 	// 1. A project candy declares it, but nothing referenced it, so it was never loaded.
 	// This is the cause the old message hid most completely: the plugin is fine.
@@ -1384,12 +1406,12 @@ func explainUnresolvedPluginWord(class ProviderClass, word string) string {
 			}
 			bin := filepath.Join(d, strings.TrimSuffix(e.Name(), ".providers"))
 			for _, line := range strings.Split(string(data), "\n") {
-				c, w, ok := splitCapability(strings.TrimSpace(line))
+				c, w, parent, ok := splitCapability(strings.TrimSpace(line))
 				if !ok {
 					continue
 				}
-				words = append(words, provKey(c, w)+" -> "+filepath.Base(bin))
-				if provKey(c, w) == key {
+				words = append(words, providerKey(c, w, parent)+" -> "+filepath.Base(bin))
+				if providerKey(c, w, parent) == key {
 					if _, statErr := os.Stat(bin); statErr != nil {
 						foundWord = fmt.Sprintf("declared by %s but its binary %s is missing",
 							e.Name(), bin)

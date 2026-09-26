@@ -69,12 +69,14 @@ func TestResolveDeployNodeByPath(t *testing.T) {
 	}
 }
 
-// TestExternalDeploySubstratePluginRef proves the substrate→canonical-plugin-candy mapping a
+// TestDeploySubstrateCanonicalRef proves the substrate→canonical-plugin-candy mapping a
 // box/<distro> submodule auto-injects so an externalized substrate word resolves to its
 // out-of-process provider (the main repo discovers it from candy/ directly; a submodule does
-// not). A non-externalized substrate (pod) has NO ref. Kept in sync with
-// externalizedDeploySubstrates by the startup checkDeployProviderBijection gate.
-func TestExternalDeploySubstratePluginRef(t *testing.T) {
+// not). A non-externalized substrate has NO ref. The ref and the set are BOTH projections of
+// the generated index (the former checkDeployProviderBijection gate is retired), so this test
+// is the in-tree consistency check between them — both read the ONE class-agnostic lookup
+// (canonicalProviderRef).
+func TestDeploySubstrateCanonicalRef(t *testing.T) {
 	want := map[string]string{
 		"vm":         "@github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
 		"pod":        "@github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
@@ -83,15 +85,15 @@ func TestExternalDeploySubstratePluginRef(t *testing.T) {
 		"kubernetes": "@github.com/opencharly/plugin-kube/candy/plugin-kube",
 	}
 	for word, exp := range want {
-		got, ok := externalDeploySubstratePluginRef(word)
-		if !ok || got != exp {
-			t.Errorf("externalDeploySubstratePluginRef(%q) = %q ok=%v, want %q", word, got, ok, exp)
+		got := canonicalProviderRef(ClassDeployTarget, word, "", "")
+		if got != exp {
+			t.Errorf("canonicalProviderRef(deploy, %q) = %q, want %q", word, got, exp)
 		}
 	}
 	// Every externalized substrate MUST have a plugin ref (else a submodule can't discover
-	// it). ALL FIVE substrates are externalized now, so this covers the whole set.
+	// it) — the two are projections of the SAME index, so their domains must coincide.
 	for word := range externalizedDeploySubstrates {
-		if _, ok := externalDeploySubstratePluginRef(word); !ok {
+		if canonicalProviderRef(ClassDeployTarget, word, "", "") == "" {
 			t.Errorf("externalized substrate %q has no plugin-candy ref", word)
 		}
 	}

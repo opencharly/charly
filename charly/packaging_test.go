@@ -121,6 +121,35 @@ func TestPackagingDeclaresTheNerdctlEngineStack(t *testing.T) {
 	}
 }
 
+// TestPackagingDeclaresTheKindClusterTool — the kind (Kubernetes-in-Docker) tool
+// is a hard dependency on archlinux (where the `kind` package exists in extra) +
+// its containerd nerdctl-engine prerequisite, and a `suggest` on rpm/deb/apk where
+// no native package exists (kind-integration: the `kindcluster` deploy substrate).
+func TestPackagingDeclaresTheKindClusterTool(t *testing.T) {
+	pkg := loadPackaging(t)
+
+	arch := pkg.Formats["archlinux"]
+	for _, p := range []string{"kind", "containerd"} {
+		if !slices.Contains(arch.Depends, p) {
+			t.Errorf("archlinux.depends must include %q (the kindcluster substrate tool)", p)
+		}
+	}
+	// The distros with no native kind package SUGGEST it (not depend — it is
+	// optional tooling; the layer-kind candy downloads the pinned binary there).
+	for _, distro := range []string{"rpm", "deb", "apk"} {
+		f, ok := pkg.Formats[distro]
+		if !ok {
+			t.Fatalf("format %q missing", distro)
+		}
+		if !slices.Contains(f.Suggests, "kind") {
+			t.Errorf("%s.suggests must include %q (the kindcluster substrate tool)", distro, "kind")
+		}
+		if slices.Contains(f.Depends, "kind") {
+			t.Errorf("%s.depends must NOT include %q — no native package exists there", distro, "kind")
+		}
+	}
+}
+
 func checkPlainNames(t *testing.T, what string, names ...string) {
 	t.Helper()
 	for _, n := range names {

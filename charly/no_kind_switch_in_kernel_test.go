@@ -4,11 +4,11 @@ package main
 // kernel/plugin boundary law's core clause (CLAUDE.md "The kernel/plugin boundary
 // law"): "a kind-word switch... is an incomplete seam". It complements the narrower,
 // pre-existing TestNoSubstrateWordSwitchInDeployConsult (no_substrate_word_switch_gate_test.go,
-// P9) — that gate only catches a bare `.Target == "word"` BinaryExpr over 5 substrate
+// P9) — that gate only catches a bare `.Target == "word"` BinaryExpr over the substrate
 // words across charly/+sdk/deploykit; THIS gate catches the broader STRUCTURAL shape —
 // an actual `switch` statement or an if/else-if chain of >=3 arms — dispatching on ANY
-// of the full deploy-substrate vocabulary (pod/vm/kubernetes/local/android, plus the entity
-// words group/candy/deploy), scoped to charly/ core only (the kernel).
+// of the full deploy-substrate vocabulary (pod/vm/kubernetes/local/android/kindcluster/
+// kubevirt, plus the entity words candy/deploy), scoped to charly/ core only (the kernel).
 //
 // A single stray `if x == "candy"` (kind-recognition Data — the loader/materialize
 // files legitimately read pn.Disc == "candy" to route box-vs-layer parsing, per the
@@ -36,12 +36,13 @@ import (
 )
 
 // kindSwitchVocabulary is the deploy-substrate + entity kind-word vocabulary this gate
-// polices, per the W5 brief: the 5 deploy substrates plus the 3 entity/verb words whose
+// polices, per the W5 brief: the 7 deploy substrates (pod/vm/kubernetes/local/android/
+// kindcluster/kubevirt) plus the 2 entity/verb words (candy/deploy) whose
 // accidental re-introduction as a dispatch key would also be a kernel/plugin boundary
-// violation (candy/deploy). The former 4th word "group" DIED with the group-kind
+// violation. The former "group" word DIED with the group-kind
 // removal (Cutover C task 1) — it is no longer a kind word in any vocabulary.
 var kindSwitchVocabulary = map[string]bool{
-	"pod": true, "vm": true, "kubernetes": true, "local": true, "android": true,
+	"pod": true, "vm": true, "kubernetes": true, "local": true, "android": true, "kindcluster": true, "kubevirt": true,
 	"candy": true, "deploy": true,
 }
 

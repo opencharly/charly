@@ -7,31 +7,39 @@ import (
 
 // TestCommandPrescan_RegisterAndCollect proves the prescan→grammar path: a declared external
 // command word (registerDeclaredExternalCommand, as the byte-gated prescanPluginManifest does)
-// surfaces in declaredExternalCommandWords AND collectExternalCommandPlugins builds a TOP-LEVEL
-// grammar holder + a dispatch entry (word + holder set) for it — so `charly <word>` parses
-// before the binary is resolved (the resolve + syscall.Exec are deferred to dispatch).
+// surfaces in declaredExternalCommandIdentities AND collectExternalCommandPlugins builds a
+// grammar holder + a dispatch entry for it — so `charly <word>` parses before the binary is
+// resolved (the resolve + syscall.Exec are deferred to dispatch). A NESTED command (a non-empty
+// parent) nests under its parent's holder instead, proving the prescan carries the parent.
 func TestCommandPrescan_RegisterAndCollect(t *testing.T) {
-	registerDeclaredExternalCommand("zzprescancmd")
-	found := false
-	for _, w := range declaredExternalCommandWords() {
-		if w == "zzprescancmd" {
-			found = true
-		}
+	registerDeclaredExternalCommand("zzprescancmd", "")
+	registerDeclaredExternalCommand("zznestedcmd", "zzparent")
+	ids := declaredExternalCommandIdentities()
+	if _, ok := ids[providerKey(ClassCommand, "zzprescancmd", "")]; !ok {
+		t.Fatal("declaredExternalCommandIdentities missing the prescanned top-level word")
 	}
-	if !found {
-		t.Fatal("declaredExternalCommandWords missing the prescanned word")
+	if p, ok := ids[providerKey(ClassCommand, "zznestedcmd", "zzparent")]; !ok || p != "zzparent" {
+		t.Fatalf("declaredExternalCommandIdentities nested entry = %q, %v; want parent zzparent", p, ok)
 	}
-	_, _, table := collectExternalCommandPlugins()
+	top, nested, table := collectExternalCommandPlugins()
 	d, ok := table["zzprescancmd"]
 	if !ok {
 		t.Fatal("collectExternalCommandPlugins built no dispatch entry for the prescanned word")
 	}
-	if d.word != "zzprescancmd" {
-		t.Fatalf("dispatch entry word = %q, want zzprescancmd", d.word)
+	if d.word != "zzprescancmd" || d.parent != "" {
+		t.Fatalf("top-level dispatch entry = %+v, want word zzprescancmd parent empty", d)
 	}
 	if d.holder == nil {
-		t.Fatal("dispatch entry has no grammar holder")
+		t.Fatal("top-level dispatch entry has no grammar holder")
 	}
+	if _, ok := nested["zzparent"]; !ok {
+		t.Fatal("a prescanned NESTED command did not nest under its parent")
+	}
+	nd, ok := table["zzparent zznestedcmd"]
+	if !ok || nd.parent != "zzparent" {
+		t.Fatalf("nested dispatch entry = %+v, %v; want parent zzparent", nd, ok)
+	}
+	_ = top
 }
 
 // TestResolveCommandPluginBinary_Baked proves dispatch resolves a command word to its BAKED
@@ -40,10 +48,10 @@ func TestCommandPrescan_RegisterAndCollect(t *testing.T) {
 // path `charly mcp serve` takes inside the charly-mcp service container.
 func TestResolveCommandPluginBinary_Baked(t *testing.T) {
 	const word = "zzbakedcmd"
-	bakedPluginBinaries[provKey(ClassCommand, word)] = "/usr/lib/charly/plugins/" + word
-	defer delete(bakedPluginBinaries, provKey(ClassCommand, word))
+	bakedPluginBinaries[providerKey(ClassCommand, word, "")] = "/usr/lib/charly/plugins/" + word
+	defer delete(bakedPluginBinaries, providerKey(ClassCommand, word, ""))
 
-	bin, err := resolveCommandPluginBinary(context.Background(), word)
+	bin, err := resolveCommandPluginBinary(context.Background(), word, "")
 	if err != nil {
 		t.Fatalf("resolveCommandPluginBinary (baked): %v", err)
 	}

@@ -48,10 +48,13 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 	// The VM plugin candy (verb:libvirt) is external (out-of-process) and in no box's image
 	// closure, so a bed whose plan dispatches `libvirt:` (e.g. check-fedora-vm's libvirt-verb-
 	// dispatches step) needs it pulled in by its canonical ref — the same host-side-plugin pattern
-	// as a bed add_candy'ing plugin-spice for `spice:`. Harmless for non-VM beds: loadProjectPlugins
-	// build-connects it only if the plan references libvirt; in a bed CHARLY_REPO_OVERRIDE resolves
-	// the ref to the local superproject under development.
-	addCandy = append(addCandy, vmPluginCandyRef())
+	// as a bed add_candy'ing plugin-spice for `spice:`. It comes from the ONE provider-ref index
+	// (canonicalProviderRef), the SAME lookup every other class uses; harmless for non-VM beds
+	// (loadProjectPlugins build-connects it only if the plan references libvirt), and in a bed
+	// CHARLY_REPO_OVERRIDE resolves the ref to the local superproject under development.
+	if ref := canonicalProviderRef(ClassVerb, "libvirt", "", ""); ref != "" {
+		addCandy = append(addCandy, ref)
+	}
 	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{ExtraCandyRefs: addCandy})
 	if scanErr != nil {
 		return checkRunnerContext{CandyScanErr: fmt.Errorf("scanning candy source dirs: %w", scanErr)}
