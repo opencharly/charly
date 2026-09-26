@@ -28,7 +28,9 @@ func reqCap(class ProviderClass, word string) spec.PluginCapability {
 // A declared, already-registered peer resolves with no work: the gate passes and the
 // unit is not blocked. This is the common case (a peer in the same project/registry).
 func TestRegisterPluginUnitRequires_PeerAlreadyRegistered(t *testing.T) {
-	providerRegistry.register(zzReqProv{ClassVerb, "zzreqpresent"}, "test")
+	if err := providerRegistry.register(zzReqProv{ClassVerb, "zzreqpresent"}, "test"); err != nil {
+		t.Fatalf("register peer: %v", err)
+	}
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqconsumer"}},
 		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreqpresent")}},
