@@ -138,6 +138,19 @@ func TestLiftRequirements_RejectsMalformed(t *testing.T) {
 // requires, so only a manifest read (candy.GetPluginRequires) can make them pass/fail —
 // they fail if gateCandyRequires stops reading the manifest.
 
+// requirementRef renders an authored `source:` (a bare #GithubRef) as the `@`-prefixed
+// remote ref the ref resolver requires: CanonicalRef treats a non-`@` ref as a LOCAL path,
+// so a raw source never resolves. The live A6 run surfaced exactly this.
+func TestRequirementRef(t *testing.T) {
+	if got := requirementRef(""); got != "" {
+		t.Fatalf("an empty source must stay empty (fall through to the generated index), got %q", got)
+	}
+	const bare = "github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch"
+	if got := requirementRef(bare); got != "@"+bare {
+		t.Fatalf("a bare source must be @-prefixed, got %q", got)
+	}
+}
+
 func TestGateCandyRequires_RegisteredPeerResolves(t *testing.T) {
 	if err := providerRegistry.register(zzReqProv{ClassVerb, "zzgm-present"}, "test"); err != nil {
 		t.Fatalf("register peer: %v", err)

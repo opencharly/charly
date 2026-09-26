@@ -66,6 +66,18 @@ var (
 	requiresInFlight = map[string]string{}
 )
 
+// requirementRef renders an authored requirement `source:` — a bare #GithubRef repo/candy
+// path like `github.com/org/repo/candy/name` — as the `@`-prefixed REMOTE ref the ref
+// resolver's CanonicalRef requires (a non-`@` ref is a LOCAL path there). An empty source
+// returns "" so connectPluginByWordRef falls through to the generated index
+// (canonicalProviderRef renders the SAME `@`-prefixed form).
+func requirementRef(source string) string {
+	if source == "" {
+		return ""
+	}
+	return "@" + source
+}
+
 // registerPluginUnitRequires gates a connected plugin UNIT's WIRE-declared requirements —
 // the placements that carry no manifest: the process-start builtin gate
 // (loadBuiltinPluginUnits) and a source-less baked binary (loadBakedPluginBinary). It
@@ -171,7 +183,7 @@ func registerPluginRequires(unitName string, ownKeys []string, requires []spec.P
 		if _, ok := providerRegistry.resolveIdentity(class, word, parent); ok {
 			continue
 		}
-		if _, ok := connectPluginByWordRef(class, word, parent, req.Source); ok {
+		if _, ok := connectPluginByWordRef(class, word, parent, requirementRef(req.Source)); ok {
 			continue
 		}
 		if req.Optional {
