@@ -877,6 +877,12 @@ check-kubevirt-operator:
             - k3s-server
             - '@github.com/opencharly/layer-kubevirt-operator:v2026.269.0037' # the standalone repo (kind-prefixed naming)
             - '@github.com/opencharly/layer-kubevirt:v2026.269.0037' # virtctl (the client candy)
+            # The verb providers the bed's plan dispatches: plugin-kube serves `kube:`
+            # (the kindcluster bed add_candy's it for the same reason); plugin-kubevirt
+            # serves `kubevirt:`. Neither is compiled into charly, so the bed must
+            # reference them or the verb resolves "no provider registered".
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.268.2341'
+            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.269.0234'
         env:
             K3S_SERVER_HOSTNAME: 127.0.0.1
         install_opts:
@@ -890,7 +896,7 @@ check-kubevirt-operator:
               id: kvo-wait-nodes
               kube:
                 method: wait-nodes
-                cluster: "check-kubevirt-operator-ctx"
+                kube_context: "vm-check-kubevirt-operator"
                 kube_count: 1
               timeout: "300s"
               stdout: {contains: "Ready"}
@@ -900,7 +906,7 @@ check-kubevirt-operator:
               id: kvo-crds-established
               kube:
                 method: raw
-                cluster: "check-kubevirt-operator-ctx"
+                kube_context: "vm-check-kubevirt-operator"
                 kube_resource: customresourcedefinitions
                 kube_group: apiextensions.k8s.io
                 kube_version: v1
@@ -911,14 +917,14 @@ check-kubevirt-operator:
               id: kvo-kubevirt-cr-deployed
               kubevirt:
                 method: wait-ready
-                cluster: "check-kubevirt-operator-ctx"
+                kube_context: "vm-check-kubevirt-operator"
               timeout: "600s"
               context: [runtime]
             - check: the virt-handler DaemonSet is Ready on the node — the per-node virtualization agent is up
               id: kvo-virt-handler-ready
               kube:
                 method: wait-ready
-                cluster: "check-kubevirt-operator-ctx"
+                kube_context: "vm-check-kubevirt-operator"
                 kube_kind: DaemonSet
                 namespace: kubevirt
                 name: virt-handler
@@ -928,7 +934,7 @@ check-kubevirt-operator:
               id: kvo-cdi-cr-deployed
               kube:
                 method: wait-ready
-                cluster: "check-kubevirt-operator-ctx"
+                kube_context: "vm-check-kubevirt-operator"
                 kube_kind: CDI
                 namespace: cdi
                 name: cdi
