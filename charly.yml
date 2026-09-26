@@ -4013,7 +4013,10 @@ check-pkg-uninstall:
                 in_container: false
                 command: |
                     set -euo pipefail
-                    OUT=/tmp/opencode/pr667-guest-evidence.txt
+                    # Portable evidence path (B8): mktemp, never a harness-specific
+                    # /tmp/opencode — the step runs on ANY host.
+                    OUT="$(mktemp -t pr667-guest-evidence.XXXXXX)"
+                    echo "evidence: $OUT"
                     # Single-quoted remote scripts: the remote bash does the glob + reads.
                     # NOTE: no dollar-brace form anywhere (the check-var expander SKIPs the
                     # step on an unresolved one).
