@@ -33,6 +33,7 @@ import (
 //     `TestExternalDeploy_FillsPackageRemoveUninstallCmdOnRecord` +
 //     `TestPinnedInstallRendersPinAndBareUninstall` (sdk) exercise it with a
 //     pinned spec.
+//
 // This test guards the template STRINGS the repo owns; the production render is
 // guarded by those two tests.
 func TestUninstallTemplatesStripVersionPin(t *testing.T) {
