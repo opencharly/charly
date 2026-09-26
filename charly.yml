@@ -3837,23 +3837,9 @@ check-kindcluster-nerdctl:
 # A PASS — teardown completing instead of stalling 30 min on `.ledger.lock` —
 # proves the propagation half of the fix. disposable: true authorizes destroy+rebuild.
 # =============================================================================
-check-kindcluster-lock-member-cluster:
-    kindcluster:
-        box: ""
-        engine: podman
-        node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
-        nodes:
-            - role: control-plane
-check-kindcluster-lock-cluster:
-    kindcluster:
-        box: ""
-        engine: podman
-        node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
-        nodes:
-            - role: control-plane
 check-kindcluster-lock:
     kindcluster:
-        from: check-kindcluster-lock-cluster
+        from: check-kindcluster-cluster
         disposable: true
         lifecycle: dev
         add_candy:
@@ -3873,6 +3859,31 @@ check-kindcluster-lock:
               stdout:
                 - contains: "check-kindcluster-lock"
               command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters'
+    # Deploy-level member: teardown forks this member's own `deploy del` — the
+    # pre-#680 self-deadlock site. Root and member reference the SAME shared
+    # `check-kindcluster-cluster` template (R3 — no duplicated kindcluster block);
+    # the kind cluster NAME derives from the deploy name (plugin-kube
+    # kindClusterName(p.Name)), so the two clusters stay distinct without a per-bed
+    # template. The member's plan check is authored HERE (mirror check-group-member):
+    # a composed candy's plan never reaches a deploy-scope check runner for a
+    # non-image deploy, so a check authored only on the template would never run.
     check-kindcluster-lock-member:
         kindcluster:
-            from: check-kindcluster-lock-member-cluster
+            from: check-kindcluster-cluster
+            description: >-
+                The deploy-level kindcluster MEMBER of check-kindcluster-lock: on teardown
+                the root's `deploy del` forks this member's `deploy del`, the pre-#680
+                self-deadlock site. Shares the check-kindcluster-cluster template with its
+                root (R3); its own kind cluster name derives from this deploy's name.
+            plan:
+                - check: the lock bed's deploy-level member cluster exists on the podman engine
+                  id: kl-member-cluster-exists
+                  description: >-
+                    The nested member's own kindcluster came up (its name contains "member"),
+                    so the teardown fork it triggers is the real deadlock site.
+                  context:
+                    - runtime
+                  exit_status: 0
+                  stdout:
+                    - contains: "member"
+                  command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters'
