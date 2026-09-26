@@ -12,7 +12,7 @@ import (
 // group-kind removal (Cutover C task 1): the targetless deploy group is no longer a
 // #ResourceKind entry, so the derivation is the PLAIN resource-kinds list. Every word
 // is asserted served by an external out-of-process plugin
-// (externalizedDeploySubstrates) — ALL FIVE substrates externalize today; there is no
+// (externalizedDeploySubstrates) — ALL SEVEN substrates externalize today; there is no
 // in-proc DeployTargetProvider concept left (the former interface + its ResolveTarget
 // type-assertion branch in unified_targets.go were confirmed dead — zero implementers,
 // `git grep 'func.*ResolveTarget(node \*spec.DeployNode'` matches only the package-level
@@ -30,7 +30,7 @@ var deployTargetWords = append([]string(nil), spec.ResourceKinds...)
 // out-of-process provider via sdk.Executor.InvokeProvider — never a direct E3b call
 // from core. Both checkDeployProviderBijection (in-proc XOR externalized) and
 // isExternalDeploySubstrate (a substrate kind is external iff listed here) consult
-// it — so the two gates can never disagree. GENERAL for all 5 — ALL FIVE substrates
+// it — so the two gates can never disagree. GENERAL for all 7 — ALL SEVEN substrates
 // now externalize; the ONLY substrate-specific piece is each one's registered
 // preresolver body (F6, FINAL/K5 unit 6a — candy/plugin-adb/preresolve.go /
 // candy/plugin-kube/preresolve.go, dispatched by candy/plugin-fleet's
@@ -97,11 +97,13 @@ var externalizedDeploySubstrates = setFromSlice(deployTargetWords)
 // itself CUE-derived from spec.ResourceKinds; only the VALUES (literal candy path strings) are
 // hand-written, and they have no generated source to drift from.
 var externalDeploySubstratePlugins = map[string]string{
-	"local":      "github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local",
-	"vm":         "github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
-	"pod":        "github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
-	"android":    "github.com/opencharly/plugin-adb/candy/plugin-adb",
-	"kubernetes": "github.com/opencharly/plugin-kube/candy/plugin-kube",
+	"local":       "github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local",
+	"vm":          "github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
+	"pod":         "github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
+	"android":     "github.com/opencharly/plugin-adb/candy/plugin-adb",
+	"kubernetes":  "github.com/opencharly/plugin-kube/candy/plugin-kube",
+	"kindcluster": "github.com/opencharly/plugin-kube/candy/plugin-kube",
+	"kubevirt":    "github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt",
 }
 
 // externalDeploySubstratePluginRef returns the canonical @github ref to the candy serving an
@@ -127,7 +129,7 @@ func externalDeploySubstratePluginRef(word string) (string, bool) {
 // can auto-inject the ref and resolve the substrate word. There is no in-proc
 // DeployTargetProvider concept anymore — the former interface + its ResolveTarget
 // type-assertion branch in unified_targets.go were confirmed dead (zero implementers)
-// and deleted; ALL FIVE substrates externalize today. Run in the same init() that
+// and deleted; ALL SEVEN substrates externalize today. Run in the same init() that
 // registers (after registration), avoiding the alphabetical race. An externalized word
 // legitimately has NO provider at process start (its grpcProvider connects later at load).
 func checkDeployProviderBijection() error {
