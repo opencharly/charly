@@ -72,8 +72,9 @@ func TestResolveDeployNodeByPath(t *testing.T) {
 // TestExternalDeploySubstratePluginRef proves the substrate→canonical-plugin-candy mapping a
 // box/<distro> submodule auto-injects so an externalized substrate word resolves to its
 // out-of-process provider (the main repo discovers it from candy/ directly; a submodule does
-// not). A non-externalized substrate (pod) has NO ref. Kept in sync with
-// externalizedDeploySubstrates by the startup checkDeployProviderBijection gate.
+// not). A non-externalized substrate has NO ref. The ref and the set are BOTH projections of
+// the generated index (the former checkDeployProviderBijection gate is retired), so this test
+// is the in-tree consistency check between them.
 func TestExternalDeploySubstratePluginRef(t *testing.T) {
 	want := map[string]string{
 		"vm":         "@github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
@@ -89,7 +90,7 @@ func TestExternalDeploySubstratePluginRef(t *testing.T) {
 		}
 	}
 	// Every externalized substrate MUST have a plugin ref (else a submodule can't discover
-	// it). ALL SEVEN substrates are externalized now, so this covers the whole set.
+	// it) — the two are projections of the SAME index, so their domains must coincide.
 	for word := range externalizedDeploySubstrates {
 		if _, ok := externalDeploySubstratePluginRef(word); !ok {
 			t.Errorf("externalized substrate %q has no plugin-candy ref", word)

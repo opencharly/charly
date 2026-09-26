@@ -29,4 +29,17 @@ func TestUnresolvedDeployTargetError(t *testing.T) {
 	if strings.Contains(unknown, "known substrate") {
 		t.Fatalf("a typo target must NOT be reported as a known substrate, got: %s", unknown)
 	}
+
+	// A KNOWN CUE resource kind that no corpus plugin serves (kubevirt today) → the
+	// known-but-unserved text, and NEVER an empty plugin name ("the  plugin candy").
+	if !resourceKindSet["kubevirt"] || externalizedDeploySubstrates["kubevirt"] {
+		t.Fatalf("precondition: kubevirt must be a resource kind absent from the deploy set")
+	}
+	unserved := unresolvedDeployTargetError("my-kv", "kubevirt").Error()
+	if !strings.Contains(unserved, "known substrate") || !strings.Contains(unserved, "no plugin in") {
+		t.Fatalf("a known-but-unserved kind must report the missing corpus plugin, got: %s", unserved)
+	}
+	if strings.Contains(unserved, "the  plugin candy") {
+		t.Fatalf("the diagnostic must not render an empty plugin name, got: %s", unserved)
+	}
 }
