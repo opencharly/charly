@@ -247,7 +247,7 @@ func TestProcessPid_NilSafeAndLive(t *testing.T) {
 // building several plugin candies at once) can starve past the window — a 150ms window
 // with a 50ms touch was starved in a real run and false-failed. A 3s window touched
 // every 50ms needs a 3s scheduling gap to starve, while still firing well before the
-// 7.5s wait when the arming is absent (so the test keeps its fail-without-the-fix
+// 7s wait when the arming is absent (so the test keeps its fail-without-the-fix
 // property).
 func TestIdleBoundedContext_NilWakeLiteralStillResets(t *testing.T) {
 	const (
