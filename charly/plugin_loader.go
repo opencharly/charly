@@ -628,29 +628,29 @@ func connectPluginByWord(class ProviderClass, word string) (Provider, bool) {
 	return connectPluginByWordRef(class, word, "", "")
 }
 
-// connectPluginByWordRef is THE one on-demand plugin-connect entry point. A capability
-// IDENTITY (class:word[:parent]) resolves by a single rule (plan §4):
+// connectPluginByWordRef is THE one on-demand plugin-connect entry point for a capability
+// IDENTITY (class:word[:parent]) — the SAME chain every host out-call and every peer invoke uses.
 //
-//  1. already registered, or served by a BAKED binary → return it (no scan);
-//  2. else the candy ref is the caller's explicit extraRef when set, else the GENERATED
-//     provider-ref index's canonical ref for THIS identity (canonicalProviderRef) — and the
-//     project's candy closure is scanned ONCE with that ref, then the referenced plugins are
-//     connected;
-//  3. else the identity is genuinely unavailable → (nil,false), surfaced loudly by the caller.
+// The RESOLUTION RULE is one, with no fallback chain: resolve the identity in the registry; on a
+// miss, its canonical ref comes from the caller's explicit extraRef when set, else the GENERATED
+// provider-ref index (canonicalProviderRef — the ONE word→ref lookup, class-agnostic: a deploy:pod
+// substrate and a verb:libvirt verb resolve through the SAME table, no per-class branch); then the
+// project closure is connected. There is no default ref, no per-kind map, no special case.
 //
-// No second pass, no default ref, no per-kind map, no special case for a substrate vs a verb:
-// a `deploy:pod` substrate and a `verb:libvirt` verb resolve through the SAME table. The
-// identity's PARENT is threaded through every leg (`providerKey`), so a nested
+// The SCAN runs local-first in up to TWO passes — pass 1 over the project's OWN closure
+// (network-free), and ONLY if the identity is still unresolved, pass 2 with the canonical ref
+// appended (spec.ResolveOpts.ExtraCandyRefs). This is NOT a second resolution path (both passes
+// run the identical scan+connect, differing only by one ref) and NOT a fallback chain: it is a
+// correctness requirement, established in review (charly#677). Appending the ref makes the scan
+// fetch it and resolve its latest tag, work that can ERROR on an unreachable repo; a project that
+// VENDORS the candy locally must still load it in that case, so the network-free pass 1 runs
+// first and answers without ever needing the ref. Collapsing this to a single ref-bearing scan
+// (the original plan §4 row) made a fetch error a HARD connect failure for a locally-vendored
+// candy — a regression, so the local-first order is kept and the plan row corrected.
+//
+// The identity's PARENT is threaded through every leg (`providerKey`), so a nested
 // `command:<word>:<parent>` connect reaches the provider serving THAT identity — never a
 // bare-word twin (the former code dropped the parent here and re-resolved the top-level word).
-//
-// NOTE (deliberate trade-off, plan §4): the former two-pass ran a network-free pass over the
-// project closure FIRST, appending the canonical ref only on a miss. The single rule above
-// appends the ref whenever the index knows the identity, so a project that vendors the candy
-// locally now also resolves the ref's latest tag (one cached, 1h-TTL, disk-persisted
-// `git ls-remote` per distinct repo) before the loader's version arbitration makes the LOCAL
-// body win (shadowing is effective, not advisory). The fetch is thus redundant-but-harmless
-// work, never a wrong result; it is the price of ONE resolution path with no second pass.
 func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) (Provider, bool) {
 	if p, ok := connectBakedPlugin(class, word, parent); ok {
 		return p, true
@@ -667,13 +667,20 @@ func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) 
 	if ref == "" {
 		ref = canonicalProviderRef(class, word, parent, "")
 	}
-	opts := spec.ResolveOpts{}
+	passes := []spec.ResolveOpts{{}}
 	if ref != "" {
-		opts = spec.ResolveOpts{ExtraCandyRefs: []string{ref}}
+		passes = append(passes, spec.ResolveOpts{ExtraCandyRefs: []string{ref}})
 	}
-	if candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts); scanErr == nil && candyMap != nil {
+	for _, opts := range passes {
+		candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts)
+		if scanErr != nil || candyMap == nil {
+			continue
+		}
 		if perr := loadProjectPlugins(context.Background(), candyMap, map[string]struct{}{word: {}}); perr != nil {
 			fmt.Fprintf(os.Stderr, "warning: plugin load (%s:%s): %v\n", class, word, perr)
+		}
+		if p, ok := providerRegistry.resolveIdentity(class, word, parent); ok {
+			return p, true
 		}
 	}
 	return providerRegistry.resolveIdentity(class, word, parent)
