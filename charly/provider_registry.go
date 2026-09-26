@@ -42,8 +42,9 @@ func newRegistry() *Registry {
 
 // provKey is the TWO-SEGMENT "<class>:<word>" key, for the one map whose domain is
 // genuinely two-segment: the plugin_input def table (only a command nests, and a command
-// carries no input def). Every registry identity uses providerKey instead.
-func provKey(c ProviderClass, word string) string { return string(c) + ":" + word }
+// carries no input def). It delegates to providerKey (R3: the ONE key renderer) with an
+// empty parent.
+func provKey(c ProviderClass, word string) string { return providerKey(c, word, "") }
 
 // providerIdentity renders a provider's registry IDENTITY from its own declared
 // class/word/parent — the key every map and diagnostic must use so a nested command and

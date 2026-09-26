@@ -1,9 +1,5 @@
 package main
 
-import (
-	"strings"
-)
-
 // externalizedDeploySubstrates is the set of deploy words served by a plugin — DERIVED
 // from the generated provider-ref index (pluginProviderRefs, the projection of every
 // plugin repo's own `plugin:` block), never from a compiled-in per-kind map or a closed
@@ -33,12 +29,13 @@ var externalizedDeploySubstrates = deploySubstrateWords()
 
 // deploySubstrateWords projects the generated provider-ref index onto the deploy class —
 // the DEPLOY subset of "which plugin serves which word". A mutable map (the
-// reserved_registry test's delete/restore probe still works).
+// reserved_registry test's delete/restore probe still works). It reuses splitCapability (R3:
+// the ONE key-grammar parser) rather than a second parser.
 func deploySubstrateWords() map[string]bool {
 	out := map[string]bool{}
 	for key := range pluginProviderRefs {
-		class, word, ok := splitProviderKey(key)
-		if ok && ProviderClass(class) == ClassDeployTarget {
+		class, word, _, ok := splitCapability(key)
+		if ok && class == ClassDeployTarget {
 			out[word] = true
 		}
 	}
@@ -76,15 +73,4 @@ func pluginProviderRef(key string) (string, bool) {
 		return "", false
 	}
 	return ref, true
-}
-
-// splitProviderKey splits a "<class>:<word>[:<parent>]" index key into its class + word.
-// Kept tiny + local (R3: the one place the key grammar is parsed in core). The optional
-// command parent is irrelevant to a deploy/verb-class caller, so it is dropped here.
-func splitProviderKey(key string) (class, word string, ok bool) {
-	parts := strings.Split(key, ":")
-	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
-	}
-	return parts[0], parts[1], true
 }
