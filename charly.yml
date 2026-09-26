@@ -862,8 +862,9 @@ check-helm-vm:
 # against its OWN per-deploy-domain profile (check-kubevirt-operator-ctx) — the
 # partition: install in-venue, probe host-side on the side that can name a profile.
 #
-# This is the platform leg of the kubevirt-check-beds batch; check-kubevirt-vm
-# (below) is the full guest-VM leg on top of it.
+# This is the platform leg of the kubevirt-check-beds batch; the full guest-VM leg
+# (`check-kubevirt-vm`, booting a charly-built VM box as a containerDisk) is the
+# next leg of that batch, not part of this bed.
 # =============================================================================
 check-kubevirt-operator:
     vm:
