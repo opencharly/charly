@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/opencharly/spec/spec"
 	pb "github.com/opencharly/spec/proto"
 )
 
@@ -23,37 +24,32 @@ import (
 // plugin and the missing peer (the same loud-at-load contract as the schema gate);
 // `optional: true` records a skip instead. A declared dependency CYCLE is rejected
 // with the chain named.
+//
+// The unit holds the CUE-GENERATED spec.PluginRequirement (the authored `#PluginRequirement`
+// shape — capability + source + optional), not a hand-written mirror: `capability` is the
+// peer's full IDENTITY `<class>:<word>[:<parent>]` (the C0 key grammar), parsed with the ONE
+// `splitCapability`.
 
-// Requirement is one declared inter-plugin dependency, lifted from the wire
-// PluginRequirement. It mirrors the SDK's sdk.Requirement / the candy
-// plugin.requires entry: Class+Word(+CommandParent) name the peer's IDENTITY
-// ("<class>:<word>[:<parent>]"), Source is the peer's candy ref for a peer outside the
-// project closure, Optional makes an absent peer a recorded skip rather than a load
-// failure.
-type Requirement struct {
-	Class         string
-	Word          string
-	CommandParent string
-	Source        string
-	Optional      bool
-}
-
-// key renders the peer's registry IDENTITY for messages + lookup.
-func (r Requirement) key() string { return providerKey(ProviderClass(r.Class), r.Word, r.CommandParent) }
-
-// liftRequirements converts a unit's wire requirements, validating the class/word
-// shape with the SAME closed class set the capability lift uses (one vocabulary, R3).
-func liftRequirements(required []*pb.PluginRequirement, origin string) ([]Requirement, error) {
+// liftRequirements converts a unit's wire requirements to the CUE-authored
+// spec.PluginRequirement shape, validating the class/word with the SAME closed class set
+// the capability lift uses (one vocabulary, R3). The wire splits the peer into
+// class/word/command_parent; the authored shape carries the ONE capability identity, so
+// this re-renders it with providerKey (the ONE key renderer).
+func liftRequirements(required []*pb.PluginRequirement, origin string) ([]spec.PluginRequirement, error) {
 	if len(required) == 0 {
 		return nil, nil
 	}
-	out := make([]Requirement, 0, len(required))
+	out := make([]spec.PluginRequirement, 0, len(required))
 	for _, r := range required {
 		class := ProviderClass(r.GetClass())
 		if !providerClasses[class] || r.GetWord() == "" {
 			return nil, fmt.Errorf("%s advertised malformed requirement %q:%q", origin, r.GetClass(), r.GetWord())
 		}
-		out = append(out, Requirement{Class: r.GetClass(), Word: r.GetWord(), CommandParent: r.GetCommandParent(), Source: r.GetSource(), Optional: r.GetOptional()})
+		out = append(out, spec.PluginRequirement{
+			Capability: spec.PluginCapability(providerKey(class, r.GetWord(), r.GetCommandParent())),
+			Source:     r.GetSource(),
+			Optional:   r.GetOptional(),
+		})
 	}
 	return out, nil
 }
@@ -106,18 +102,21 @@ func registerPluginUnitRequires(unitName string, unit *PluginUnit) error {
 	}()
 
 	for _, req := range unit.Requires {
-		class := ProviderClass(req.Class)
-		k := req.key()
+		class, word, parent, ok := splitCapability(string(req.Capability))
+		if !ok {
+			return fmt.Errorf("plugin %q declared malformed capability %q", unitName, req.Capability)
+		}
+		k := providerKey(class, word, parent)
 		requiresGateMu.Lock()
 		owner := requiresInFlight[k]
 		requiresGateMu.Unlock()
 		if owner != "" && owner != unitName {
 			return fmt.Errorf("plugin dependency cycle: %s requires %s, which is provided by %s while %s is still loading", unitName, k, owner, owner)
 		}
-		if _, ok := providerRegistry.resolveIdentity(class, req.Word, req.CommandParent); ok {
+		if _, ok := providerRegistry.resolveIdentity(class, word, parent); ok {
 			continue
 		}
-		if _, ok := connectPluginByWordRef(class, req.Word, req.CommandParent, req.Source); ok {
+		if _, ok := connectPluginByWordRef(class, word, parent, req.Source); ok {
 			continue
 		}
 		if req.Optional {

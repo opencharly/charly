@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opencharly/spec/spec"
 	pb "github.com/opencharly/spec/proto"
 )
 
@@ -19,13 +20,18 @@ func (p zzReqProv) Reserved() string                                   { return 
 func (p zzReqProv) Class() ProviderClass                               { return p.class }
 func (p zzReqProv) Invoke(context.Context, *Operation) (*Result, error) { return &Result{}, nil }
 
+// reqCap renders a peer identity "<class>:<word>[:<parent>]" for a requirement fixture.
+func reqCap(class ProviderClass, word string) spec.PluginCapability {
+	return spec.PluginCapability(providerKey(class, word, ""))
+}
+
 // A declared, already-registered peer resolves with no work: the gate passes and the
 // unit is not blocked. This is the common case (a peer in the same project/registry).
 func TestRegisterPluginUnitRequires_PeerAlreadyRegistered(t *testing.T) {
 	providerRegistry.register(zzReqProv{ClassVerb, "zzreqpresent"}, "test")
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqconsumer"}},
-		Requires:  []Requirement{{Class: string(ClassVerb), Word: "zzreqpresent"}},
+		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreqpresent")}},
 	}
 	if err := registerPluginUnitRequires("zzreqconsumer", unit); err != nil {
 		t.Fatalf("declared+registered peer must resolve, got %v", err)
@@ -37,7 +43,7 @@ func TestRegisterPluginUnitRequires_PeerAlreadyRegistered(t *testing.T) {
 func TestRegisterPluginUnitRequires_MissingPeerFailsLoud(t *testing.T) {
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqmissconsumer"}},
-		Requires:  []Requirement{{Class: string(ClassVerb), Word: "zzreqabsent-peer"}},
+		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreqabsent-peer")}},
 	}
 	err := registerPluginUnitRequires("zzreqmissconsumer", unit)
 	if err == nil {
@@ -52,7 +58,7 @@ func TestRegisterPluginUnitRequires_MissingPeerFailsLoud(t *testing.T) {
 func TestRegisterPluginUnitRequires_OptionalMissingSkips(t *testing.T) {
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqoptconsumer"}},
-		Requires:  []Requirement{{Class: string(ClassVerb), Word: "zzreq-opt-absent", Optional: true}},
+		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreq-opt-absent"), Optional: true}},
 	}
 	if err := registerPluginUnitRequires("zzreqoptconsumer", unit); err != nil {
 		t.Fatalf("an absent optional peer must skip, got %v", err)
@@ -74,7 +80,7 @@ func TestRegisterPluginUnitRequires_CycleRejected(t *testing.T) {
 
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqcycle-a"}},
-		Requires:  []Requirement{{Class: string(ClassVerb), Word: "zzreqcycle-b"}},
+		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreqcycle-b")}},
 	}
 	err := registerPluginUnitRequires("zzreqcycle-a", unit)
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
@@ -92,7 +98,7 @@ func TestRegisterPluginUnitRequires_NestedIdentityResolvesParent(t *testing.T) {
 	}
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassCommand, "zzreqnestedconsumer"}},
-		Requires:  []Requirement{{Class: string(ClassCommand), Word: "zzreqnested", CommandParent: "zzreqbox"}},
+		Requires:  []spec.PluginRequirement{{Capability: spec.PluginCapability(providerKey(ClassCommand, "zzreqnested", "zzreqbox"))}},
 	}
 	// The nested identity (command:zzreqnested:zzreqbox) is NOT registered → a non-optional
 	// miss, proving the gate looked up the PARENTED key, not the bare word.
@@ -106,7 +112,8 @@ func TestRegisterPluginUnitRequires_NestedIdentityResolvesParent(t *testing.T) {
 }
 
 // liftRequirements rejects a malformed requirement (unknown class / empty word) with
-// the SAME closed class vocabulary the capability lift uses.
+// the SAME closed class vocabulary the capability lift uses, and re-renders the peer
+// as the ONE capability identity (providerKey).
 func TestLiftRequirements_RejectsMalformed(t *testing.T) {
 	if _, err := liftRequirements([]*pb.PluginRequirement{{Class: "bogus", Word: "x"}}, "test"); err == nil {
 		t.Error("an unknown class must be rejected")
@@ -116,6 +123,13 @@ func TestLiftRequirements_RejectsMalformed(t *testing.T) {
 	}
 	if rs, err := liftRequirements(nil, "test"); err != nil || rs != nil {
 		t.Errorf("no requirements must lift to (nil,nil), got (%v,%v)", rs, err)
+	}
+	rs, err := liftRequirements([]*pb.PluginRequirement{{Class: "command", Word: "feature", CommandParent: "box", Source: "gh/x", Optional: true}}, "test")
+	if err != nil || len(rs) != 1 {
+		t.Fatalf("lift one: %v %v", rs, err)
+	}
+	if rs[0].Capability != "command:feature:box" || rs[0].Source != "gh/x" || !rs[0].Optional {
+		t.Fatalf("lifted requirement = %+v, want the parented identity command:feature:box", rs[0])
 	}
 }
 
