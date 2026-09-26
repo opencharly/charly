@@ -876,7 +876,7 @@ check-kubevirt-operator:
             R10 for candy/layer-kubevirt-operator — the KubeVirt + CDI platform install on a disposable libvirt Arch k3s VM (the shared k3s-vm entity + k3s-server, an auto-allocated host->guest 6443 forward). The candy's IN-VENUE run: steps (context: [deploy]) fetch the pinned KubeVirt operator + CR manifests and the CDI operator + CR manifests with curl and apply them with the GUEST's own kubectl against the GUEST's own kubeconfig (/etc/rancher/k3s/k3s.yaml) — the layer-helm-chart precedent, the platform install owned by the venue it lands in. The bed's own plan then asserts the platform HOST-side over the managed port-forward (its own per-deploy-domain profile, cluster: check-kubevirt-operator-ctx): the VirtualMachine + VirtualMachineInstance CRDs are Established, the virt-handler DaemonSet is Ready on the node, and the KubeVirt CR + the CDI CR report Deployed via the `kubevirt: wait-ready` platform arm. Proves the whole platform leg end-to-end from a real cluster, no mocks.
         add_candy:
             - k3s-server
-            - '@github.com/opencharly/layer-kubevirt-operator:v2026.269.0037' # the standalone repo (kind-prefixed naming)
+            - '@github.com/opencharly/layer-kubevirt-operator:v2026.269.1736' # the standalone repo (kind-prefixed naming)
             - '@github.com/opencharly/layer-kubevirt:v2026.269.0037' # virtctl (the client candy)
             # The verb providers the bed's plan dispatches: plugin-kube serves `kube:`
             # (the kindcluster bed add_candy's it for the same reason); plugin-kubevirt
