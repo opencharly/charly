@@ -241,20 +241,33 @@ func TestProcessPid_NilSafeAndLive(t *testing.T) {
 // reset by a touch — idleBoundedContext arms the event channel before watching, so
 // the guard can never silently revert to a bare timer and false-kill a progressing
 // call. This FAILS if the arming is removed (the touch would never signal).
+//
+// The window/touch/wait budget is deliberately WIDE relative to the touch period: the
+// touch rides its own goroutine, which a heavily loaded host (a CI runner or a machine
+// building several plugin candies at once) can starve past the window — a 150ms window
+// with a 50ms touch was starved in a real run and false-failed. A 3s window touched
+// every 50ms needs a 3s scheduling gap to starve, while still firing well before the
+// 7s wait when the arming is absent (so the test keeps its fail-without-the-fix
+// property).
 func TestIdleBoundedContext_NilWakeLiteralStillResets(t *testing.T) {
+	const (
+		window = 3 * time.Second
+		touch  = 50 * time.Millisecond
+		wait   = 7 * time.Second
+	)
 	old := pluginInvokeNoProgressOverride
-	pluginInvokeNoProgressOverride = 150 * time.Millisecond
+	pluginInvokeNoProgressOverride = window
 	defer func() { pluginInvokeNoProgressOverride = old }()
 
 	a := &pluginActivity{} // deliberately a bare literal: wake is nil
 	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
 	defer stop()
-	// Touch every 50ms (< the 150ms window) from a separate goroutine; if the event
+	// Touch every `touch` (< the window) from a separate goroutine; if the event
 	// channel were nil, each touch would never signal and the timer would fire at
-	// 150ms and cancel a call that is plainly progressing.
+	// `window` and cancel a call that is plainly progressing.
 	done := make(chan struct{})
 	go func() {
-		tk := time.NewTicker(50 * time.Millisecond)
+		tk := time.NewTicker(touch)
 		defer tk.Stop()
 		for {
 			select {
@@ -269,8 +282,8 @@ func TestIdleBoundedContext_NilWakeLiteralStillResets(t *testing.T) {
 	case <-ctx.Done():
 		close(done)
 		t.Fatalf("a bare-literal clock's touch must reset the deadline, got %v", context.Cause(ctx))
-	case <-time.After(400 * time.Millisecond):
-		// good: outlived 2.6x the window because the touches reset it
+	case <-time.After(wait):
+		// good: outlived >2x the window because the touches reset it
 	}
 	close(done)
 }
