@@ -38,6 +38,15 @@ func TestResolveDeployNodeByPath(t *testing.T) {
 			},
 		},
 		"pod-bed": {Target: "pod"},
+		// The NAMESPACE-QUALIFIED key shape the merged-root tree uses (spec#164's
+		// Deploys() fold + ResolveBedForRoot qualification): a dotted key whose dots are
+		// NAMESPACE separators, not member-path separators. A pod bed named
+		// `charly.check-dsh-pod` is a TOP-LEVEL entry — it has no members — so the
+		// pre-fix dotted-path split looked up a root named `charly`, missed it, and
+		// returned false: deployNodePluginContext then surfaced NO plugin words for the
+		// bed and its `pod` substrate provider was never connected (the live
+		// "deploy provider is not connected" failure on every namespaced pod bed).
+		"charly.check-dsh-pod": {Target: "pod"},
 	}
 	cases := []struct {
 		name       string
@@ -56,6 +65,10 @@ func TestResolveDeployNodeByPath(t *testing.T) {
 		{"vm:check-arch-vm.web.db", true, "pod"},      // RCA #8: "vm:"-prefixed deep dotted path
 		{"vm:does-not-exist", false, ""},              // RCA #8: prefix stays honest on a real miss
 		{"vm:check-arch-vm.nope", false, ""},          // RCA #8: prefix stays honest on a missing child
+		// Namespace-qualified top-level key (dots are namespace separators): the exact-key
+		// match must win over the member-path split. FAILS pre-fix (returns false).
+		{"charly.check-dsh-pod", true, "pod"},
+		{"vm:charly.check-dsh-pod", true, "pod"}, // same key, "vm:"-prefixed address
 	}
 	for _, tc := range cases {
 		n, ok := resolveDeployNodeByPath(tree, tc.name)

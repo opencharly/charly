@@ -1165,6 +1165,17 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 // the never-connected provider. Returns false when any segment is absent.
 func resolveDeployNodeByPath(tree map[string]spec.DeployNode, name string) (*spec.DeployNode, bool) {
 	name, _ = spec.SplitVmAddress(name)
+	// EXACT full-key match FIRST: a NAMESPACE-QUALIFIED deploy (`charly.check-agentteams-vm`)
+	// contains dots that are namespace separators, not member-path separators, so the dotted
+	// split below would look up a root named `charly` and miss the real entry — the deploy's
+	// substrate/verb plugin words would then never load and its provider never connected
+	// ("known substrate but its deploy provider is not connected"). A member path
+	// (`openclaw-stack.web.db`) only applies when the full key is absent. Mirrors
+	// spec.ResolveNodePath's exact-key-first contract (spec#164) — the SAME rule, one per
+	// layer (spec for the plugin-side walk, core for the pre-connect plugin-word collection).
+	if node, ok := tree[name]; ok {
+		return &node, true
+	}
 	parts := strings.Split(name, ".")
 	root, ok := tree[parts[0]]
 	if !ok {
