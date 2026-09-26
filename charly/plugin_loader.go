@@ -1255,15 +1255,35 @@ func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader
 	return nil
 }
 
-// pluginAlreadyConnected reports whether an out-of-tree plugin candy's declared
-// providers are ALREADY registered in this process from candy.Plugin.Source — making a
-// re-load a no-op. It checks EVERY declared capability: any one already registered from
-// the SAME source means the unit is connected (loadPluginUnit registers a unit's
-// providers together), so it returns true (skip); any one registered from a DIFFERENT
-// origin is a real word→two-providers collision and returns an error. Returns
-// (false, nil) when none of the plugin's providers are registered yet.
+// pluginAlreadyConnected reports whether an out-of-tree plugin candy is ALREADY served,
+// so an out-of-process re-load would contribute NOTHING and is skipped (the idempotency
+// guard, R3; loadProjectPlugins runs on every connect path in one process).
+//
+// Two things make a candy already served, and BOTH are per WORD (never whole-candy
+// "any one" — see below):
+//
+//   - a word registered from the SAME source: loadPluginUnit connects a candy's units
+//     ATOMICALLY, so one same-source word proves the source is loaded → skip. This is
+//     what makes a re-load idempotent even when the candy's `providers:` list declares a
+//     word its served unit does not actually register (e.g. candy/plugin-mcp's
+//     `command:mcp`): the served `verb:mcp` proves the load, and the re-load that would
+//     otherwise collide on `verb:mcp` is skipped.
+//   - a word compiled in (originBuiltin): served in-proc — the placement-coexist skip.
+//     A candy ALL of whose declared words are builtin is fully compiled in → skip.
+//
+// The rule is PER WORD because a candy may declare SOME compiled-in words and SOME of
+// its OWN (e.g. candy/plugin-kubevirt: `kind:kubevirt` is compiled into
+// candy/plugin-substrate, while `verb:kubevirt` / `deploy:kubevirt` / `command:kubevirt`
+// are this candy's own). The former whole-candy rule ("any one builtin ⇒ skip the whole
+// candy") silently DROPPED those own capabilities — `kubevirt:` then resolved "no
+// provider registered for plugin verb". So a candy with at least one not-yet-served word
+// must load.
+//
+// Returns an error for a word registered from a DIFFERENT non-builtin origin — a genuine
+// word→two-providers collision (the register backstop).
 func pluginAlreadyConnected(name string, source string, providers []string) (bool, error) {
-	connected := false
+	loaded := false            // some word is already registered from THIS source → the source is loaded
+	allDeclaredCovered := true // every declared word is served (builtin, or by the loaded source)
 	for _, capability := range providers {
 		class, word, ok := splitCapability(capability)
 		if !ok {
@@ -1271,26 +1291,24 @@ func pluginAlreadyConnected(name string, source string, providers []string) (boo
 		}
 		origin, found := providerRegistry.registeredOrigin(class, word)
 		if !found {
+			// Not registered at all → only the out-of-process load can serve this word.
+			allDeclaredCovered = false
 			continue
 		}
-		// COEXIST SWITCH: a word already registered as a COMPILED-IN plugin (origin
-		// "builtin", registered at init() by registerCompiledPlugin from the
-		// charly.yml `compiled_plugins:` selection) means this candy is compiled INTO
-		// the running charly — the out-of-process host build + connect is redundant,
-		// so SKIP it rather than reporting a collision. This is THE placement-coexist
-		// path: a plugin NOT in compiled_plugins loads out-of-process here; one that IS
-		// compiled in is served in-proc and skipped. Placement is a per-charly-build
-		// choice, invisible above the registry.
 		if origin == originBuiltin {
-			connected = true
+			// Served in-proc — the placement-coexist skip, per word.
 			continue
 		}
 		if origin != source {
 			return false, fmt.Errorf("plugin %q provider %s:%s collides with one already registered from %q", name, class, word, origin)
 		}
-		connected = true
+		// Already registered from THIS source: the source is loaded → the whole candy is served.
+		loaded = true
 	}
-	return connected, nil
+	if loaded {
+		return true, nil
+	}
+	return allDeclaredCovered, nil
 }
 
 // cueDefHasField reports whether the def value declares a (possibly optional)

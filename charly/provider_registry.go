@@ -120,6 +120,25 @@ func (r *Registry) register(p Provider, origin string) error {
 			r.origins[k] = origin
 			return nil
 		default:
+			// A registration that does NOT change the word's placement is a no-op, not a
+			// collision — the per-word placement-coexist rule:
+			//
+			//   - a word already served by a COMPILED-IN provider (originBuiltin) STAYS in-proc:
+			//     an OUT-OF-PROCESS candy declaring it (e.g. candy/plugin-kubevirt, whose
+			//     `kind:kubevirt` is compiled into candy/plugin-substrate while
+			//     `verb:kubevirt` / `deploy:kubevirt` / `command:kubevirt` are its own) must
+			//     still register the words it OWNS; the shared compiled-in word is skipped, not
+			//     overridden and not a collision;
+			//   - an identical ORIGIN is the same unit loaded twice (a candy scanned under two
+			//     keys, or re-loaded on a later connect path) — idempotent, so skipped.
+			//
+			// A genuine collision (a DIFFERENT non-builtin origin claiming an already-registered
+			// word) still errors, and a BUILTIN-vs-BUILTIN duplicate still errors (panicking at
+			// init() via RegisterBuiltinProvider / RegisterBuiltinPluginUnit) — that startup
+			// fail-fast invariant is preserved.
+			if origin != originBuiltin && (r.origins[k] == originBuiltin || r.origins[k] == origin) {
+				return nil
+			}
 			return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s",
 				k, r.origins[k], origin)
 		}
