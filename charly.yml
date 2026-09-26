@@ -2780,15 +2780,17 @@ check-dsh-pod:
                 command: ${CHARLY_BIN} dsh status --box check-dsh-pod
                 in_container: false
 # =============================================================================
-# agentteams + agentteams-manager + check-agentteams-pod — the R10 bed for the
-# full AgentTeams stack (minio, matrix, element, higress, controller) on the
-# cachyos base. Every service runs as the image user (uid 1000) against its own
-# home-relative volume (~/.agentteams/minio, ~/.agentteams/matrix,
-# ~/.agentteams/higress, ~/.agentteams/controller) — the rootless charly
-# architecture, no root anywhere. The bed binds the host rootless podman socket
-# into the box so the controller can spawn the manager container from the
-# pre-built agentteams-manager image (AGENTTEAMS_MANAGER_IMAGE) on the charly
-# network.
+# agentteams + agentteams-manager + agentteams-worker — the AgentTeams boxes on
+# the cachyos base (minio, matrix, element, higress, controller). Every service
+# runs as the image user (uid 1000) against its own home-relative volume
+# (~/.agentteams/minio, ~/.agentteams/matrix, ~/.agentteams/higress,
+# ~/.agentteams/controller) — the rootless charly architecture, no root anywhere.
+# The manager/worker image boxes are spawned by the controller through the host
+# rootless podman socket (AGENTTEAMS_MANAGER_IMAGE /
+# AGENTTEAMS_WORKER_IMAGE) on the charly network. The pod-substrate R10 beds that
+# exercised these boxes now live with their artifact owner
+# (opencharly/layer-agentteams); the VM-substrate bed (check-agentteams-vm,
+# below) remains here.
 # =============================================================================
 agentteams:
     candy:
@@ -2871,226 +2873,6 @@ agentteams-worker:
         candy:
             - '@github.com/opencharly/layer-supervisord:v2026.240.0121'
             - '@github.com/opencharly/pod-agentteams-worker:v2026.239.1600'
-check-agentteams-pod:
-    pod:
-        image: agentteams
-        disposable: true
-        lifecycle: dev
-        description: >-
-            R10 bed for the full AgentTeams stack. Deploying the box to steady state proves the minio S3 API, the Tuwunel Matrix homeserver, the Element Web client, the Higress AI gateway, and the controller (kube-apiserver + REST API) all build, start, and stay up as uid 1000 against their own home-relative volumes (~/.agentteams/minio, ~/.agentteams/matrix, ~/.agentteams/higress, ~/.agentteams/controller) — and that the controller spawns the manager container from the pre-built agentteams-manager image through the host rootless podman socket (AGENTTEAMS_MANAGER_IMAGE), then creates a Worker CR and spawns the worker container from the pre-built agentteams-worker image (AGENTTEAMS_WORKER_IMAGE), which reaches Running and joins its Matrix room.
-        volume:
-            - name: podman-socket
-              type: bind
-              host: /run/user/1000/podman/podman.sock
-              path: /run/user/1000/podman/podman.sock
-        env:
-            AGENTTEAMS_MANAGER_IMAGE: ghcr.io/opencharly/agentteams-manager:manager
-            AGENTTEAMS_WORKER_IMAGE: ghcr.io/opencharly/agentteams-worker:worker
-        security:
-            security_opt:
-                - label=disable
-        plan:
-            - check: the agentteams pod reached steady state
-              id: agentteams-pod-running
-              exit_status: 0
-              stdout:
-                - contains: '"kind": "pod"'
-                - contains: check-agentteams-pod
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} status --json
-                in_container: false
-            - check: the minio S3 API answers its health probe
-              id: agentteams-minio-health
-              timeout: 30s
-              context:
-                - runtime
-              http:
-                http: "http://127.0.0.1:${HOST_PORT:9000}/minio/health/live"
-                status: 200
-            - check: the Matrix homeserver answers the client versions endpoint
-              id: agentteams-matrix-versions
-              timeout: 30s
-              context:
-                - runtime
-              http:
-                http: "http://127.0.0.1:${HOST_PORT:6167}/_matrix/client/versions"
-                status: 200
-            - check: the Element Web client answers on its port
-              id: agentteams-element-http
-              timeout: 30s
-              context:
-                - runtime
-              http:
-                http: "http://127.0.0.1:${HOST_PORT:8088}/"
-                status: 200
-            - check: the Higress apiserver answers on its internal port
-              id: agentteams-higress-apiserver
-              timeout: 60s
-              context:
-                - runtime
-              command: 'curl -sk https://127.0.0.1:18443/version | grep -q "gitVersion"'
-            - check: the Higress gateway is healthy (pilot-agent + envoy answer the status port; bounded probe — envoy's V8 WASM engine segfaults once at startup under the upstream --concurrency default and the init's restart policy covers the ~15s down window on both substrates)
-              id: agentteams-higress-gateway-health
-              timeout: 60s
-              context:
-                - runtime
-              command: 'for i in $(seq 1 28); do curl -sf http://127.0.0.1:15021/healthz/ready && exit 0; sleep 2; done; exit 1'
-            - check: the Higress gateway serves the console on its ingress port (the 8080 listener only materializes when the proxy node LABELS match the Gateway selector; bounded probe for the same startup/restart window)
-              id: agentteams-higress-gateway-http
-              timeout: 60s
-              context:
-                - runtime
-              command: |
-                for i in $(seq 1 28); do
-                    code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)"
-                    [ "${code}" = "200" ] && exit 0
-                    sleep 2
-                done
-                exit 1
-            - check: the Higress console answers on its port
-              id: agentteams-higress-console-http
-              timeout: 60s
-              context:
-                - runtime
-              http:
-                http: "http://127.0.0.1:${HOST_PORT:8001}/"
-                status: 200
-            - # The `agentteams:` check verb (the declarative controller-probe counterpart of
-              # the `charly agentteams` command plugin) replaces the raw curl sequence: the
-              # provider resolves the controller's in-venue :8090 to a host-routable address
-              # over the reverse channel (the box's published port), pulls the admin SA token
-              # from the venue, and probes with the SAME apiClient the command uses (R3 — one
-              # REST surface covers the CLI and every bed).
-              check: the controller spawns the default manager and it reaches Running phase (proves the manager image is in the host store under AGENTTEAMS_MANAGER_IMAGE and the controller can spawn it through the bound podman socket)
-              id: agentteams-manager-running
-              timeout: 300s
-              context:
-                - runtime
-              agentteams:
-                method: manager-running
-              stdout:
-                - contains: "Running"
-            - check: the controller creates a Worker CR, spawns the worker container from the pre-built agentteams-worker image, and the worker reaches Running with its Matrix room created (proves AGENTTEAMS_WORKER_IMAGE is in the host store and the controller can spawn the worker through the bound podman socket)
-              id: agentteams-worker-running
-              timeout: 300s
-              context:
-                - runtime
-              agentteams:
-                method: worker-running
-              stdout:
-                - contains: "room alias resolvable"
-            - # The `agentteams:` check verb exercised LIVE against the running controller —
-              # the declarative counterpart of the compiled-in `charly agentteams` command
-              # plugin. The verb is HOST-BASED (the mcp pattern): the provider resolves the
-              # controller's in-venue :8090 to a host-routable address over the reverse
-              # channel (the box's published port), pulls the admin SA token from the venue,
-              # and probes with the SAME apiClient the command uses (R3 — one REST surface
-              # covers the CLI and every bed).
-              check: "the `agentteams: status` verb reaches the live controller with the admin token and reports the resource counts"
-              id: agentteams-plugin-status
-              timeout: 60s
-              context:
-                - runtime
-              agentteams:
-                method: status
-              stdout:
-                - contains: "Total Workers:"
-            - check: "the `agentteams: worker-list` verb lists the bed-worker the controller spawned (proves the verb's REST client + token discovery work end-to-end)"
-              id: agentteams-plugin-worker-list
-              timeout: 60s
-              context:
-                - runtime
-              agentteams:
-                method: worker-list
-              stdout:
-                - contains: "bed-worker"
-            - # The compiled-in `charly agentteams config` command reports the controller
-              # endpoint WITHOUT any network — a deterministic live proof that the CLI's
-              # default fallback matches the box's actual host-mapped port. The controller
-              # serves :8090 in-container and the box host-maps it by default
-              # auto-allocation, so the default is http://127.0.0.1:8090 (the R4a fix that
-              # replaced the unreachable upstream 18090 published-port default). The env is
-              # cleared so a host-shell AGENTTEAMS_CONTROLLER_URL cannot mask the default.
-              check: the compiled-in `charly agentteams config` command reports the controller endpoint default 8090
-              id: agentteams-plugin-config-default
-              timeout: 60s
-              context:
-                - runtime
-              command:
-                command: |
-                    unset AGENTTEAMS_CONTROLLER_URL AGENTTEAMS_AUTH_TOKEN AGENTTEAMS_AUTH_TOKEN_FILE
-                    "${CHARLY_BIN}" agentteams config
-                in_container: false
-              stdout:
-                - contains: "Controller URL: http://127.0.0.1:8090"
-# check-agentteams-snapshot — the R10 bed for Factory Unit 6, the snapshot/hydrate
-# round-trip.
-#
-# The round-trip is asserted by STATE THAT SURVIVES IT, never by the two commands
-# exiting 0 — a snapshot that writes an empty bundle and a hydrate that applies
-# nothing both exit 0, so exit status cannot distinguish a working round-trip from
-# a vacuous one.
-#
-# The worker is DELETED between snapshot and apply and its absence asserted. That
-# is what makes the hydrate half discriminate: `charly agentteams apply` never
-# deletes (control.go's applyPathWithClient has no delete path), so with the worker
-# left in place a completely vacuous hydrate would still satisfy the final
-# assertion. Without the delete the check could not fail for the reason it names.
-#
-# The check runs INSIDE the controller pod: the controller serves its REST API on
-# 127.0.0.1:8090 and refuses a connection from outside, so a host-side invocation
-# cannot reach it. The `agentteams` box deliberately does NOT carry the charly
-# toolchain — it is a production composition — so the bed overlays
-# candy/agentteams-snapshot via add_candy: on the DEPLOY rather than bloating the
-# box for a check.
-check-agentteams-snapshot:
-    pod:
-        image: agentteams
-        disposable: true
-        lifecycle: dev
-        description: >-
-            R10 bed for Factory Unit 6. Proves the snapshot/hydrate round-trip against a live AgentTeams deploy: the controller's worker is captured into a hydration bundle, the worker is DELETED, the bundle is applied back, and the worker is listed again.
-        # The worker is DELETED between snapshot and apply, and its absence asserted,
-        # so the hydrate half can fail: `charly agentteams apply` never deletes
-        # (control.go's applyPathWithClient has no delete path), so without the
-        # delete a completely vacuous hydrate would leave the worker in place and
-        # the final assertion would pass regardless. That made the check unable to
-        # fail for the reason it names.
-        #
-        # The round-trip check runs `charly agentteams snapshot|apply` INSIDE the
-        # controller pod: the controller serves its REST API on 127.0.0.1:8090 and
-        # refuses a connection from outside, so a host-side invocation cannot reach
-        # it. The `agentteams` box deliberately does NOT carry the charly toolchain
-        # — it is a production composition — so the bed overlays it here instead of
-        # bloating the box for a check. Without this the step fails with
-        # `sh: charly: command not found`, which is what the first run did.
-        add_candy:
-            - '@github.com/opencharly/layer-agentteams-snapshot:v2026.239.1618'
-        volume:
-            - name: podman-socket
-              type: bind
-              host: /run/user/1000/podman/podman.sock
-              path: /run/user/1000/podman/podman.sock
-        env:
-            AGENTTEAMS_MANAGER_IMAGE: ghcr.io/opencharly/agentteams-manager:manager
-            AGENTTEAMS_WORKER_IMAGE: ghcr.io/opencharly/agentteams-worker:worker
-        security:
-            security_opt:
-                - label=disable
-        plan:
-            - check: the snapshot/hydrate round-trip preserves the controller's worker
-              id: snapshot-roundtrip
-              exit_status: 0
-              stdout:
-                - contains: ROUNDTRIP-OK
-              context:
-                - runtime
-              command:
-                command: >-
-                    sh -c 'set -e; charly agentteams worker list | grep -q bed-worker || charly agentteams worker create --name bed-worker --no-wait; charly agentteams worker list | grep -q bed-worker; rm -rf /tmp/at-snap; charly agentteams snapshot --out /tmp/at-snap >/dev/null; test -s /tmp/at-snap/workers.yml; grep -q bed-worker /tmp/at-snap/workers.yml; charly agentteams worker delete bed-worker >/dev/null; ! charly agentteams worker list | grep -q bed-worker; charly agentteams apply -f /tmp/at-snap >/dev/null; charly agentteams worker list | grep -q bed-worker; echo ROUNDTRIP-OK'
-                in_container: true
 # agentteams-vm — the disposable VM substrate for the AgentTeams stack. The
 # check-agentteams-vm bed installs the agentteams top composition candy (all five
 # foundation candies) into this Arch cloud-image guest via add_candy, so the
@@ -3130,8 +2912,7 @@ agentteams-vm:
 # run as systemd units under uid 1000 (init polymorphism — no supervisord in a VM).
 # The controller's rootless podman socket is set up by the controller candy's plan
 # step; the bed's host-side cp-box steps deliver the PRE-BUILT manager/worker images
-# (charly box build agentteams-manager / agentteams-worker — the same pre-requisite
-# the check-agentteams-pod bed has) into the guest's rootless store, and the
+# (charly box build agentteams-manager / agentteams-worker) into the guest's rootless store, and the
 # controller spawns the manager + a worker from them through the rootless socket —
 # proving the full controller-spawns-manager → create-worker → room sequence
 # in-guest. The manager reconciler retries a failed spawn every 30s, so the
