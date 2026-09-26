@@ -99,10 +99,6 @@ github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3
 github.com/nlpodyssey/gopickle v0.3.0/go.mod h1:f070HJ/yR+eLi5WmM1OXJEGaTpuJEUiib19olXgYha0=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
 github.com/openai/openai-go/v3 v3.61.0/go.mod h1:ufI1+K+t0ijRB3gk8eztiw1crcDpsBuxRQL4sbLIrts=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.1841 h1:3Xeei5BpdEXe3RvhpEQ6z4EAPni+ZYSBc6FvKCTPJaA=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.1841/go.mod h1:3WRmvtXLybza1C0c54Zt8gikRPZ5N8MwtumbMhLQPKo=
-github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845 h1:w5NX80kiApaXyT8JmGbrW9i02WZns2uO8CKcFU6+B48=
-github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845/go.mod h1:cnet2p4CbE6oh9DEoPewlkArwUEGdKZsqAr3aBzCpGY=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.534 h1:AtKpvdMNgKrSsJqwwqV7/OuoZ4QXn4/TSpW5pu59aS0=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.534/go.mod h1:QktfTESS3KTxlzESYJ2ImS1njOZPWOqKuJ+doAIfSvo=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026251.1105/go.mod h1:c928FYEmTDs7rvFibYc7+mpijKbMogaYyA/BZF01Kgw=
@@ -110,6 +106,8 @@ github.com/opencharly/sdk v0.2026253.1947 h1:8LRFQ135eupkEFPfFJvQzeax9AiSAONi3tU
 github.com/opencharly/sdk v0.2026253.1947/go.mod h1:bHkz9iCZVrpRQ1GjmsqnnOZYkk6bidLqzmikJivJbrU=
 github.com/opencharly/sdk v0.2026268.1823 h1:apioJmQcFfiboyLbsrf3MloIyP8uRlW4z1T5fP8oBsQ=
 github.com/opencharly/sdk v0.2026268.1823/go.mod h1:6Q9bbCH4jO+aKqkdP1YdoeGf1haYKDgzsaB2dp558Mg=
+github.com/opencharly/sdk v0.2026269.920 h1:jmjD5GouRwSWmzG2vERIb25ThSQzp27NaHHjPVuYzRc=
+github.com/opencharly/sdk v0.2026269.920/go.mod h1:vbHiiNXTyTorpPtkH9igUKrnHaYny/c6iuvKDBEi63s=
 github.com/opencharly/spec v0.2026250.709 h1:Fv2dspCPit2L7lwwwn29yXuWArFfyrMle65cH7A4SeU=
 github.com/opencharly/spec v0.2026250.709/go.mod h1:yaB8ABSTiJClK1xq/zCtWizcqfKKOhnuKcgGrHwxmW8=
 github.com/opencharly/spec v0.2026268.1800 h1:kUPBd21TsLFsSDI8pwe8hwBgnI2J0E5VlPKxYA4WlmA=
