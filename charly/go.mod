@@ -9,7 +9,7 @@ require (
 	github.com/opencharly/plugin-addr/candy/plugin-addr v0.2026237.1413
 	github.com/opencharly/plugin-agent-pi/candy/plugin-agent-pi v0.2026237.1414
 	github.com/opencharly/plugin-agent/candy/plugin-agent v0.2026237.1413
-	github.com/opencharly/plugin-agentteams/candy/plugin-agentteams v0.2026237.1414
+	github.com/opencharly/plugin-agentteams/candy/plugin-agentteams v0.2026269.2113
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026269.652
 	github.com/opencharly/plugin-box/candy/plugin-box v0.2026269.645
@@ -25,7 +25,7 @@ require (
 	github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026242.1131
 	github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418
 	github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419
-	github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026266.2321
+	github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026269.2116
 	github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026269.4
 	github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026237.1419
 	github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap v0.2026237.1419
@@ -102,7 +102,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026269.1717 // indirect
+	github.com/opencharly/sdk v0.2026269.2108 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
