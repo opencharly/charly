@@ -151,6 +151,10 @@ func loadBuiltinPluginUnits() error {
 				builtinGateErr = err
 				return
 			}
+			if err := registerPluginUnitRequires(builtinUnitName(unit), unit); err != nil {
+				builtinGateErr = err
+				return
+			}
 		}
 	})
 	return builtinGateErr
@@ -578,6 +582,11 @@ func loadBakedPluginBinary(bin string) bool {
 		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: schema gate: %v\n", bin, err)
 		return false
 	}
+	if err := registerPluginUnitRequires(filepath.Base(bin), unit); err != nil {
+		_ = closer.Close()
+		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: requires gate: %v\n", bin, err)
+		return false
+	}
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "local:"+bin, closer); err != nil {
 		_ = closer.Close()
 		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: register: %v\n", bin, err)
@@ -881,6 +890,10 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 		return err
 	}
 	if err := registerPluginUnitSchema(name, unit.Schema); err != nil {
+		_ = closer.Close()
+		return err
+	}
+	if err := registerPluginUnitRequires(name, unit); err != nil {
 		_ = closer.Close()
 		return err
 	}
