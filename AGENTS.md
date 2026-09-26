@@ -116,7 +116,7 @@ match, load ALL their skills before doing anything.
 | the `punktfunk:` check verb / probing OR managing a running punktfunk streaming host from a candy/box plan (out-of-process plugin; health, status, diagnostics, compositors, gpus, pairing, clients, library, virtual displays, plugins, hooks, actions, bounded SSE events) | `/charly-check:check` |
 | punktfunk / a game- or desktop-streaming host / Moonlight-compatible host / the `punktfunk-host` systemd user units / the punktfunk pacman repo | `/charly-punktfunk:punktfunk-host` |
 | the `kube:` check verb / Kubernetes cluster probing from a candy/box plan (out-of-process plugin; nodes, pods, ingress, wait-ready, storageclass, addons, apply/delete, raw resource GETs) | `/charly-kubernetes:check-k8s` |
-| the agentteams box / the AgentTeams multi-agent stack (Manager–Workers, Rooms, the controller + matrix + element + higress + minio candies) on the pod or vm substrate / the `check-agentteams-pod` and `check-agentteams-vm` beds | `/charly-agentteams:agentteams` |
+| the agentteams box / the AgentTeams multi-agent stack (Manager–Workers, Rooms, the controller + matrix + element + higress + minio candies) on the pod or vm substrate / the `check-agentteams-vm` bed | `/charly-agentteams:agentteams` |
 
 Full index: the opencharly/marketplace repo's README. Anything not listed
 requires reading the index first, loading the matching skill second, and touching
