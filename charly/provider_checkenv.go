@@ -94,13 +94,13 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.C
 	// project-lessly inside a deployed container / on a host where it is installed alongside
 	// charly — additive: a registry hit returns immediately, and with no baked binary it is a
 	// plain ResolveVerb miss.
-	prov, ok := connectBakedPlugin(ClassVerb, word)
+	prov, ok := connectBakedPlugin(ClassVerb, word, "")
 	if !ok {
 		// An unresolved plugin verb is a FAILURE, not a skip — a bed asserting a
 		// plugin verb that never registered must go red, not fake-green (mirrors
 		// the unresolvable-${HOST:...} rule).
 		res.Status = spec.StatusFail
-		res.Message = explainUnresolvedPluginWord(ClassVerb, word)
+		res.Message = explainUnresolvedPluginWord(ClassVerb, word, "")
 		return res
 	}
 	// Validate the authored plugin_input against the plugin's SERVED CUE schema

@@ -79,10 +79,10 @@ func collectExternalCommandPlugins() (topLevel kong.Plugins, nestedByParent map[
 		}
 		holder := externalCommandHolder(word, field, subs)
 		d := externalCommandDispatch{word: word, holder: holder, field: field, subcommands: subs}
-		seen[word] = true
+		seen[providerIdentity(p)] = true
 		if ncp, ok := p.(NestedCommandProvider); ok {
 			if parent := ncp.CommandParent(); parent != "" {
-				d.parent = parent // dispatch must resolve the PARENTED registry key, not the plain word
+				d.parent = parent // dispatch must resolve the FULL identity (word + parent), never the plain word
 				nestedByParent[parent] = append(nestedByParent[parent], holder)
 				table[parent+" "+word] = d
 				continue
@@ -92,16 +92,26 @@ func collectExternalCommandPlugins() (topLevel kong.Plugins, nestedByParent map[
 		table[word] = d
 	}
 	// (b) prescanned command words — TOP-LEVEL holders, no declared subcommands (no Describe has
-	// run yet). Nested external commands stay the registered path (a): the prescan learns only
-	// the word, not its parent, and no real nested external command exists today.
-	for _, word := range declaredExternalCommandWords() {
-		if seen[word] {
+	// run yet). A prescanned NESTED command carries its parent (the manifest's three-segment
+	// `command:<word>:<parent>` form), so it nests under that parent's holder exactly like a
+	// connected nested command — the prescan learns word AND parent, and the connect stays
+	// deferred to dispatch.
+	for identity, parent := range declaredExternalCommandIdentities() {
+		class, word, _, ok := splitCapability(identity)
+		if !ok || class != ClassCommand || seen[identity] {
 			continue
 		}
 		field := exportedCommandField(word)
 		holder := externalCommandHolder(word, field, nil)
+		d := externalCommandDispatch{word: word, parent: parent, holder: holder, field: field}
+		seen[identity] = true
+		if parent != "" {
+			nestedByParent[parent] = append(nestedByParent[parent], holder)
+			table[parent+" "+word] = d
+			continue
+		}
 		topLevel = append(topLevel, holder)
-		table[word] = externalCommandDispatch{word: word, holder: holder, field: field}
+		table[word] = d
 	}
 	return topLevel, nestedByParent, table
 }
@@ -299,7 +309,7 @@ func dispatchExternalCommand(d externalCommandDispatch, sub string) error {
 // CHARLY_BIN).
 func externalCommandExecPlan(d externalCommandDispatch, sub string) (bin string, argv, env []string, err error) {
 	args := externalCommandArgs(d, sub)
-	bin, err = resolveCommandPluginBinary(context.Background(), d.word)
+	bin, err = resolveCommandPluginBinary(context.Background(), d.word, d.parent)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -350,17 +360,18 @@ func externalCommandArgs(d externalCommandDispatch, sub string) []string {
 // cheap, no repo is derived, the seam is not asked and the baked hit serves exactly as before —
 // the shortcut stays the whole answer for the case it exists for. When the project IS there, the
 // override wins — the same rule, LOUD bypass and provenance lines as the loader path.
-func resolveCommandPluginBinary(ctx context.Context, word string) (string, error) {
-	name, candy, scanErr := projectCommandPluginCandy(word)
+func resolveCommandPluginBinary(ctx context.Context, word, parent string) (string, error) {
+	name, candy, scanErr := projectCommandPluginCandy(word, parent)
 	repoPath, srcDir := "", ""
 	if candy != nil {
 		srcDir = candy.GetSourceDir()
 		repoPath = pluginRepoPath(candy.GetPluginSource())
 	}
-	baked := bakedPluginBinaries[provKey(ClassCommand, word)]
+	baked := bakedPluginBinaries[providerKey(ClassCommand, word, parent)]
+	identity := providerKey(ClassCommand, word, parent)
 	overrideRoot, overridden, err := repoOverrideRootFor(repoPath)
 	if err != nil {
-		return "", fmt.Errorf("command %q: %w", word, err)
+		return "", fmt.Errorf("command %q: %w", identity, err)
 	}
 	if overridden {
 		// bypassed = the binary this path would have served absent the override: the .providers
@@ -373,7 +384,7 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 		}
 		built, berr := overridePluginBinary(ctx, name, srcDir, repoPath, overrideRoot, bypassed)
 		if berr != nil {
-			return "", fmt.Errorf("command %q: %w", word, berr)
+			return "", fmt.Errorf("command %q: %w", identity, berr)
 		}
 		reportPluginServed(name, srcDir, built, overrideRoot)
 		return built, nil
@@ -382,14 +393,14 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 		return baked, nil
 	}
 	if scanErr != nil {
-		return "", fmt.Errorf("command %q: %w", word, scanErr)
+		return "", fmt.Errorf("command %q: %w", identity, scanErr)
 	}
 	if candy == nil {
-		return "", fmt.Errorf("command %q: no plugin candy provides command:%s in the project", word, word)
+		return "", fmt.Errorf("command %q: no plugin candy provides %s in the project", identity, identity)
 	}
 	bin, _, err := resolvePluginBinary(ctx, srcDir, name, repoPath)
 	if err != nil {
-		return "", fmt.Errorf("command %q: %w", word, err)
+		return "", fmt.Errorf("command %q: %w", identity, err)
 	}
 	return bin, nil
 }
@@ -404,7 +415,7 @@ func resolveCommandPluginBinary(ctx context.Context, word string) (string, error
 // from source — a baked hit answers the deployed-container case the shortcut exists for even when
 // a project on disk cannot be loaded (a project pinning a schema this binary predates, a missing
 // ref), and taking the command away there would be a regression, not a diagnostic.
-func projectCommandPluginCandy(word string) (string, spec.CandyReader, error) {
+func projectCommandPluginCandy(word, parent string) (string, spec.CandyReader, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", nil, fmt.Errorf("resolve cwd: %w", err)
@@ -420,19 +431,19 @@ func projectCommandPluginCandy(word string) (string, spec.CandyReader, error) {
 	if candyMap == nil {
 		return "", nil, fmt.Errorf("scan candies: no candy map for %s", dir)
 	}
-	name, candy := findCommandPluginCandy(candyMap, word)
+	name, candy := findCommandPluginCandy(candyMap, word, parent)
 	return name, candy, nil
 }
 
 // findCommandPluginCandy returns the scanned-set key + candy of the plugin candy whose
-// declaration provides command:<word>, or ("", nil) if none does.
-func findCommandPluginCandy(candies map[string]spec.CandyReader, word string) (string, spec.CandyReader) {
+// declaration provides the command identity (word + parent), or ("", nil) if none does.
+func findCommandPluginCandy(candies map[string]spec.CandyReader, word, parent string) (string, spec.CandyReader) {
 	for name, candy := range candies {
 		if candy == nil || !candy.IsPluginCandy() {
 			continue
 		}
 		for _, capability := range candy.GetPluginProviders() {
-			if class, w, ok := splitCapability(capability); ok && class == ClassCommand && w == word {
+			if class, w, p, ok := splitCapability(capability); ok && class == ClassCommand && w == word && p == parent {
 				return name, candy
 			}
 		}
