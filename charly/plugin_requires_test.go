@@ -82,6 +82,29 @@ func TestRegisterPluginUnitRequires_CycleRejected(t *testing.T) {
 	}
 }
 
+// A requirement naming a NESTED command carries its parent, so the gate resolves the
+// full identity `<class>:<word>:<parent>` (the C0 key grammar) — a top-level same-word
+// twin must NOT satisfy it.
+func TestRegisterPluginUnitRequires_NestedIdentityResolvesParent(t *testing.T) {
+	// Register a TOP-LEVEL zzreqnested — it must NOT satisfy a nested requirement.
+	if err := providerRegistry.register(zzReqProv{ClassCommand, "zzreqnested"}, "test"); err != nil {
+		t.Fatalf("register top-level: %v", err)
+	}
+	unit := &PluginUnit{
+		Providers: []Provider{zzReqProv{ClassCommand, "zzreqnestedconsumer"}},
+		Requires:  []Requirement{{Class: string(ClassCommand), Word: "zzreqnested", CommandParent: "zzreqbox"}},
+	}
+	// The nested identity (command:zzreqnested:zzreqbox) is NOT registered → a non-optional
+	// miss, proving the gate looked up the PARENTED key, not the bare word.
+	err := registerPluginUnitRequires("zzreqnestedconsumer", unit)
+	if err == nil {
+		t.Fatal("a nested requirement must not be satisfied by the top-level same-word twin")
+	}
+	if !strings.Contains(err.Error(), "command:zzreqnested:zzreqbox") {
+		t.Fatalf("the error must name the nested IDENTITY, got %q", err.Error())
+	}
+}
+
 // liftRequirements rejects a malformed requirement (unknown class / empty word) with
 // the SAME closed class vocabulary the capability lift uses.
 func TestLiftRequirements_RejectsMalformed(t *testing.T) {
