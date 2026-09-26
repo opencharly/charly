@@ -1085,9 +1085,9 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 			// resolve to its provider without the auto-inject. Inject the canonical ref via
 			// ExtraCandyRefs UNCONDITIONALLY (both contexts). In a check bed CHARLY_REPO_OVERRIDE
 			// redirects the ref to the local superproject under development. The SAME
-			// host-side-plugin pattern as vmPluginCandyRef (verb:libvirt), generalized to every
-			// external substrate (R3).
-			if ref, ok := externalDeploySubstratePluginRef(n.Target); ok {
+			// host-side-plugin pattern as the verb:libvirt case, generalized to every external
+			// substrate — the ONE class-agnostic provider-ref lookup (R3).
+			if ref := canonicalProviderRef(ClassDeployTarget, n.Target, "", ""); ref != "" {
 				addCandy = append(addCandy, ref)
 			}
 		}
