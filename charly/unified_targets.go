@@ -521,8 +521,8 @@ func ResolveTarget(node *spec.DeployNode, name string) (spec.UnifiedDeployTarget
 // target words; neither is a typo.
 func unresolvedDeployTargetError(name, target string) error {
 	if resourceKindSet[target] || externalizedDeploySubstrates[target] {
-		ref, ok := externalDeploySubstratePluginRef(target)
-		if !ok || ref == "" {
+		ref := canonicalProviderRef(ClassDeployTarget, target, "", "")
+		if ref == "" {
 			// A known substrate word whose serving plugin is NOT in the generated corpus —
 			// e.g. the CUE vocabulary names it but no corpus plugin declares `deploy:<word>`.
 			// Say exactly that; never render an empty plugin name.

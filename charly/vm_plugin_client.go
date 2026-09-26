@@ -16,8 +16,9 @@ import (
 // rather than failing to compile (the plan's "core reaches the plugin through the registry"). The
 // FORMER preempt consumer (charly/preempt.go's holderStop/holderStart/vmIsRunning) moved into
 // candy/plugin-preempt (FLOOR-SLIM-proper Unit-8) — it now dispatches verb:libvirt directly via
-// sdk.Executor.InvokeProvider(ExtraRef: vmPluginCandyRef()), never through this core-only client
-// (connectPluginByWordRef + Operation are core-private, a kernel Mechanism a plugin cannot call).
+// sdk.Executor.InvokeProvider with the canonical ref from the generated index, never through this
+// core-only client (connectPluginByWordRef + Operation are core-private, a kernel Mechanism a
+// plugin cannot call).
 //
 // Cutover B unit 2 (R-E4): the wire shapes (spec.VmPluginEnv / spec.VmSnapInternalReq /
 // spec.VmDisplayEndpoint / spec.VmResolveResult) are now CUE-sourced (sdk/schema/vmclient.cue) —
@@ -36,22 +37,9 @@ func invokeVmPlugin(vmOp, vmName, uri string) (json.RawMessage, bool) {
 	return invokeVmPluginEnv(spec.VmPluginEnv{VmOp: vmOp, VmName: vmName, URI: uri})
 }
 
-// vmPluginCandyRef is the canonical @github ref to the external VM plugin candy, read from
-// the GENERATED provider-ref index (pluginProviderRefs — the verb:libvirt provider's own
-// declared `source:`), never a kernel literal (boundary-law clause D: the word->provider
-// fact lives in the plugin repo). Empty string when no plugin declares verb:libvirt — the
-// caller then degrades gracefully (ok=false), exactly as before.
-func vmPluginCandyRef() string {
-	ref, _ := pluginProviderRef("verb:libvirt")
-	if ref == "" {
-		return ""
-	}
-	return "@" + ref
-}
-
 // invokeVmPluginEnv is the full-env variant (lifecycle ops carry Force/DeleteDisk).
 func invokeVmPluginEnv(env spec.VmPluginEnv) (json.RawMessage, bool) {
-	prov, ok := connectPluginByWordRef(ClassVerb, "libvirt", vmPluginCandyRef())
+	prov, ok := connectPluginByWordRef(ClassVerb, "libvirt", "", canonicalProviderRef(ClassVerb, "libvirt", "", ""))
 	if !ok {
 		return nil, false
 	}

@@ -444,30 +444,32 @@ func TestInvokeProvider_LazyConnectFallback_DuringNestedKindConnectPass_NoDeadlo
 	}
 }
 
-// TestSubstrateFallbackRef — the S3b substrate-default regression test for the K-wave-2
-// pod-config connect gap: a deploy-class word naming a known externalized substrate with an
-// EMPTY caller extraRef defaults to the substrate's canonical plugin ref, so a candy-less
-// box/<distro> project reaches deploy:pod for `charly config` (Pass-1 is empty there — no local
-// candy/ dir — and without the default Pass-2 never fired). The caller's own ref wins when set;
-// unknown words and non-deploy classes keep "" — byte-identical S2/S3b behavior.
-func TestSubstrateFallbackRef(t *testing.T) {
+// TestCanonicalProviderRef — the class-agnostic word→ref lookup that replaced the former
+// class-special-cased substrateFallbackRef (plan §4: no special case for a substrate vs a verb).
+// A deploy:pod substrate AND a verb:libvirt verb both resolve from the SAME generated index; the
+// caller's own ref wins when set; an unknown identity keeps "" (nothing to connect). The
+// identity's PARENT is part of the key, so a nested command resolves its own candy, not a bare-word
+// twin.
+func TestCanonicalProviderRef(t *testing.T) {
 	for _, tt := range []struct {
-		name     string
-		class    ProviderClass
-		word     string
-		extraRef string
-		want     string
+		name      string
+		class     ProviderClass
+		word      string
+		parent    string
+		callerRef string
+		want      string
 	}{
-		{"pod substrate default", ClassDeployTarget, "pod", "", "@github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod"},
-		{"kubernetes substrate default", ClassDeployTarget, "kubernetes", "", "@github.com/opencharly/plugin-kube/candy/plugin-kube"},
-		{"vm substrate default", ClassDeployTarget, "vm", "", "@github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm"},
-		{"caller ref wins", ClassDeployTarget, "pod", "@example.org/candy/custom", "@example.org/candy/custom"},
-		{"unknown word no default", ClassDeployTarget, "builder-nope", "", ""},
-		{"non-deploy class no default", ClassVerb, "pod", "", ""},
+		{"pod substrate (deploy class)", ClassDeployTarget, "pod", "", "", "@github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod"},
+		{"kubernetes substrate (deploy class)", ClassDeployTarget, "kubernetes", "", "", "@github.com/opencharly/plugin-kube/candy/plugin-kube"},
+		{"vm substrate (deploy class)", ClassDeployTarget, "vm", "", "", "@github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm"},
+		{"libvirt verb (verb class — NOT a substrate)", ClassVerb, "libvirt", "", "", "@github.com/opencharly/plugin-vm/candy/plugin-vm"},
+		{"caller ref wins", ClassDeployTarget, "pod", "", "@example.org/candy/custom", "@example.org/candy/custom"},
+		{"unknown identity no default", ClassDeployTarget, "builder-nope", "", "", ""},
+		{"nested command identity resolves its own candy", ClassCommand, "list", "box", "", "@github.com/opencharly/plugin-box/candy/plugin-box"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := substrateFallbackRef(tt.class, tt.word, tt.extraRef); got != tt.want {
-				t.Fatalf("substrateFallbackRef(%s, %q, %q) = %q, want %q", tt.class, tt.word, tt.extraRef, got, tt.want)
+			if got := canonicalProviderRef(tt.class, tt.word, tt.parent, tt.callerRef); got != tt.want {
+				t.Fatalf("canonicalProviderRef(%s, %q, %q, %q) = %q, want %q", tt.class, tt.word, tt.parent, tt.callerRef, got, tt.want)
 			}
 		})
 	}

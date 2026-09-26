@@ -16,7 +16,8 @@ import (
 // (pluginProviderRefs, emitted by pluginsgen into plugins_refs_generated.go). A hand-written
 // per-word/per-kind map or a candy-ref string literal in production code is BY DEFINITION an
 // R-item that leaked — the exact crutch this cutover removed (the former
-// externalDeploySubstratePlugins map + vmPluginCandyRef literal).
+// externalDeploySubstratePlugins kernel map + the single-verb vmPluginCandyRef helper, both
+// deleted).
 //
 // The gate flags two shapes in production (.go, non-_test) source:
 //
