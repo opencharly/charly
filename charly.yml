@@ -3822,3 +3822,57 @@ check-kindcluster-nerdctl:
                 kube_resource: namespaces
               stdout:
                 - contains: kube-system
+
+# =============================================================================
+# check-kindcluster-lock — R10 regression witness for the charly#680 LEDGER-LOCK
+# deadlock, exercising the PRODUCTION propagation path (withLedgerLockHeld threaded
+# into deploykit.TearDownMembers) end to end.
+#
+# Shape: an external-in-place kindcluster ROOT with a deploy-level kindcluster
+# MEMBER. No image anywhere — kindcluster is external-in-place (venue "none"), so
+# the member needs NO image build. On teardown the check runner runs
+# `deploy del <root>`; the ROOT holds the ledger transaction lock and its
+# TearDownMembers forks a peer `deploy del <root>.<member>`. That forked child is
+# the exact pre-#680 deadlock site (it re-acquired the lock its own ancestor held).
+# A PASS — teardown completing instead of stalling 30 min on `.ledger.lock` —
+# proves the propagation half of the fix. disposable: true authorizes destroy+rebuild.
+# =============================================================================
+check-kindcluster-lock-member-cluster:
+    kindcluster:
+        box: ""
+        engine: podman
+        node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+        nodes:
+            - role: control-plane
+check-kindcluster-lock-cluster:
+    kindcluster:
+        box: ""
+        engine: podman
+        node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+        nodes:
+            - role: control-plane
+check-kindcluster-lock:
+    kindcluster:
+        from: check-kindcluster-lock-cluster
+        disposable: true
+        lifecycle: dev
+        add_candy:
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.269.0814'
+        description: >-
+            R10 regression for charly#680: a disposable kindcluster ROOT (external-in-place)
+            with a deploy-level kindcluster MEMBER. Teardown runs the root's `deploy del`,
+            which holds the ledger lock and forks the member's `deploy del` — the pre-#680
+            deadlock site. A completing teardown proves the lock-inheritance fix on the
+            production propagation path.
+        plan:
+            - check: the kindcluster-lock cluster exists on the podman engine
+              id: kl-cluster-exists
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster-lock"
+              command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters'
+    check-kindcluster-lock-member:
+        kindcluster:
+            from: check-kindcluster-lock-member-cluster
