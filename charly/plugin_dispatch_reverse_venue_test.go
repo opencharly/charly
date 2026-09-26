@@ -360,6 +360,28 @@ func TestInvokeProvider_LazyConnectFallback(t *testing.T) {
 	}
 }
 
+// TestInvokeProvider_UnregisteredNestedCommandNamesFullIdentity pins the diagnostic at
+// plugin_dispatch_reverse.go's miss branch: it must name the full identity ONCE
+// ("command:feature:box"), never a doubled class ("command:command:feature:box") — the
+// B18 defect found in review.
+func TestInvokeProvider_UnregisteredNestedCommandNamesFullIdentity(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
+	srv := &executorReverseServer{}
+	_, err := srv.InvokeProvider(context.Background(), &pb.InvokeProviderRequest{
+		Class: "command", Reserved: "zzabsentword", CommandParent: "box", Op: ops.OpRun,
+	})
+	if err == nil {
+		t.Fatal("an unregistered nested command must error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "command:zzabsentword:box") {
+		t.Fatalf("diagnostic must name the full identity, got: %s", msg)
+	}
+	if strings.Contains(msg, "command:command:") {
+		t.Fatalf("diagnostic must not double the class, got: %s", msg)
+	}
+}
+
 // --- S2 Fixture 2: the Spike-2 concern — does the fallback deadlock (or corrupt
 // inKindConnectPassFlag) when InvokeProvider is itself called WHILE the loader is already mid a
 // connectDeclaredKindPlugins nested-load pass? connectDeclaredKindPlugins' OWN top-of-function

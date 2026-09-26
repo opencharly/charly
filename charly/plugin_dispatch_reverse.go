@@ -114,7 +114,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 		prov, ok = connectPluginByWordRef(class, word, substrateFallbackRef(class, word, req.GetExtraRef()))
 	}
 	if !ok {
-		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s:%s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", class, providerKey(class, word, parent))
+		return nil, fmt.Errorf("InvokeProvider: no provider registered for %s (the target plugin must be loaded before a peer invokes it, and no connectable candy source provides it)", providerKey(class, word, parent))
 	}
 	// Fail fast on a hung PLUGIN→PLUGIN call, mirroring the host→plugin guard in
 	// invokeTyped: the broker context a plugin passes back to the host carries no

@@ -70,9 +70,14 @@ func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 // checkDeployProviderBijection (which validated against the closed spec.ResourceKinds
 // vocabulary) is GONE.
 //
-// The word set is exactly the corpus's: a deploy word appears here because a plugin in the
-// org corpus declares it, so `kubevirt` (served by candy/plugin-kubevirt, whose repo joins the
-// corpus as it lands) is not asserted until that repo is in `charly/plugin_corpus.txt`.
+// `kubevirt` is deliberately NOT in the asserted set. It remains a CUE resource kind (so
+// unresolvedDeployTargetError still classifies it as a KNOWN substrate via resourceKindSet),
+// but no plugin in `charly/plugin_corpus.txt` declares `deploy:kubevirt`: the server,
+// github.com/opencharly/plugin-kubevirt, is owned by the KubeVirt venue leg (a separate
+// in-flight session) and cannot join the corpus yet because it ALSO declares `kind:kubevirt`,
+// which the compiled-in candy/plugin-substrate declares too — a duplicate the generator
+// rejects ("a word has one canonical provider"). When that leg lands plugin-kubevirt into the
+// corpus and retires the overlap, `deploy:kubevirt` returns to this set with no charly change.
 func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 
@@ -87,6 +92,17 @@ func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 		if _, ok := providerRegistry.resolve(ClassDeployTarget, w); ok {
 			t.Fatalf("%s must NOT have an in-proc DeployTargetProvider — it is externalized", w)
 		}
+	}
+
+	// `kubevirt` is a CUE resource kind but is NOT in the index-derived set (its server,
+	// plugin-kubevirt, is not in the corpus yet — see the KubeVirt venue leg above). This pins
+	// that the set is a projection of the index, not of spec.ResourceKinds: a ResourceKind with
+	// no corpus plugin is absent here while still being a KNOWN word to the diagnostics.
+	if externalizedDeploySubstrates["kubevirt"] {
+		t.Fatalf("kubevirt must NOT be in the index-derived deploy set while plugin-kubevirt is absent from the corpus")
+	}
+	if !resourceKindSet["kubevirt"] {
+		t.Fatalf("kubevirt must remain a CUE resource kind (it is a known substrate word)")
 	}
 
 	// The set is OPEN: a plugin-declared word outside spec.ResourceKinds is a deploy substrate

@@ -521,7 +521,15 @@ func ResolveTarget(node *spec.DeployNode, name string) (spec.UnifiedDeployTarget
 // target words; neither is a typo.
 func unresolvedDeployTargetError(name, target string) error {
 	if resourceKindSet[target] || externalizedDeploySubstrates[target] {
-		ref, _ := externalDeploySubstratePluginRef(target)
+		ref, ok := externalDeploySubstratePluginRef(target)
+		if !ok || ref == "" {
+			// A known substrate word whose serving plugin is NOT in the generated corpus —
+			// e.g. the CUE vocabulary names it but no corpus plugin declares `deploy:<word>`.
+			// Say exactly that; never render an empty plugin name.
+			return fmt.Errorf("deployment %q: target %q is a known substrate but no plugin in "+
+				"the generated corpus serves deploy:%s (add the plugin repo to the corpus, or "+
+				"check the plugin's manifest)", name, target, target)
+		}
 		return fmt.Errorf("deployment %q: target %q is a known substrate but its deploy provider "+
 			"is not connected (the %s plugin candy is not compiled-in or failed to load)",
 			name, target, ref)
