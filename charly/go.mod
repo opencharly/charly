@@ -26,7 +26,7 @@ require (
 	github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026237.1418
 	github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419
 	github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026266.2321
-	github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026250.951
+	github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026269.4
 	github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026237.1419
 	github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap v0.2026237.1419
 	github.com/opencharly/plugin-example-command/candy/plugin-example-command v0.2026237.1420
@@ -62,7 +62,7 @@ require (
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026237.1428
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026237.1428
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026250.552
-	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026268.2319
+	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026269.14
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026237.1429
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026237.1429
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026237.1430
