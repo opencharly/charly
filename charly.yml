@@ -4012,6 +4012,7 @@ check-pkg-uninstall:
               command:
                 in_container: false
                 command: |
+                    set -euo pipefail
                     OUT=/tmp/opencode/pr667-guest-evidence.txt
                     # Single-quoted remote scripts: the remote bash does the glob + reads.
                     # NOTE: no dollar-brace form anywhere (the check-var expander SKIPs the
