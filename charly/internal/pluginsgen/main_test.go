@@ -6,15 +6,15 @@ import (
 	"testing"
 )
 
-// TestPluginsGenReproducible is the drift gate for the committed compiled-in plugin
-// wiring: it regenerates plugins_generated.go + go.work from charly.yml's
-// `compiled_plugins:` and asserts the committed files match byte-for-byte. It fails if
-// someone hand-edits a generated file, or changes compiled_plugins without re-running
-// `scripts/bootstrap-charly.sh` (which runs pluginsgen). Mirrors spec.TestGenReproducible for
-// the CUE-gen path.
+// TestPluginsGenReproducible is the drift gate for the committed generated plugin files: it
+// regenerates plugins_generated.go + go.work + plugins_refs_generated.go from charly.yml's
+// `compiled_plugins:` plus the org-wide corpus (charly/plugin_corpus.txt) and asserts the
+// committed files match byte-for-byte. It fails if someone hand-edits a generated file, or
+// changes compiled_plugins / the corpus without re-running `scripts/bootstrap-charly.sh`
+// (which runs pluginsgen). Mirrors spec.TestGenReproducible for the CUE-gen path.
 func TestPluginsGenReproducible(t *testing.T) {
 	root := filepath.Join("..", "..", "..") // charly/internal/pluginsgen -> repo root
-	genGo, genWork, _, err := generate(root, filepath.Join("charly", "charly.yml"), filepath.Join("charly", "plugin_corpus.txt"))
+	genGo, genWork, genRefs, err := generate(root, filepath.Join("charly", "charly.yml"), filepath.Join("charly", "plugin_corpus.txt"))
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
@@ -24,6 +24,7 @@ func TestPluginsGenReproducible(t *testing.T) {
 	}{
 		{filepath.Join("charly", "plugins_generated.go"), genGo},
 		{"go.work", genWork},
+		{filepath.Join("charly", "plugins_refs_generated.go"), genRefs},
 	} {
 		committed, err := os.ReadFile(filepath.Join(root, tc.rel))
 		if err != nil {
