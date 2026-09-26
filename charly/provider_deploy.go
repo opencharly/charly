@@ -42,26 +42,6 @@ func deploySubstrateWords() map[string]bool {
 	return out
 }
 
-// externalDeploySubstratePluginRef returns the canonical @github ref to the candy serving an
-// externalized deploy SUBSTRATE word, read from the GENERATED provider-ref index
-// (pluginProviderRefs — a projection of each plugin repo's own `plugin:` block, see
-// pluginsgen). There is NO kernel map: the word->provider fact lives in the plugin repo,
-// so a new substrate costs a plugin manifest entry, never a charly code change
-// (boundary-law clause D). A box/<distro> SUBMODULE's beds reference the substrate plugin
-// nowhere in their own candy closure — a main-repo project discovers it from candy/
-// directly (its `discover:` scans candy/*), but a submodule scans only its own + imported
-// candies — so the deploy/check plugin-load paths auto-inject this ref (via ExtraCandyRefs)
-// ONLY in a submodule context, so the substrate word resolves to its out-of-process
-// provider. In a submodule bed CHARLY_REPO_OVERRIDE redirects it to the local superproject
-// under development.
-func externalDeploySubstratePluginRef(word string) (string, bool) {
-	ref, ok := pluginProviderRef("deploy:" + word)
-	if !ok {
-		return "", false
-	}
-	return "@" + ref, true
-}
-
 // pluginProviderRef returns the canonical candy ref for a capability identity
 // "<class>:<word>[:<parent>]", read from the GENERATED provider-ref index. THE one place a
 // word resolves to a plugin ref (boundary-law clause D: kind-recognition Data consulted by
