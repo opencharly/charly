@@ -3051,7 +3051,7 @@ check-agentteams-vm:
 # The base is a raw registry ref rather than a distro box on purpose: the fixture
 # must be a LEAF image with nothing built FROM it, because `podman rmi` refuses an
 # image another image depends on and retention swallows that refusal silently
-# (observed on fedora-nonfree:check-docs-2026.227.1835 — selected by retention,
+# (historically observed on a now-relocated bed's image — selected by retention,
 # refused by the engine, absent from the removed list, still in the store).
 # =============================================================================
 check-retention-app:
