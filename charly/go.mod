@@ -62,12 +62,12 @@ require (
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026237.1428
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026237.1428
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026250.552
-	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026269.14
+	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026269.1716
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026237.1429
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026237.1429
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026237.1430
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026242.2148
-	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026266.1235
+	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026269.2256
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.61.0
 	gopkg.in/yaml.v3 v3.0.1
