@@ -38,7 +38,7 @@ import (
 // is restated on the parsed node too: NO genericNode reconstruction exists anywhere in the
 // dispatch.
 func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
-	// C2-substrate: a substrate structural kind (pod/vm/kubernetes/local/android) is decoded
+	// C2-substrate: a substrate structural kind (pod/vm/kubernetes/local/android/kindcluster/kubevirt) is decoded
 	// HOST-SIDE (its rich core-referencing value cannot ride op.Params nor a self-contained
 	// plugin schema — see foldSubstrateKind) and folds into acc.Deploy (deploy) or the typed
 	// template map (template). It does NOT use the op.Params + plugin-schema validation the
@@ -204,7 +204,7 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 // = *#Candy | #Image); keep the #<Kind>Value defs in lockstep with isStandaloneResourceKind
 // + the foldSubstrateKind/foldCandyKind branches.
 
-// foldSubstrateKind decodes a SUBSTRATE structural kind node (pod/vm/kubernetes/local/android)
+// foldSubstrateKind decodes a SUBSTRATE structural kind node (pod/vm/kubernetes/local/android/kindcluster/kubevirt)
 // HOST-SIDE and folds candy/plugin-substrate's echo into the right map (C2-substrate). The
 // value is rich + core-referencing (#Vm/#Deploy/#LibvirtDomain/… with host-canonicalized
 // shorthand like tunnel:/port:), so — unlike group's scalar #GroupInput value — it cannot be

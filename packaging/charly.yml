@@ -180,6 +180,11 @@ charly:
                         - cni-plugins
                         - rootlesskit
                         - buildkit
+                        # the kind (Kubernetes-in-Docker) local-cluster tool (Arch
+                        # extra) + the containerd runtime its rootless-nerdctl provider
+                        # needs (kind-integration: the `kindcluster` deploy substrate).
+                        - kind
+                        - containerd
                         - libisoburn
                         - cdrtools
                         - edk2-ovmf
@@ -204,6 +209,7 @@ charly:
                         gvisor-tap-vsock: podman-machine networking — provides /usr/lib/podman/gvproxy (AUR)
                         nvidia-utils: nvidia-smi GPU detection + nvidia-ctk CDI generation (GPU targets only)
                         kubectl: Kubernetes deploys + charly eval k8s probes (kind:k8s targets only)
+                        kind: local Kubernetes-in-Docker clusters — the `kindcluster` deploy substrate (docker/podman/nerdctl engines)
                         android-tools: "host adb for the remote `target: android` package-download install path"
                         libsecret: secret-tool CLI + pinentry-qt Secret Service passphrase auto-retrieval; the bundled plugin-secrets credential store uses the pure-Go go-keyring D-Bus client
                         dmidecode: SMBIOS inspection inside guests when debugging VM key-injection
@@ -252,6 +258,7 @@ charly:
                         - gvisor-tap-vsock
                         - xorg-x11-drv-nvidia-cuda
                         - kubernetes-client
+                        - kind
                         - tesseract
                         - tesseract-langpack-eng
                 deb:
@@ -296,6 +303,7 @@ charly:
                         - gvisor-tap-vsock
                         - nvidia-driver
                         - kubectl
+                        - kind
                         - tesseract-ocr
                         - tesseract-ocr-eng
                 apk:
@@ -339,6 +347,7 @@ charly:
                         - cargo
                     suggests:
                         - tailscale
+                        - kind
                         - tesseract-ocr
                         - tesseract-ocr-data-eng
                 ipk:

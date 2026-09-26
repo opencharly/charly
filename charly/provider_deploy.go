@@ -16,23 +16,24 @@ import (
 // sdk.Executor.InvokeProvider — never a direct call from core.
 //
 // It is OPEN by construction: the deploy provider set is whatever plugins declare. A
-// canonical substrate (deploy:pod/vm/kubernetes/local/android), a plugin-only example
-// target (deploy:exampledeploy), and a third party's own word (declared by its project)
-// are all the same kind of fact — a plugin serves the word. This is why the former
-// `checkDeployProviderBijection` is gone: there is no closed deploy vocabulary to check a
-// plugin-declared word against, so a plugin can add a deploy target with ZERO core edits.
+// canonical substrate (deploy:pod/vm/kubernetes/kubevirt/kindcluster/local/android), a
+// plugin-only example target (deploy:exampledeploy), and a third party's own word
+// (declared by its project) are all the same kind of fact — a plugin serves the word.
+// This is why the former `checkDeployProviderBijection` is gone: there is no closed deploy
+// vocabulary to check a plugin-declared word against, so a plugin can add a deploy target
+// with ZERO core edits.
 //
 // Per-substrate behaviour is DECLARED, never a branch here: each plugin reports its own
 // #DeployTraits (P9), so deployTraitsFor reads the traits off the resolved provider; a
 // substrate's preresolve/lifecycle legs are its own provider's InvokeProvider ops
-// (candy/plugin-adb + candy/plugin-kube register preresolve; candy/plugin-deploy-vm and
-// candy/plugin-deploy-pod own lifecycles) — reached the SAME generic way as every other
+// (candy/plugin-adb + candy/plugin-kube/kubevirt register preresolve; candy/plugin-deploy-vm
+// and candy/plugin-deploy-pod own lifecycles) — reached the SAME generic way as every other
 // substrate, with no separate core-side registry.
 var externalizedDeploySubstrates = deploySubstrateWords()
 
 // deploySubstrateWords projects the generated provider-ref index onto the deploy class —
-// the DEPLOY subset of "which plugin serves which word". setFromSlice-style mutable map
-// (the reserved_registry test's delete/restore probe still works).
+// the DEPLOY subset of "which plugin serves which word". A mutable map (the
+// reserved_registry test's delete/restore probe still works).
 func deploySubstrateWords() map[string]bool {
 	out := map[string]bool{}
 	for key := range pluginProviderRefs {

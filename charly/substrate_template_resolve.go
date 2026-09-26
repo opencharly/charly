@@ -79,7 +79,7 @@ func resolveAndroidViaPlugin(body json.RawMessage) (*spec.ResolvedAndroid, error
 }
 
 func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([]byte, error) {
-	// The substrate provider serves all 5 words; any resolves the template legs.
+	// The substrate provider serves every substrate word; any resolves the template legs.
 	prov, ok := providerRegistry.ResolveKind("local")
 	if !ok {
 		return nil, fmt.Errorf("substrate template resolve: kind provider not registered")
