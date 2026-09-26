@@ -11,9 +11,9 @@ require (
 	github.com/opencharly/plugin-agent/candy/plugin-agent v0.2026237.1413
 	github.com/opencharly/plugin-agentteams/candy/plugin-agentteams v0.2026237.1414
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414
-	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026237.1414
-	github.com/opencharly/plugin-box/candy/plugin-box v0.2026266.1110
-	github.com/opencharly/plugin-build/candy/plugin-build v0.2026266.1755
+	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026269.652
+	github.com/opencharly/plugin-box/candy/plugin-box v0.2026269.645
+	github.com/opencharly/plugin-build/candy/plugin-build v0.2026269.606
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026266.1435
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416

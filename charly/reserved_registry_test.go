@@ -59,24 +59,28 @@ func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 
 // TestReservedWordRegistry_DeploySubstrates proves the F1 substrate-kind-plugin dispatch
 // seam under the OPEN deploy-provider model: the deploy provider set is the generated
-// provider-ref index (every deploy word a plugin declares), NOT a closed vocabulary and NOT
-// an in-proc provider. The canonical substrates (android, kindcluster, kubernetes, kubevirt,
-// local, pod, vm) are served out-of-process by candy/plugin-adb / candy/plugin-kube /
-// candy/plugin-kubevirt / candy/plugin-deploy-local / candy/plugin-deploy-pod /
-// candy/plugin-deploy-vm, whose providers register at plugin-load time; a plugin-ONLY word
+// provider-ref index (every deploy word a plugin in the corpus declares), NOT a closed
+// vocabulary and NOT an in-proc provider. The canonical substrates present in the corpus
+// (android, kindcluster, kubernetes, local, pod, vm) are served out-of-process by
+// candy/plugin-adb / candy/plugin-kube / candy/plugin-deploy-local / candy/plugin-deploy-pod
+// / candy/plugin-deploy-vm, whose providers register at plugin-load time; a plugin-ONLY word
 // (exampledeploy / examplelifecycle, declared by the example plugins and NOT in
 // spec.ResourceKinds) is a first-class deploy substrate too — that is what "anyone can create
 // any kind of plugin with zero core changes" means, and why the former
 // checkDeployProviderBijection (which validated against the closed spec.ResourceKinds
 // vocabulary) is GONE.
+//
+// The word set is exactly the corpus's: a deploy word appears here because a plugin in the
+// org corpus declares it, so `kubevirt` (served by candy/plugin-kubevirt, whose repo joins the
+// corpus as it lands) is not asserted until that repo is in `charly/plugin_corpus.txt`.
 func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 
-	// Every canonical substrate is externalized: recognized as a deploy substrate AND
+	// Every canonical corpus substrate is externalized: recognized as a deploy substrate AND
 	// INTENTIONALLY without an in-proc DeployTargetProvider. pluginDeployTarget (S3b) reads
 	// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider — there is no separate
 	// per-substrate lifecycle registry left to assert against.
-	for _, w := range []string{"android", "kindcluster", "kubernetes", "kubevirt", "local", "pod", "vm"} {
+	for _, w := range []string{"android", "kindcluster", "kubernetes", "local", "pod", "vm"} {
 		if !externalizedDeploySubstrates[w] {
 			t.Fatalf("%s must be in externalizedDeploySubstrates (the generated deploy-provider set)", w)
 		}
