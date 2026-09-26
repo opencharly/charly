@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/opencharly/spec/spec"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/spec"
 )
 
 // zzReqProv is a minimal in-proc provider that satisfies the registry (a distinct
@@ -16,8 +16,8 @@ type zzReqProv struct {
 	word  string
 }
 
-func (p zzReqProv) Reserved() string                                   { return p.word }
-func (p zzReqProv) Class() ProviderClass                               { return p.class }
+func (p zzReqProv) Reserved() string                                    { return p.word }
+func (p zzReqProv) Class() ProviderClass                                { return p.class }
 func (p zzReqProv) Invoke(context.Context, *Operation) (*Result, error) { return &Result{}, nil }
 
 // reqCap renders a peer identity "<class>:<word>[:<parent>]" for a requirement fixture.
@@ -133,3 +133,81 @@ func TestLiftRequirements_RejectsMalformed(t *testing.T) {
 	}
 }
 
+// The AUTHORED manifest declaration (`plugin.requires:`, read from the resolved view) is
+// THE declared-dependency source for a scanned candy. These fixtures carry NO wire
+// requires, so only a manifest read (candy.GetPluginRequires) can make them pass/fail —
+// they fail if gateCandyRequires stops reading the manifest.
+
+// requirementRef renders an authored `source:` (a bare #GithubRef) as the `@`-prefixed
+// remote ref the ref resolver requires: CanonicalRef treats a non-`@` ref as a LOCAL path,
+// so a raw source never resolves. The live A6 run surfaced exactly this.
+func TestRequirementRef(t *testing.T) {
+	if got := requirementRef(""); got != "" {
+		t.Fatalf("an empty source must stay empty (fall through to the generated index), got %q", got)
+	}
+	const bare = "github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch"
+	if got := requirementRef(bare); got != "@"+bare {
+		t.Fatalf("a bare source must be @-prefixed, got %q", got)
+	}
+}
+
+func TestGateCandyRequires_RegisteredPeerResolves(t *testing.T) {
+	if err := providerRegistry.register(zzReqProv{ClassVerb, "zzgm-present"}, "test"); err != nil {
+		t.Fatalf("register peer: %v", err)
+	}
+	candy := testCandy("zzgm-consumer", spec.CandyModel{}, spec.CandyView{
+		IsPlugin:        true,
+		PluginSource:    "github.com/opencharly/zzgm-consumer",
+		PluginProviders: []string{"verb:zzgm-consumer"},
+		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzgm-present")}},
+	})
+	if err := gateCandyRequires("zzgm-consumer", candy); err != nil {
+		t.Fatalf("a manifest requirement on a registered peer must resolve, got %v", err)
+	}
+}
+
+func TestGateCandyRequires_MissingPeerFailsLoud(t *testing.T) {
+	candy := testCandy("zzgm-miss", spec.CandyModel{}, spec.CandyView{
+		IsPlugin:        true,
+		PluginSource:    "github.com/opencharly/zzgm-miss",
+		PluginProviders: []string{"verb:zzgm-miss"},
+		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzgm-absent")}},
+	})
+	err := gateCandyRequires("zzgm-miss", candy)
+	if err == nil || !strings.Contains(err.Error(), "zzgm-absent") {
+		t.Fatalf("a manifest requirement on a missing peer must fail loud, got %v", err)
+	}
+}
+
+func TestGateCandyRequires_NoManifestRequiresNoOp(t *testing.T) {
+	candy := testCandy("zzgm-none", spec.CandyModel{}, spec.CandyView{
+		IsPlugin:        true,
+		PluginSource:    "github.com/opencharly/zzgm-none",
+		PluginProviders: []string{"verb:zzgm-none"},
+	})
+	if err := gateCandyRequires("zzgm-none", candy); err != nil {
+		t.Fatalf("a candy declaring no manifest requires must be a no-op, got %v", err)
+	}
+}
+
+// The compiled-in placement: a candy whose providers are already registered as builtin (the
+// `compiled_plugins:` selection) is served in-proc, but its AUTHORED manifest declaration is
+// STILL gated in loadProjectPlugins — where the scanned candy is in scope — so a compiled-in
+// plugin's declared peer is resolved exactly as an external one's.
+func TestLoadProjectPlugins_CompiledInCandyManifestGated(t *testing.T) {
+	if err := providerRegistry.register(zzReqProv{ClassVerb, "zzgmcompiledin"}, originBuiltin); err != nil {
+		t.Fatalf("register builtin provider: %v", err)
+	}
+	candy := testCandy("zzgmcompiledin-candy", spec.CandyModel{}, spec.CandyView{
+		IsPlugin:        true,
+		PluginSource:    "github.com/opencharly/zzgmcompiledin",
+		PluginProviders: []string{"verb:zzgmcompiledin"},
+		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzgmcompiledin-missing")}},
+	})
+	candies := map[string]spec.CandyReader{"zzgmcompiledin-candy": candy}
+	refs := map[string]struct{}{"zzgmcompiledin": {}}
+	err := loadProjectPlugins(context.Background(), candies, refs)
+	if err == nil || !strings.Contains(err.Error(), "zzgmcompiledin-missing") {
+		t.Fatalf("a compiled-in candy's manifest requires must be gated by loadProjectPlugins, got %v", err)
+	}
+}

@@ -376,6 +376,11 @@ charly-dev:
             - '@github.com/opencharly/plugin-example-step/candy/plugin-example-step:v2026.237.1421'
             - '@github.com/opencharly/plugin-example-stepkind/candy/plugin-example-stepkind:v2026.237.1421'
             - '@github.com/opencharly/plugin-example-structkind/candy/plugin-example-structkind:v2026.249.2023'
+            # The declared-requires witness (A6): its manifest declares TWO peers
+            # (verb:externalprobe compiled-in; verb:exampledispatchpeer out-of-process)
+            # and its examplerequire verb peer-invokes both. Pinned so the check bed's
+            # load drives the requires gate at pass-1.
+            - '@github.com/opencharly/plugin-example-require/candy/plugin-example-require:v2026.269.1910'
         distro:
             debian:
                 # tailscale is a mandatory charly dep but is NOT in Debian main, so the
@@ -3590,6 +3595,52 @@ check-task:
           task: check-task-smoke
         context:
           - runtime
+
+# =============================================================================
+# check-plugin-requires-local — the R10 witness of the DECLARED inter-plugin
+# dependency gate (`plugin.requires:`). The fixture candy/plugin-example-require
+# declares TWO peers in its candy manifest — verb:externalprobe (compiled into
+# charly: the resolve branch) and verb:exampledispatchpeer (served out-of-process
+# by candy/plugin-example-dispatch: the on-demand connect branch) — and its
+# examplerequire verb peer-invokes both over the host broker. NO plan references
+# exampledispatchpeer: the gate connects it at LOAD from the authored declaration
+# alone (the manifest is THE source; there is no sdk.NewMetaWithRequires call and
+# no charly-core change per new plugin). disposable: true authorizes destroy+rebuild.
+# =============================================================================
+check-plugin-requires-app:
+    local:
+        description: |-
+            Minimal kind:local TEMPLATE for the check-plugin-requires-local bed — a
+            BARE `local:` node declaring no candy (the bed exercises the requires
+            gate, not a layer).
+        candy: []
+check-plugin-requires-local:
+    local:
+        from: check-plugin-requires-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole R10 witness of the DECLARED inter-plugin dependency gate (plugin.requires). The
+            fixture candy/plugin-example-require declares TWO peers in its candy manifest —
+            verb:externalprobe (compiled into charly: the resolve branch) and
+            verb:exampledispatchpeer (served out-of-process by candy/plugin-example-dispatch: the
+            on-demand connect branch) — and its examplerequire verb peer-invokes both over the host
+            broker. NO plan references verb:exampledispatchpeer: the gate connects it at LOAD from
+            the authored declaration alone (the manifest is THE source; no sdk.NewMetaWithRequires
+            call, no charly-core change per new plugin) — the run log's plugin-example-dispatch
+            served line is the retained evidence. The step proves the fixture's verb dispatches and
+            peer-invokes BOTH declared peers (a non-optional miss would have failed the bed's load
+            loud). disposable: true authorizes destroy+rebuild.
+        plan:
+            - check: the examplerequire verb dispatches and PEER-INVOKES both declared peers (verb:externalprobe, compiled in; verb:exampledispatchpeer, connected on demand from the authored declaration) over the host broker — the bed's own load resolved the declaration first (a non-optional miss would have failed it loud), and the run log's plugin-example-dispatch served line shows the gate connected the out-of-process peer although NO plan references its word
+              id: examplerequire-dispatches
+              examplerequire:
+                marker: plugin-requires-ok
+                builtin_peer: externalprobe
+                external_peer: exampledispatchpeer
+              context:
+                - runtime
 
 # =============================================================================
 # check-kindcluster — the R10 bed for the deploy:kindcluster substrate (the

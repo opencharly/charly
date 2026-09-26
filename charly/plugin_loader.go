@@ -875,7 +875,12 @@ func resolvePluginBinary(ctx context.Context, srcDir, name, repoPath string) (st
 // host-built), connect over LocalTransport, run the SAME schema gate a builtin runs, then
 // register its providers. The schema travels over the Describe channel (gRPC
 // schema_cue) — the host never reads the candy's schema/ dir.
-func loadPluginUnit(ctx context.Context, name string, source string, srcDir string) error {
+//
+// declaredRequires is the candy's AUTHORED `plugin.requires:` declaration
+// (candy.GetPluginRequires), read by loadProjectPlugins from the resolved view. It is THE
+// declaration for this placement and is gated BEFORE the providers are registered, so a
+// missing non-optional peer fails the load rather than surfacing at dispatch.
+func loadPluginUnit(ctx context.Context, name string, source string, srcDir string, declaredRequires []spec.PluginRequirement) error {
 	bin, overrideRoot, err := resolvePluginBinary(ctx, srcDir, name, pluginRepoPath(source))
 	if err != nil {
 		return fmt.Errorf("plugin %q (source %s): %w", name, source, err)
@@ -893,7 +898,7 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 		_ = closer.Close()
 		return err
 	}
-	if err := registerPluginUnitRequires(name, unit); err != nil {
+	if err := registerPluginRequires(name, unitProviderKeys(unit), declaredRequires); err != nil {
 		_ = closer.Close()
 		return err
 	}
@@ -1283,9 +1288,18 @@ func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader
 			return err
 		}
 		if connected {
+			// A candy whose providers are ALREADY registered — a compiled-in candy
+			// (origin builtin, registered at init) or a same-source re-load — still
+			// declares its peer dependencies in its AUTHORED manifest. Gate them here,
+			// where the scanned candy is in scope; the process-start builtin gate covers
+			// only the wire form (a source-less builtin), so the manifest is read for the
+			// compiled-in candy exactly as it is for the external one below.
+			if err := gateCandyRequires(name, candy); err != nil {
+				return err
+			}
 			continue
 		}
-		if err := loadPluginUnit(ctx, name, src, candy.GetSourceDir()); err != nil {
+		if err := loadPluginUnit(ctx, name, src, candy.GetSourceDir(), candy.GetPluginRequires()); err != nil {
 			return err
 		}
 	}
