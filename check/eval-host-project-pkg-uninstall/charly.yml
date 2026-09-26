@@ -1,0 +1,187 @@
+# Pruned GUEST PROJECT for the check-pkg-uninstall bed (eval-host-vm).
+#
+# The superproject `check-pkg-uninstall` bed (a top-level `vm: {from: eval-host-vm}`
+# deploy) delivers THIS file into the guest at /home/arch/eval-project and then runs
+# `charly --host charly-check-pkg-uninstall check run check-pkg-uninstall-inner`.
+# The GUEST's charly resolves THIS project via CHARLY_PROJECT_DIR (set in the
+# guest's /etc/environment by eval-host-vm) and runs the inner bed below against
+# its OWN `host: local` venue — so EVERY install/teardown side effect lands in the
+# disposable guest, never on the operator's workstation.
+#
+# WHY the inner bed has a ROOT + a deploy-level MEMBER:
+# RDD (proven live) — the bed runner classifies a top-level `local:` deploy as
+# HostRooted (substrateTraits["local"] = {Venue: "shell"} → ExternalInPlaceVenue is
+# FALSE), so its OWN cleanup arm is `charly remove --purge`, which does NOT replay
+# reverse ops. A deploy-level MEMBER is torn down by `deploykit.TearDownMembers`,
+# whose default arm IS `charly deploy del <root>.<member>` → handleDeployDel →
+# TeardownHostDeploy → RunReverseOps — i.e. the member's recorded package-remove
+# reverse op (rendered from the embedded pac `uninstall_template`) IS executed, on
+# whichever host runs the bed (here: the GUEST).
+#
+# The ROOT and the MEMBER compose DIFFERENT fixture candies ON PURPOSE: a candy's
+# ledger record is REFCOUNTED by DeployedBy, so two deploys of the SAME candy name
+# would leave the member's RemoveCandyDeployment with a non-zero refcount and skip
+# its reverse op entirely (the EXECUTE leg would silently not run). The member is
+# the pinned-charly fixture (its reverse op is the one under test); the root is a
+# benign distinct candy whose own reverse op is never asserted.
+#
+# The RENDER/INSTALL assertions live on the inner bed ROOT's OWN plan because a
+# deploy-level member's plan is NOT surfaced to a deploy-scope check runner. The
+# root plan reads the GLOBAL guest state (the per-bed ledger file + pacman's DB),
+# which includes the member's records.
+version: 2026.261.1747
+check-pkg-uninstall-root-candy:
+    candy:
+        version: 2026.268.1917
+        description: |-
+            Benign root fixture: installs an ordinary Arch package (ripgrep) so the inner
+            bed's ROOT has a deterministic, distinct deploy effect. Its candy name differs
+            from the member's fixture candy, so the member's candy record keeps a refcount
+            of exactly one and its package-remove reverse op IS replayed at teardown.
+        distro:
+            arch:
+                package:
+                    - ripgrep
+        plan:
+            - check: the benign root fixture package is present on the Arch deploy venue
+              id: pkg-uninstall-root-candy-ok
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: rg --version
+                in_container: false
+check-pkg-uninstall-fixture:
+    candy:
+        version: 2026.268.1917
+        description: |-
+            Fixture: installs an EXACT-VERSION-PINNED charly from the published charly-arch
+            repo via the `distro: arch. package:/repo:` path, so the deploy's teardown
+            renders the pac `uninstall_template` ({{pkgName .}}) and executes it.
+        distro:
+            arch:
+                package:
+                    - charly=2026.268.1917
+                repo:
+                    - name: charly
+                      server: "https://opencharly.github.io/charly-arch/amd64/"
+                      key: "https://opencharly.github.io/charly-arch/charly.gpg"
+        plan:
+            - check: the pinned charly package is present on the Arch deploy venue
+              id: pkg-uninstall-fixture-installed
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: pacman -Q charly
+                in_container: false
+check-pkg-uninstall-root-app:
+    local:
+        description: |-
+            Root template for the inner bed — a no-op-plus-benign-package local stack.
+        candy:
+            - check-pkg-uninstall-root-candy
+check-pkg-uninstall-fixture-app:
+    local:
+        description: |-
+            Minimal kind:local template composing check-pkg-uninstall-fixture (pins
+            charly=2026.268.1917 from the published charly-arch repo) so the deploy has a
+            deterministic package-remove deploy effect whose teardown executes the rendered
+            uninstall_template.
+        candy:
+            - check-pkg-uninstall-fixture
+check-pkg-uninstall-inner:
+    local:
+        from: check-pkg-uninstall-root-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Inner local bed, run INSIDE the disposable eval-host-vm guest by the guest's own
+            charly (`charly --host charly-check-pkg-uninstall check run check-pkg-uninstall-inner`).
+            The root composes a benign fixture; its deploy-level member
+            (check-pkg-uninstall-member) composes the EXACT-VERSION-PINNED charly fixture, so
+            `cleanup-members` replays the member's recorded package-remove reverse op via
+            `charly deploy del` ON THE GUEST — executing the rendered uninstall template inside
+            the disposable guest. The two checks below are the RENDER proof (the persisted member
+            `uninstall_cmd` is the BARE pacman command, NOT the version-pinned spec — this FAILS
+            on the pre-#667 template) and the INSTALL proof (`pacman -Q charly` reports the exact
+            pinned version).
+        install_opts:
+            allow_repo_changes: true
+        add_candy:
+            # The external deploy:local substrate provider (out-of-tree plugin) must be in the
+            # project closure for the guest's charly to apply a kind:local deploy; the guest
+            # builds it in-guest from the proxy-resolved sdk (mirrors check-local's add_candy).
+            - '@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local:v2026.241.1003'
+        plan:
+            - check: the recorded uninstall_cmd is the BARE package name (pkgName stripped the pin) — the production render path
+              id: pkg-uninstall-render-bare-name
+              description: >-
+                recordDeploy rendered the pac uninstall_template via
+                buildkit.RenderTemplate("pac-uninstall", fd.UninstallTemplate, ictx) with
+                TemplateFuncs' pkgName, so the persisted op's uninstall_cmd is
+                `pacman -Rs --noconfirm charly` — NOT `charly=2026.268.1917`. This fails on
+                the pre-#667 template, which rendered the pinned spec verbatim into the ledger.
+                Read from the per-bed isolated ledger (CHARLY_DEPLOY_CONFIG) on the GUEST; the
+                member's candy-remove op is what carries the charly uninstall command.
+              timeout: 10m
+              exit_status: 0
+              stdout:
+                - contains: PKG-UNINSTALL-RENDER-OK
+              context:
+                - runtime
+              command:
+                command: |
+                    set -euo pipefail
+                    # NOTE: no dollar-brace form anywhere in this file — the check-var
+                    # expander treats it as a check variable and SKIPs the step when
+                    # unresolved (the exact cause of a prior SKIP).
+                    LED="$CHARLY_DEPLOY_CONFIG"
+                    if [ -z "$LED" ] || [ ! -f "$LED" ]; then
+                      LED=$(ls -t /tmp/charly-bed-cfg-*/charly.yml 2>/dev/null | head -1 || true)
+                    fi
+                    echo "ledger: $LED"
+                    test -n "$LED" && test -f "$LED" || { echo "no per-bed ledger found on the guest" >&2; ls -la /tmp 2>/dev/null | grep charly-bed-cfg >&2 || true; exit 1; }
+                    echo "--- uninstall_cmd lines recorded ---"
+                    grep -n 'uninstall_cmd:' "$LED" >&2 || true
+                    if grep -q 'uninstall_cmd:.*charly=2026.268.1917' "$LED"; then
+                      echo "uninstall_cmd still carries the version pin" >&2
+                      exit 1
+                    fi
+                    cmd=$( { grep -m1 'uninstall_cmd:.*pacman -Rs --noconfirm charly' "$LED" \
+                             | sed -e 's/^[[:space:]]*uninstall_cmd:[[:space:]]*//'; } || true )
+                    echo "uninstall_cmd=[$cmd]"
+                    test -n "$cmd" || { echo "the bare charly uninstall_cmd was not recorded — the production render path did not run" >&2; exit 1; }
+                    # Persist the rendered command durably IN THE GUEST (the per-bed ledger is
+                    # removed at bed teardown) so the outer bed's evidence-harvest step can
+                    # retain it after this nested run returns.
+                    printf '%s\n' "$cmd" > /home/arch/pr667-render-cmd.txt
+                    grep -h 'uninstall_cmd:' "$LED" >> /home/arch/pr667-render-cmd.txt 2>/dev/null || true
+                    echo "PKG-UNINSTALL-RENDER-OK"
+                in_container: false
+            - check: the pinned charly package is installed at the exact pinned version
+              id: pkg-uninstall-installed-pinned
+              description: >-
+                The `distro: arch. package: [charly=2026.268.1917]` + `repo:` path installed
+                the EXACT pinned version from the published charly-arch repo — the precondition
+                the uninstall render strips.
+              timeout: 10m
+              exit_status: 0
+              stdout:
+                - contains: PKG-UNINSTALL-INSTALLED-OK
+              context:
+                - runtime
+              command:
+                command: |
+                    set -euo pipefail
+                    got=$(pacman -Q charly | awk '{print $2}')
+                    echo "installed=[$got]"
+                    test "$got" = "2026.268.1917-1" || { echo "pinned version mismatch: $got" >&2; exit 1; }
+                    echo "PKG-UNINSTALL-INSTALLED-OK"
+                in_container: false
+    check-pkg-uninstall-member:
+        local:
+            from: check-pkg-uninstall-fixture-app
+            install_opts:
+                allow_repo_changes: true
