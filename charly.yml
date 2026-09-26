@@ -3954,6 +3954,15 @@ check-kindcluster-docker:
               timeout: 180s
               stdout:
                 - contains: "Ready"
+            - check: the local-path StorageClass kind installs is present on the docker cluster
+              id: kcd-storageclass
+              context:
+                - runtime
+              kube:
+                method: storageclass
+                kube_context: kind-check-kindcluster-docker
+              stdout:
+                - contains: "standard"
             - check: raw — the docker cluster's namespaces include kube-system
               id: kcd-raw-namespaces
               context:
@@ -4014,6 +4023,15 @@ check-kindcluster-nerdctl:
               timeout: 180s
               stdout:
                 - contains: "Ready"
+            - check: the local-path StorageClass kind installs is present on the nerdctl cluster
+              id: kcn-storageclass
+              context:
+                - runtime
+              kube:
+                method: storageclass
+                kube_context: kind-check-kindcluster-nerdctl
+              stdout:
+                - contains: "standard"
             - check: raw — the nerdctl cluster's namespaces include kube-system
               id: kcn-raw-namespaces
               context:
