@@ -151,6 +151,10 @@ func loadBuiltinPluginUnits() error {
 				builtinGateErr = err
 				return
 			}
+			if err := registerPluginUnitRequires(builtinUnitName(unit), unit); err != nil {
+				builtinGateErr = err
+				return
+			}
 		}
 	})
 	return builtinGateErr
@@ -578,6 +582,11 @@ func loadBakedPluginBinary(bin string) bool {
 		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: schema gate: %v\n", bin, err)
 		return false
 	}
+	if err := registerPluginUnitRequires(filepath.Base(bin), unit); err != nil {
+		_ = closer.Close()
+		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: requires gate: %v\n", bin, err)
+		return false
+	}
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, "local:"+bin, closer); err != nil {
 		_ = closer.Close()
 		fmt.Fprintf(os.Stderr, "warning: baked plugin %s: register: %v\n", bin, err)
@@ -884,6 +893,10 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 		_ = closer.Close()
 		return err
 	}
+	if err := registerPluginUnitRequires(name, unit); err != nil {
+		_ = closer.Close()
+		return err
+	}
 	if err := providerRegistry.RegisterPluginProviders(unit.Providers, source, closer); err != nil {
 		_ = closer.Close()
 		return fmt.Errorf("plugin %q: register: %w", name, err)
@@ -1085,9 +1098,9 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 			// resolve to its provider without the auto-inject. Inject the canonical ref via
 			// ExtraCandyRefs UNCONDITIONALLY (both contexts). In a check bed CHARLY_REPO_OVERRIDE
 			// redirects the ref to the local superproject under development. The SAME
-			// host-side-plugin pattern as vmPluginCandyRef (verb:libvirt), generalized to every
-			// external substrate (R3).
-			if ref, ok := externalDeploySubstratePluginRef(n.Target); ok {
+			// host-side-plugin pattern as the verb:libvirt case, generalized to every external
+			// substrate — the ONE class-agnostic provider-ref lookup (R3).
+			if ref := canonicalProviderRef(ClassDeployTarget, n.Target, "", ""); ref != "" {
 				addCandy = append(addCandy, ref)
 			}
 		}
