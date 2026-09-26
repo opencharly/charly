@@ -169,6 +169,9 @@ func (a *testCandyReader) HasSecretRequires() bool             { return len(a.m.
 func (a *testCandyReader) IsPluginCandy() bool          { return a.v.IsPlugin }
 func (a *testCandyReader) GetPluginSource() string      { return a.v.PluginSource }
 func (a *testCandyReader) GetPluginProviders() []string { return a.v.PluginProviders }
+func (a *testCandyReader) GetPluginRequires() []spec.PluginRequirement {
+	return a.v.PluginRequires
+}
 
 func (a *testCandyReader) AgentProvide() []spec.AgentRuntimeCapability { return a.v.AgentProvide }
 func (a *testCandyReader) HasAgentProvides() bool                      { return len(a.v.AgentProvide) > 0 }

@@ -2,7 +2,7 @@ module github.com/opencharly/charly/tools/golden-cloudinit
 
 go 1.26.4
 
-require github.com/opencharly/sdk v0.2026269.1159
+require github.com/opencharly/sdk v0.2026269.1717
 
 require (
 	cuelang.org/go v0.16.1 // indirect
@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/spec v0.2026269.759 // indirect
+	github.com/opencharly/spec v0.2026269.1640 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	golang.org/x/net v0.57.0 // indirect
