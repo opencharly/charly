@@ -3822,3 +3822,117 @@ check-kindcluster-nerdctl:
                 kube_resource: namespaces
               stdout:
                 - contains: kube-system
+# =============================================================================
+# check-pkg-uninstall — R10 witness for the `{{pkgName .}}` uninstall render
+# (opencharly/charly#667). A candy may pin an EXACT package version in
+# `distro: <d>. package:` (`charly=2026.268.1917` on pac/apt/apk,
+# `charly-<ver>-<rel>` on rpm) so a rebuilt upstream package invalidates exactly
+# the install layer. The SAME `.Packages` list feeds each format's
+# `uninstall_template`, and pacman/apk REJECT a versioned spec for removal
+# (`pacman -Rs charly=2026.268.1917` → "target not found"). The four install
+# formats' uninstall templates therefore render `{{pkgName .}}` to strip the pin
+# back to the bare name.
+#
+# SHAPE (RDD-proven): an OUTER `vm: {from: eval-host-vm}` bed delivers a pruned
+# guest project (check/eval-host-project-pkg-uninstall/) into the disposable
+# guest and runs the INNER local bed there with `charly --host`. The inner bed's
+# ROOT is a trivial `local:` deploy and its DEPLOY-LEVEL member composes the
+# pinned-charly fixture candy. Rationale, measured: the bed runner classifies a
+# top-level `local:` deploy as HostRooted (substrateTraits["local"] = {Venue:
+# "shell"} → ExternalInPlaceVenue FALSE), so its OWN cleanup arm is
+# `charly remove --purge`, which does NOT replay reverse ops; a deploy-level
+# MEMBER is torn down by deploykit.TearDownMembers, whose default arm IS
+# `charly deploy del <root>.<member>` → handleDeployDel → TeardownHostDeploy →
+# RunReverseOps — i.e. the member's recorded package-remove reverse op (rendered
+# from the embedded pac `uninstall_template`) IS executed. Because the whole inner
+# bed runs on the GUEST (the guest's own charly process forks every child), BOTH
+# the pinned install and the rendered removal happen INSIDE the disposable guest,
+# never on the operator's host. The outer bed's every side effect is the guest it
+# destroys (`vm destroy`) — it never runs `deploy del` on the operator.
+#
+# The outer bed welds NO charly-dev: the VM deploy substrate's PrepareVenue
+# (EnsureCharlyInGuest) and `charly --host` (ReexecOverSSH →
+# EnsureCharlyInDeployVenue) both auto-deliver the active controller binary to a
+# versioned /tmp path in the guest, so /usr/bin stays free and the
+# "exists in filesystem" conflict the brief warned about cannot arise.
+# =============================================================================
+check-pkg-uninstall:
+    vm:
+        from: eval-host-vm
+        disposable: true
+        # Cap every check-bed VM: 2 vCPU / 2G RAM is sufficient for all beds.
+        cpu: 2
+        ram: 2G
+        lifecycle: dev
+        description: >-
+            R10 witness for the `{{pkgName .}}` uninstall render (opencharly/charly#667), run
+            INSIDE the disposable eval-host-vm guest. Boots the guest, delivers the pruned
+            check/eval-host-project-pkg-uninstall project, then runs
+            `charly --host charly-check-pkg-uninstall check run check-pkg-uninstall-inner`: the
+            GUEST's charly runs the inner local bed, whose deploy-level member composes a
+            candy pinning charly=2026.268.1917 from the published charly-arch repo. At
+            bring-up-members the member's SystemPackagesStep emits ReverseOpPackageRemove and
+            the production path (candy/plugin-fleet recordDeploy → buildkit.RenderTemplate with
+            TemplateFuncs' `pkgName`) records `pacman -Rs --noconfirm charly` into the ledger's
+            `uninstall_cmd`; at cleanup-members `deploy del <member>` replays it ON THE GUEST.
+            The inner bed's root plan asserts (1) the RENDER — the recorded uninstall_cmd is the
+            BARE `pacman -Rs --noconfirm charly`, NOT `charly=2026.268.1917` (fails on the
+            pre-#667 template) — and (2) the INSTALL — `pacman -Q charly` reports the pinned
+            version. Every side effect (the pinned install, its rendered removal) is confined to
+            the disposable guest; the outer bed's cleanup is `vm destroy`.
+        plan:
+            - check: deliver the pruned guest project into the guest project dir (host-side scp over the managed charly-check-pkg-uninstall ssh alias — the domain is named after this DEPLOY, not the eval-host-vm entity)
+              id: guest-project-delivered
+              context:
+                - runtime
+              exit_status: 0
+              command:
+                in_container: false
+                command: |
+                    set -euo pipefail
+                    ssh charly-check-pkg-uninstall 'mkdir -p /home/arch/eval-project'
+                    scp -q ./check/eval-host-project-pkg-uninstall/charly.yml charly-check-pkg-uninstall:/home/arch/eval-project/charly.yml
+            - check: run the inner local bed INSIDE the guest via `charly --host` — the guest charly resolves the delivered project via CHARLY_PROJECT_DIR, applies the pinned-charly fixture member to its OWN host:local, asserts RENDER + INSTALL, then replays the rendered uninstall at cleanup-members; exit 0 proves the production render+execute end-to-end off the operator's workstation
+              id: guest-as-host-check-pkg-uninstall
+              context:
+                - runtime
+              # The nested `check run` builds the guest's deploy:local plugin, installs the
+              # pinned charly (its dep set is large), runs its own checks + fresh-rebuild, and
+              # tears down — measured ~4-5 min solo. 30m gives an honest ceiling above the
+              # default 6m never-hang floor (which killed the first attempt).
+              timeout: 30m
+              exit_status: 0
+              command:
+                in_container: false
+                command: ${CHARLY_BIN} --host charly-check-pkg-uninstall check run check-pkg-uninstall-inner
+            - check: harvest the guest-side evidence (rendered uninstall_cmd + inner check-live log + pacman.log) into the retained run log — the GUEST's records are the RENDER/EXECUTE proof, and the guest is destroyed by the outer teardown
+              id: guest-evidence-harvested
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: GUEST-EVIDENCE-HARVESTED
+              command:
+                in_container: false
+                command: |
+                    set -euo pipefail
+                    # Portable evidence path (B8): mktemp, never a harness-specific
+                    # /tmp/opencode — the step runs on ANY host.
+                    OUT="$(mktemp -t pr667-guest-evidence.XXXXXX)"
+                    echo "evidence: $OUT"
+                    # Single-quoted remote scripts: the remote bash does the glob + reads.
+                    # NOTE: no dollar-brace form anywhere (the check-var expander SKIPs the
+                    # step on an unresolved one).
+                    {
+                      echo "===== RENDERED uninstall_cmd (RENDER proof) ====="
+                      ssh charly-check-pkg-uninstall 'cat /home/arch/pr667-render-cmd.txt'
+                      echo "===== inner check-live.log (RENDER + INSTALL assertions) ====="
+                      ssh charly-check-pkg-uninstall 'D=$(ls -d /home/arch/eval-project/.check/check-pkg-uninstall-inner/*/ | tail -1); cat "$D"check-live.log'
+                      echo "===== inner summary.yml (ok:) ====="
+                      ssh charly-check-pkg-uninstall 'D=$(ls -d /home/arch/eval-project/.check/check-pkg-uninstall-inner/*/ | tail -1); grep -E "^(bed|ok|total_seconds):|^  - name:|    ok:" "$D"summary.yml'
+                      echo "===== guest pacman.log (INSTALL then REMOVE EXECUTION) ====="
+                      ssh charly-check-pkg-uninstall 'grep -E "charly|pacman -(S|R)" /var/log/pacman.log | tail -12'
+                    } 2>&1 | grep -vE '^plugin |^Downloading|^Resolved |^charly: fetching|^charly: git metadata' | tee "$OUT"
+                    grep -q 'uninstall_cmd: pacman -Rs --noconfirm charly' "$OUT"
+                    grep -q 'removed charly (2026.268.1917-1)' "$OUT"
+                    echo "GUEST-EVIDENCE-HARVESTED"
