@@ -633,20 +633,24 @@ func connectPluginByWord(class ProviderClass, word string) (Provider, bool) {
 //
 //  1. already registered, or served by a BAKED binary → return it (no scan);
 //  2. else the candy ref is the caller's explicit extraRef when set, else the GENERATED
-//     provider-ref index's canonical ref for THIS identity — and the project's candy
-//     closure is scanned ONCE with that ref, then the referenced plugins are connected;
+//     provider-ref index's canonical ref for THIS identity (canonicalProviderRef) — and the
+//     project's candy closure is scanned ONCE with that ref, then the referenced plugins are
+//     connected;
 //  3. else the identity is genuinely unavailable → (nil,false), surfaced loudly by the caller.
 //
 // No second pass, no default ref, no per-kind map, no special case for a substrate vs a verb:
 // a `deploy:pod` substrate and a `verb:libvirt` verb resolve through the SAME table. The
 // identity's PARENT is threaded through every leg (`providerKey`), so a nested
-// `command:<word>:<parent>` miss connects the candy serving THAT identity — never a bare-word
-// twin (the former code dropped the parent here and re-resolved the top-level word).
+// `command:<word>:<parent>` connect reaches the provider serving THAT identity — never a
+// bare-word twin (the former code dropped the parent here and re-resolved the top-level word).
 //
-// The project closure is scanned WITH the canonical ref in ONE pass; the loader's version
-// arbitration makes a LOCAL candy of the same name win over the remote ref (shadowing is
-// effective, not advisory), so a project that vendors the candy locally still uses its own
-// copy — the remote ref only pays off when the closure references the word nowhere.
+// NOTE (deliberate trade-off, plan §4): the former two-pass ran a network-free pass over the
+// project closure FIRST, appending the canonical ref only on a miss. The single rule above
+// appends the ref whenever the index knows the identity, so a project that vendors the candy
+// locally now also resolves the ref's latest tag (one cached, 1h-TTL, disk-persisted
+// `git ls-remote` per distinct repo) before the loader's version arbitration makes the LOCAL
+// body win (shadowing is effective, not advisory). The fetch is thus redundant-but-harmless
+// work, never a wrong result; it is the price of ONE resolution path with no second pass.
 func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) (Provider, bool) {
 	if p, ok := connectBakedPlugin(class, word, parent); ok {
 		return p, true
@@ -661,9 +665,7 @@ func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) 
 	}
 	ref := extraRef
 	if ref == "" {
-		if r, ok := pluginProviderRef(providerKey(class, word, parent)); ok {
-			ref = "@" + r
-		}
+		ref = canonicalProviderRef(class, word, parent, "")
 	}
 	opts := spec.ResolveOpts{}
 	if ref != "" {

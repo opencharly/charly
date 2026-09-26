@@ -87,7 +87,7 @@ func canonicalProviderRef(class ProviderClass, word, parent, callerRef string) s
 		return callerRef
 	}
 	ref, ok := pluginProviderRef(providerKey(class, word, parent))
-	if !ok {
+	if !ok || ref == "" {
 		return ""
 	}
 	return "@" + ref
