@@ -509,17 +509,30 @@ func ResolveTarget(node *spec.DeployNode, name string) (spec.UnifiedDeployTarget
 }
 
 // unresolvedDeployTargetError distinguishes the two ways ResolveDeploy(target) can fail: a
-// genuinely UNKNOWN target word (a typo — not one of the canonical substrates), versus a KNOWN
+// genuinely UNKNOWN target word (a typo — not a known substrate word at all), versus a KNOWN
 // substrate word whose deploy provider is merely NOT CONNECTED (the deploy-substrate plugins are
 // out-of-process and connected on demand via loadDeployPlugins — a target with no charly.yml entry,
 // or a plugin that failed to load, leaves the registry entry absent). The former is a user error;
 // the latter is a load/connect gap. Conflating them (the former "unknown target" text for both)
 // misdirected the operator during the check-k3s-vm RCA.
+//
+// "Known" is the UNION of the CUE resource-kind vocabulary (the canonical pod/vm/… words) and the
+// generated deploy-provider index (a plugin-declared word, e.g. exampledeploy) — both are real
+// target words; neither is a typo.
 func unresolvedDeployTargetError(name, target string) error {
-	if externalizedDeploySubstrates[target] {
+	if resourceKindSet[target] || externalizedDeploySubstrates[target] {
+		ref, ok := externalDeploySubstratePluginRef(target)
+		if !ok || ref == "" {
+			// A known substrate word whose serving plugin is NOT in the generated corpus —
+			// e.g. the CUE vocabulary names it but no corpus plugin declares `deploy:<word>`.
+			// Say exactly that; never render an empty plugin name.
+			return fmt.Errorf("deployment %q: target %q is a known substrate but no plugin in "+
+				"the generated corpus serves deploy:%s (add the plugin repo to the corpus, or "+
+				"check the plugin's manifest)", name, target, target)
+		}
 		return fmt.Errorf("deployment %q: target %q is a known substrate but its deploy provider "+
 			"is not connected (the %s plugin candy is not compiled-in or failed to load)",
-			name, target, externalDeploySubstratePlugins[target])
+			name, target, ref)
 	}
 	return fmt.Errorf("deployment %q: unknown target %q (want local|vm|pod|kubernetes|android)", name, target)
 }
