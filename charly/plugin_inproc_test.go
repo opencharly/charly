@@ -91,7 +91,8 @@ func TestCoexistSwitch_PartialBuiltinStillLoads(t *testing.T) {
 // TestRegister_BuiltinVsBuiltinStillErrors pins the boundary of the per-word coexist
 // skip: a BUILTIN registration colliding with an existing builtin is still a hard error
 // (init() panics on it), so the skip cannot silently swallow a genuine builtin duplicate.
-// Only an OUT-OF-PROCESS registration may coexist with — and be skipped by — a builtin.
+// Only an OUT-OF-PROCESS registration may coexist with — and be skipped by — a builtin,
+// and a same-origin out-of-process re-registration is idempotent.
 func TestRegister_BuiltinVsBuiltinStillErrors(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	if err := providerRegistry.register(stubIdemVerb{}, originBuiltin); err != nil {

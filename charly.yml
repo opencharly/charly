@@ -508,6 +508,7 @@ check-kubevirt-operator-ctx:
     kubernetes:
         box: ""
         kubeconfig_context: vm-check-kubevirt-operator
+
 claude:
     agent:
         description: Anthropic Claude Code CLI — autonomous coding agent.
@@ -882,7 +883,7 @@ check-kubevirt-operator:
             # serves `kubevirt:`. Neither is compiled into charly, so the bed must
             # reference them or the verb resolves "no provider registered".
             - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.268.2341'
-            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.269.0234'
+            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.269.1640'
         env:
             K3S_SERVER_HOSTNAME: 127.0.0.1
         install_opts:
@@ -2777,129 +2778,6 @@ check-marketplace:
                 - runtime
               command: cat /srv/marketplace/.claude-plugin/marketplace.json
 # =============================================================================
-# dsh-app + check-dsh-pod — the R10 bed for the deepseek-harness dsh candy + the
-# compiled-in plugin-dsh management plugin (command:dsh + verb:dsh).
-#
-# The bed builds a minimal Fedora box composing nodejs + dsh. The npm builder
-# (fedora.fedora-builder) installs @deepseek-ai/dsh 0.1.0-rc.6 globally; node-pty
-# (a dsh dependency) ships NO linux-x64 prebuild in the npm tarball, so its install
-# script falls through to node-gyp — the fedora-builder's build-toolchain provides
-# gcc/make/python3, and the compiled pty.node is N-API (ABI-stable across node
-# versions, so building against the builder's node 20 runs on the image's node 22).
-# The dsh service boots `dsh web` (loopback-only, 127.0.0.1:3080) and the
-# charly-owned dsh-entrypoint exec's a socat forwarder exposing it on eth0:3081
-# (socat cannot share port 3080 with the loopback listener — Linux forbids a
-# wildcard + specific pair on one port — so the published port maps the
-# auto-allocated host port to container 3081).
-# The bed asserts: the pod reaches steady state, the dsh service runs, the web UI
-# answers HTTP 200 in-box AND through the published port (the socat forwarder),
-# node >= 22.19.0 (the dsh floor), the four dsh: verb methods dispatch in-box, and
-# the compiled-in `charly dsh status` command reaches the deployed box over the
-# pod-lifecycle reverse channel.
-# =============================================================================
-dsh-app:
-    candy:
-        version: 2026.243.0300
-        base: quay.io/fedora/fedora:43
-        description: |-
-            The deepseek-harness box: a minimal Fedora base composing the nodejs and
-            dsh candies. The npm builder installs @deepseek-ai/dsh 0.1.0-rc.6 globally
-            (node-pty's native module builds via node-gyp in the fedora-builder's
-            build-toolchain); the dsh service boots the loopback-bound web UI and a
-            socat forwarder exposes it on the container's eth0. The candy's checks run
-            in BOTH contexts, so `charly check box dsh-app` proves the CLI installs and
-            the node floor holds without deploying, and `charly check live` re-proves
-            the same shape against the running pod plus the service + web UI.
-        # The distro tag chain is load-bearing: the
-        # package resolver walks the IMAGE's declared chain most-specific-first, so a
-        # box that declares `base:` alone matches no per-distro section and silently
-        # installs nothing.
-        distro:
-            - fedora:43
-            - fedora
-        # The npm builder must be explicit: a namespace-qualified base contributes no
-        # builder map, and the distro-keyed default (from the fedora box) provides bare
-        # `fedora-builder` values that don't resolve in the main repo. The namespaced
-        # `fedora.fedora-builder` matches the main repo's convention (check-builder-vm).
-        builder:
-            npm: fedora.fedora-builder
-        candy:
-            - '@github.com/opencharly/layer-nodejs:v2026.239.1624'
-            - '@github.com/opencharly/pod-dsh:v2026.243.0410'
-check-dsh-pod:
-    pod:
-        image: dsh-app
-        disposable: true
-        lifecycle: dev
-        description: >-
-            R10 bed for the deepseek-harness dsh candy + the compiled-in plugin-dsh management plugin. Deploying it to steady state proves the dsh-app box — whose image build ran the npm builder (installing @deepseek-ai/dsh 0.1.0-rc.6 globally, node-pty's native module built via node-gyp) and asserted the CLI + node floor — builds, starts, and stays up with the dsh service running, the loopback-bound web UI answering HTTP 200 in-box AND through the socat forwarder on the published port, the four dsh: verb methods dispatching in-box, and the compiled-in `charly dsh status` command reaching the deployed box over the pod-lifecycle reverse channel.
-        plan:
-            - check: the dsh-app pod reached steady state (the dsh box runs)
-              id: dsh-pod-running
-              exit_status: 0
-              stdout:
-                - contains: '"kind": "pod"'
-                - contains: check-dsh-pod
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} status --json
-                in_container: false
-            - check: the dsh service is running under the init system in the pod
-              id: dsh-service-running
-              service:
-                service: dsh
-                running: true
-              context: [runtime]
-            - check: the dsh web UI answers HTTP 200 on 127.0.0.1:3080 in-box
-              id: dsh-web-inbox
-              timeout: 30s
-              context: [runtime]
-              command: curl -fsS -o /dev/null http://127.0.0.1:3080/
-            - check: the dsh web UI answers HTTP 200 through the published port (the socat forwarder)
-              id: dsh-web-published
-              timeout: 30s
-              context: [runtime]
-              http:
-                http: "http://127.0.0.1:${HOST_PORT:3081}/"
-                status: 200
-            - check: node is at least 22.19.0 (the deepseek-harness dsh floor)
-              id: dsh-node-floor
-              exit_status: 0
-              context: [runtime]
-              command: |
-                node -e 'const [maj,min]=process.versions.node.split(".").map(Number); if (maj<22||(maj===22&&min<19)) process.exit(1)'
-            - check: the dsh version verb reports the dsh version in-box
-              id: dsh-verb-version
-              dsh:
-                method: version
-              context: [runtime]
-            - check: the dsh web-running verb probes the web UI in-box
-              id: dsh-verb-web-running
-              dsh:
-                method: web-running
-              context: [runtime]
-            - check: the dsh profile-list verb lists the profiles in-box
-              id: dsh-verb-profile-list
-              dsh:
-                method: profile-list
-              context: [runtime]
-            - check: the dsh plugin-list verb lists the web profile's plugins in-box
-              id: dsh-verb-plugin-list
-              dsh:
-                method: plugin-list
-              context: [runtime]
-            - check: the compiled-in charly dsh status command reaches the deployed box over the reverse channel
-              id: dsh-cmd-status
-              exit_status: 0
-              stdout:
-                - contains: "web UI: HTTP 200 on 127.0.0.1:3080"
-              context:
-                - runtime
-              command:
-                command: ${CHARLY_BIN} dsh status --box check-dsh-pod
-                in_container: false
-# =============================================================================
 # agentteams + agentteams-manager + check-agentteams-pod — the R10 bed for the
 # full AgentTeams stack (minio, matrix, element, higress, controller) on the
 # cachyos base. Every service runs as the image user (uid 1000) against its own
@@ -3977,6 +3855,14 @@ check-kindcluster:
               stdout:
                 - contains: "check-kindcluster"
               command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters'
+            - check: the kind node container exists on the podman engine (the io.x-k8s.kind.cluster label)
+              id: kc-node-container
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster"
+              command: sh -c 'podman ps --filter label=io.x-k8s.kind.cluster=check-kindcluster --format "{{.Names}}"'
             - check: the cluster reports at least one Ready node
               id: kc-node-ready
               context:
@@ -4004,6 +3890,153 @@ check-kindcluster:
               kube:
                 method: raw
                 kube_context: kind-check-kindcluster
+                kube_resource: namespaces
+              stdout:
+                - contains: kube-system
+
+# =============================================================================
+# check-kindcluster-docker / check-kindcluster-nerdctl — the docker and rootless
+# nerdctl R10 witnesses of the SAME deploy:kindcluster substrate the podman bed
+# proves (check-kindcluster). kind provisions node containers on any of the three
+# charly engines; the engine word maps 1:1 to kind's KIND_EXPERIMENTAL_PROVIDER, so
+# these beds differ from the podman bed ONLY in `engine:` and their collision-free
+# cluster name + kubeconfig context (a kind cluster name is unique only WITHIN an
+# engine — `kind get clusters` is engine-scoped — so each engine bed names its own
+# cluster and context). disposable: true authorizes destroy+rebuild.
+# =============================================================================
+check-kindcluster-docker-cluster:
+    kindcluster:
+        box: ""
+        engine: docker
+        node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+        nodes:
+            - role: control-plane
+check-kindcluster-docker:
+    kindcluster:
+        from: check-kindcluster-docker-cluster
+        disposable: true
+        lifecycle: dev
+        add_candy:
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.269.0814'
+        description: >-
+            R10 witness of deploy:kindcluster on the DOCKER engine: a disposable local
+            Kubernetes-in-Docker cluster provisioned by kind on docker, probed with the
+            `kube:` verb against the context kind writes (kind-check-kindcluster-docker).
+            Proves the engine selector reaches kind's KIND_EXPERIMENTAL_PROVIDER and the
+            cluster comes up on docker; teardown is `kind delete cluster`.
+        plan:
+            - check: the kind cluster exists on the docker engine
+              id: kcd-cluster-exists
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster-docker"
+              command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=docker kind get clusters'
+            - check: the kind node container exists on the docker engine (the io.x-k8s.kind.cluster label)
+              id: kcd-node-container
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster-docker"
+              command: sh -c 'docker ps --filter label=io.x-k8s.kind.cluster=check-kindcluster-docker --format "{{.Names}}"'
+            - check: the docker cluster reports at least one Ready node
+              id: kcd-node-ready
+              context:
+                - runtime
+              kube:
+                method: wait-nodes
+                kube_context: kind-check-kindcluster-docker
+                kube_count: 1
+              timeout: 180s
+              stdout:
+                - contains: "Ready"
+            - check: the local-path StorageClass kind installs is present on the docker cluster
+              id: kcd-storageclass
+              context:
+                - runtime
+              kube:
+                method: storageclass
+                kube_context: kind-check-kindcluster-docker
+              stdout:
+                - contains: "standard"
+            - check: raw — the docker cluster's namespaces include kube-system
+              id: kcd-raw-namespaces
+              context:
+                - runtime
+              kube:
+                method: raw
+                kube_context: kind-check-kindcluster-docker
+                kube_resource: namespaces
+              stdout:
+                - contains: kube-system
+check-kindcluster-nerdctl-cluster:
+    kindcluster:
+        box: ""
+        engine: nerdctl
+        node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+        nodes:
+            - role: control-plane
+check-kindcluster-nerdctl:
+    kindcluster:
+        from: check-kindcluster-nerdctl-cluster
+        disposable: true
+        lifecycle: dev
+        add_candy:
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.269.0814'
+        description: >-
+            R10 witness of deploy:kindcluster on the ROOTLESS NERDCTL engine: a disposable
+            local Kubernetes-in-Docker cluster provisioned by kind on rootless nerdctl
+            (which requires the rootless containerd precondition the layer-kind candy's
+            kind-engine-prepare applies), probed with the `kube:` verb against the context
+            kind writes (kind-check-kindcluster-nerdctl). Proves the engine selector
+            reaches KIND_EXPERIMENTAL_PROVIDER and the cluster comes up on nerdctl;
+            teardown is `kind delete cluster`.
+        plan:
+            - check: the kind cluster exists on the nerdctl engine
+              id: kcn-cluster-exists
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster-nerdctl"
+              command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=nerdctl kind get clusters'
+            - check: the kind node container exists on the nerdctl engine (the io.x-k8s.kind.cluster label)
+              id: kcn-node-container
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster-nerdctl"
+              command: sh -c 'nerdctl ps --filter label=io.x-k8s.kind.cluster=check-kindcluster-nerdctl --format "{{.Names}}"'
+            - check: the nerdctl cluster reports at least one Ready node
+              id: kcn-node-ready
+              context:
+                - runtime
+              kube:
+                method: wait-nodes
+                kube_context: kind-check-kindcluster-nerdctl
+                kube_count: 1
+              timeout: 180s
+              stdout:
+                - contains: "Ready"
+            - check: the local-path StorageClass kind installs is present on the nerdctl cluster
+              id: kcn-storageclass
+              context:
+                - runtime
+              kube:
+                method: storageclass
+                kube_context: kind-check-kindcluster-nerdctl
+              stdout:
+                - contains: "standard"
+            - check: raw — the nerdctl cluster's namespaces include kube-system
+              id: kcn-raw-namespaces
+              context:
+                - runtime
+              kube:
+                method: raw
+                kube_context: kind-check-kindcluster-nerdctl
                 kube_resource: namespaces
               stdout:
                 - contains: kube-system

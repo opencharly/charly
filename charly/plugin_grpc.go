@@ -45,6 +45,7 @@ type ProvidedCap struct {
 	Word             string
 	InputDef         string
 	CommandModelJson []byte
+	CommandParent    string
 }
 
 // servedSet is the set of plugin UNITS a `__plugin serve` process exposes over
@@ -53,7 +54,7 @@ type ProvidedCap struct {
 // host validates plugin_input against base ++ served — identical to an external).
 type servedSet struct {
 	calver    string
-	byKey     map[string]Provider // class:word → provider
+	byKey     map[string]Provider // capability identity → provider
 	provided  []ProvidedCap       // sorted structured capability list
 	schemaCUE string              // \n-joined concatenation of every unit's schema source
 }
@@ -66,9 +67,9 @@ func newServedSet(calver string, units []PluginUnit) *servedSet {
 			schemas = append(schemas, u.Schema.CueSource)
 		}
 		for _, p := range u.Providers {
-			k := provKey(p.Class(), p.Reserved())
+			k := providerIdentity(p)
 			s.byKey[k] = p
-			capability := ProvidedCap{Class: p.Class(), Word: p.Reserved(), InputDef: u.Schema.InputDefs[k]}
+			capability := ProvidedCap{Class: p.Class(), Word: p.Reserved(), InputDef: u.Schema.InputDefs[provKey(p.Class(), p.Reserved())], CommandParent: commandParentOf(p)}
 			if carrier, ok := p.(interface{ commandModelPayload() []byte }); ok {
 				capability.CommandModelJson = carrier.commandModelPayload()
 			}
@@ -76,7 +77,9 @@ func newServedSet(calver string, units []PluginUnit) *servedSet {
 		}
 	}
 	sort.Slice(s.provided, func(i, j int) bool {
-		return provKey(s.provided[i].Class, s.provided[i].Word) < provKey(s.provided[j].Class, s.provided[j].Word)
+		ki := providerKey(s.provided[i].Class, s.provided[i].Word, s.provided[i].CommandParent)
+		kj := providerKey(s.provided[j].Class, s.provided[j].Word, s.provided[j].CommandParent)
+		return ki < kj
 	})
 	s.schemaCUE = strings.Join(schemas, "\n")
 	return s
@@ -90,9 +93,10 @@ type providerGRPCServer struct {
 }
 
 func (s *providerGRPCServer) Invoke(ctx context.Context, req *pb.InvokeRequest) (*pb.InvokeReply, error) {
-	p, ok := s.set.byKey[req.GetClass()+":"+req.GetReserved()]
+	k := providerKey(ProviderClass(req.GetClass()), req.GetReserved(), req.GetCommandParent())
+	p, ok := s.set.byKey[k]
 	if !ok {
-		return nil, fmt.Errorf("plugin serve: no provider %s:%s", req.GetClass(), req.GetReserved())
+		return nil, fmt.Errorf("plugin serve: no provider %s", k)
 	}
 	out, err := p.Invoke(ctx, &Operation{
 		Reserved: req.GetReserved(), Op: req.GetOp(),
@@ -361,6 +365,7 @@ type grpcProvider struct {
 func (g *grpcProvider) Invoke(ctx context.Context, op *Operation) (*Result, error) {
 	rep, err := g.conn.Provider.Invoke(ctx, &pb.InvokeRequest{
 		Reserved: op.Reserved, Op: op.Op, ParamsJson: op.Params, EnvJson: op.Env, Class: string(g.class),
+		CommandParent: g.cmdParent,
 	})
 	if err != nil {
 		return nil, err
@@ -465,8 +470,13 @@ func buildUnit(conn *transport.Conn, caps *pb.Capabilities, pid int) (*PluginUni
 	if err != nil {
 		return nil, err
 	}
+	requires, err := liftRequirements(caps.GetRequires(), "plugin")
+	if err != nil {
+		return nil, err
+	}
 	return &PluginUnit{
 		Providers: providers,
 		Schema:    PluginSchema{CueSource: caps.GetSchemaCue(), InputDefs: inputDefs},
+		Requires:  requires,
 	}, nil
 }

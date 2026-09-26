@@ -29,9 +29,9 @@ import (
 // spec.ValidationError.Error() produced — "validation error: <m>" for one finding, "N validation
 // errors:\n\n  <joined>" for several. Warning-severity items never reach the verdict.
 func dispatchValidateForTest(dir string, opts spec.ResolveOpts) error {
-	prov, ok := providerRegistry.resolve(ClassCommand, "validate")
+	prov, ok := providerRegistry.resolveCommand("validate", "box")
 	if !ok {
-		return fmt.Errorf("pre-build validation: the validate capability (command:validate) is not compiled in")
+		return fmt.Errorf("pre-build validation: the validate capability (command:validate:box) is not compiled in")
 	}
 	reqJSON, err := json.Marshal(spec.ValidateProjectRequest{Dir: dir, IncludeDisabled: opts.IncludeDisabled})
 	if err != nil {

@@ -96,19 +96,44 @@ var providerClasses = func() map[ProviderClass]bool {
 	return m
 }()
 
-// splitCapability parses a "<class>:<word>" capability string as authored in a
-// candy's `plugin.providers:` list. The wire form (proto ProvidedCapability) is
-// already structured; this parses the YAML-authored declarations only.
-func splitCapability(s string) (ProviderClass, string, bool) {
-	i := strings.IndexByte(s, ':')
-	if i <= 0 || i == len(s)-1 {
-		return "", "", false
+// splitCapability parses a capability IDENTITY string "<class>:<word>[:<parent>]" as
+// authored in a candy's `plugin.providers:` list. The optional THIRD segment exists ONLY
+// for class=command — a command nests under a parent CLI word (e.g. "command:generate:box"
+// for `charly box generate`) — so a non-command capability carrying a parent is malformed
+// and rejected. parent is "" for every two-segment form. The wire form (proto
+// ProvidedCapability.command_parent) is already structured; this parses the YAML-authored
+// and `.providers`-baked strings only.
+func splitCapability(s string) (class ProviderClass, word, parent string, ok bool) {
+	parts := strings.Split(s, ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return "", "", "", false
 	}
-	c := ProviderClass(s[:i])
-	if !providerClasses[c] {
-		return "", "", false
+	c := ProviderClass(parts[0])
+	if !providerClasses[c] || parts[1] == "" {
+		return "", "", "", false
 	}
-	return c, s[i+1:], true
+	word = parts[1]
+	if len(parts) == 3 {
+		// The third segment is the command-only parent. A non-command or empty parent is
+		// off-grammar: only commands nest, and a parent is a real word.
+		if c != ClassCommand || parts[2] == "" {
+			return "", "", "", false
+		}
+		parent = parts[2]
+	}
+	return c, word, parent, true
+}
+
+// providerKey renders a capability's registry IDENTITY — "<class>:<word>", with ":"+parent
+// appended for a nested command. THE one key grammar (R3): the registry, the baked
+// `.providers` word manifests, the generated index, and every diagnostic use it, so a
+// nested command and its top-level same-word twin are two distinct, unambiguous identities
+// rather than a collision the registry has to disambiguate by heuristic.
+func providerKey(class ProviderClass, word, parent string) string {
+	if parent != "" {
+		return string(class) + ":" + word + ":" + parent
+	}
+	return string(class) + ":" + word
 }
 
 // Operation is the uniform invocation envelope (wire-aligned with proto
@@ -145,6 +170,11 @@ type PluginSchema struct {
 type PluginUnit struct {
 	Providers []Provider
 	Schema    PluginSchema
+	// Requires is the unit's declared inter-plugin dependencies (F-A3), lifted from
+	// the wire Capabilities.requires into the CUE-authored spec.PluginRequirement shape
+	// (capability identity + source + optional). The host resolves every one before the
+	// unit is treated as loaded (registerPluginUnitRequires) — in every placement.
+	Requires []spec.PluginRequirement
 }
 
 // Operation selectors (op.Op) are read directly off github.com/opencharly/spec/ops

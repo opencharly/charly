@@ -26,7 +26,8 @@ mkdir -p bin
 echo "bootstrap-charly: regenerating compiled-in plugin wiring"
 (cd charly && GOWORK=off go run ./internal/pluginsgen \
   -root .. -config charly/charly.yml \
-  -out charly/plugins_generated.go -gowork go.work)
+  -out charly/plugins_generated.go -gowork go.work \
+  -outrefs charly/plugins_refs_generated.go -corpus charly/plugin_corpus.txt)
 
 # Stamp the binary's CalVer identity (`charly version` -> main.BuildCalVer) at build
 # time, from the shared scripts/calver.sh — ALWAYS the HEAD commit's UTC date

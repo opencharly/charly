@@ -40,10 +40,24 @@ func newRegistry() *Registry {
 	return &Registry{byKey: map[string]Provider{}, origins: map[string]string{}}
 }
 
-func provKey(c ProviderClass, word string) string { return string(c) + ":" + word }
+// provKey is the TWO-SEGMENT "<class>:<word>" key, for the one map whose domain is
+// genuinely two-segment: the plugin_input def table (only a command nests, and a command
+// carries no input def). It delegates to providerKey (R3: the ONE key renderer) with an
+// empty parent.
+func provKey(c ProviderClass, word string) string { return providerKey(c, word, "") }
 
-// commandParentOf reports a COMMAND provider's declared CommandParent() (the parent it nests under,
-// e.g. "box" for `charly box feature`), or "" for a non-command / top-level provider.
+// providerIdentity renders a provider's registry IDENTITY from its own declared
+// class/word/parent — the key every map and diagnostic must use so a nested command and
+// its top-level same-word twin never collide.
+func providerIdentity(p Provider) string {
+	return providerKey(p.Class(), p.Reserved(), commandParentOf(p))
+}
+
+// commandParentOf reports a provider's declared command parent — the parent it nests
+// under (e.g. "box" for `charly box feature`), or "" for a non-command / top-level
+// provider. The value is DECLARED by the plugin (the wire ProvidedCapability.command_parent,
+// populated by buildCapMeta) and carried on the shared capMeta both provider twins embed, so
+// it is identical in every placement — never inferred from plugin Go.
 func commandParentOf(p Provider) string {
 	if p.Class() != ClassCommand {
 		return ""
@@ -82,79 +96,52 @@ func (r *Registry) register(p Provider, origin string) error {
 			}
 		}
 	}
-	// Registry uniqueness keys by the plain provKey(class, word). A NESTED command word
-	// (CommandParent()!="") that COLLIDES with an already-registered word is disambiguated by parking
-	// the NESTED provider at "command:<word>:<parent>" instead of rejecting it — a nested command IS a
-	// distinct capability (e.g. `box feature` vs top-level `charly feature`, candy/plugin-feature). The
-	// TOP-LEVEL command always keeps the plain key (deterministic, so the by-word resolve lookups that
-	// want the top-level / uniquely-worded capability are unaffected); if a top-level word arrives
-	// AFTER a nested one already took the plain key, the nested one is relocated to its parent key.
-	// Every NON-colliding registration — the overwhelming default, including every uniquely-worded box
-	// command (`box validate`, `box build`, …) — keys BYTE-IDENTICALLY to before (backward-compatible).
-	k := provKey(class, word)
+	// Registry uniqueness keys by the provider's declared IDENTITY — providerKey(class,
+	// word, parent), where parent comes from the declared CommandParent (the wire
+	// ProvidedCapability.command_parent, or the manifest's three-segment
+	// `command:<word>:<parent>` form). A nested command and its top-level same-word twin
+	// are therefore two distinct, unambiguous identities (command:feature:box vs
+	// command:feature) with NO collision to disambiguate: there is no parking, no
+	// relocation, no order-dependence. Every non-nested registration keys exactly as
+	// before. A true duplicate — the same identity twice — is rejected here (fail-fast).
+	k := providerKey(class, word, commandParentOf(p))
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if existing, dup := r.byKey[k]; dup {
-		newParent := commandParentOf(p)
-		existingParent := commandParentOf(existing)
-		switch {
-		case class == ClassCommand && newParent != "" && existingParent == "":
-			// Incoming NESTED command collides with a TOP-LEVEL one → park the nested at its parent key.
-			pk := k + ":" + newParent
-			if _, dup2 := r.byKey[pk]; dup2 {
-				return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s", pk, r.origins[pk], origin)
-			}
-			r.byKey[pk] = p
-			r.origins[pk] = origin
+	if _, dup := r.byKey[k]; dup {
+		// A registration that does NOT change the identity's placement is a no-op, not a
+		// collision — the per-word placement-coexist rule:
+		//
+		//   - a word already served by a COMPILED-IN provider (originBuiltin) STAYS in-proc:
+		//     an OUT-OF-PROCESS candy declaring it (e.g. candy/plugin-kubevirt, whose
+		//     `kind:kubevirt` is compiled into candy/plugin-substrate while
+		//     `verb:kubevirt` / `deploy:kubevirt` / `command:kubevirt` are its own) must
+		//     still register the words it OWNS; the shared compiled-in word is skipped, not
+		//     overridden and not a collision;
+		//   - an identical ORIGIN is the same unit loaded twice (a candy scanned under two
+		//     keys, or re-loaded on a later connect path) — idempotent, so skipped.
+		//
+		// A genuine collision (a DIFFERENT non-builtin origin claiming an already-registered
+		// identity) still errors, and a BUILTIN-vs-BUILTIN duplicate still errors (panicking
+		// at init() via RegisterBuiltinProvider / RegisterBuiltinPluginUnit) — that startup
+		// fail-fast invariant is preserved.
+		if origin != originBuiltin && (r.origins[k] == originBuiltin || r.origins[k] == origin) {
 			return nil
-		case class == ClassCommand && newParent == "" && existingParent != "":
-			// Incoming TOP-LEVEL command collides with an already-registered NESTED one → relocate the
-			// nested to its parent key, give the top-level the plain key (top-level wins deterministically).
-			epk := k + ":" + existingParent
-			if _, dup2 := r.byKey[epk]; dup2 {
-				return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s", epk, r.origins[epk], r.origins[k])
-			}
-			r.byKey[epk] = existing
-			r.origins[epk] = r.origins[k]
-			r.byKey[k] = p
-			r.origins[k] = origin
-			return nil
-		default:
-			// A registration that does NOT change the word's placement is a no-op, not a
-			// collision — the per-word placement-coexist rule:
-			//
-			//   - a word already served by a COMPILED-IN provider (originBuiltin) STAYS in-proc:
-			//     an OUT-OF-PROCESS candy declaring it (e.g. candy/plugin-kubevirt, whose
-			//     `kind:kubevirt` is compiled into candy/plugin-substrate while
-			//     `verb:kubevirt` / `deploy:kubevirt` / `command:kubevirt` are its own) must
-			//     still register the words it OWNS; the shared compiled-in word is skipped, not
-			//     overridden and not a collision;
-			//   - an identical ORIGIN is the same unit loaded twice (a candy scanned under two
-			//     keys, or re-loaded on a later connect path) — idempotent, so skipped.
-			//
-			// A genuine collision (a DIFFERENT non-builtin origin claiming an already-registered
-			// word) still errors, and a BUILTIN-vs-BUILTIN duplicate still errors (panicking at
-			// init() via RegisterBuiltinProvider / RegisterBuiltinPluginUnit) — that startup
-			// fail-fast invariant is preserved.
-			if origin != originBuiltin && (r.origins[k] == originBuiltin || r.origins[k] == origin) {
-				return nil
-			}
-			return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s",
-				k, r.origins[k], origin)
 		}
+		return fmt.Errorf("provider %s already registered (origin %s) — refusing duplicate from %s",
+			k, r.origins[k], origin)
 	}
 	r.byKey[k] = p
 	r.origins[k] = origin
 	return nil
 }
 
-// registeredOrigin reports the origin a (class, word) provider is registered from,
-// if any. It lets loadProjectPlugins make a same-origin re-load IDEMPOTENT (skip the
-// whole build+connect+schema-append+register) while still surfacing a different-origin
+// registeredOrigin reports the origin a provider IDENTITY is registered from, if any. It
+// lets loadProjectPlugins make a same-origin re-load IDEMPOTENT (skip the whole
+// build+connect+schema-append+register) while still surfacing a different-origin
 // collision — WITHOUT touching register, which stays the fail-fast bijection backstop.
-// Returns ("", false) for an unregistered word.
-func (r *Registry) registeredOrigin(class ProviderClass, word string) (string, bool) {
-	k := provKey(class, word)
+// Returns ("", false) for an unregistered identity.
+func (r *Registry) registeredOrigin(class ProviderClass, word, parent string) (string, bool) {
+	k := providerKey(class, word, parent)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	o, ok := r.origins[k]
@@ -227,37 +214,35 @@ func (r *Registry) RegisterPluginProviders(ps []Provider, origin string, conn io
 	return nil
 }
 
-// resolve returns the provider for (class, word).
+// resolve returns the provider for a TOP-LEVEL / uniquely-worded (class, word) — the
+// two-segment identity. A nested command must be resolved with its parent
+// (resolveCommand / resolveIdentity); a command word that is ONLY nested under a parent
+// does not answer a bare-word lookup, because its identity includes the parent.
 func (r *Registry) resolve(class ProviderClass, word string) (Provider, bool) {
+	return r.resolveIdentity(class, word, "")
+}
+
+// resolveIdentity returns the provider for a full capability IDENTITY
+// (providerKey(class, word, parent)). It is THE lookup every site uses: a nested command
+// carries its parent, a top-level capability an empty one, and the key is unambiguous by
+// construction — there is no parking, no relocation, no order dependence, and no
+// bare-word fallback that could hand a nested invocation the wrong twin.
+func (r *Registry) resolveIdentity(class ProviderClass, word, parent string) (Provider, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if p, ok := r.byKey[provKey(class, word)]; ok {
+	if p, ok := r.byKey[providerKey(class, word, parent)]; ok {
 		return p, true
 	}
 	return nil, false
 }
 
-// resolveCommand returns the COMMAND provider for word, preferring the capability NESTED under
-// parent when one is parked there. It is the exact INVERSE of register's parking rule and lives
-// beside it so the two cannot drift: register gives the plain key to the TOP-LEVEL command and
-// parks a colliding NESTED one at "command:<word>:<parent>", so a plain-key lookup for a nested
-// invocation returns the WRONG capability — `charly box feature run` resolved to the top-level
-// `charly feature`, whose grammar has no `run`, making the nested command unreachable from the
-// day it was introduced.
-//
-// parent == "" (a top-level invocation) is the plain lookup, unchanged. A nested invocation whose
-// word never collided was never parked, so the parented key misses and the plain key answers —
-// which is every other `box <word>` (build, validate, list, …), each uniquely worded.
+// resolveCommand returns the COMMAND provider for (word, parent) by its declared
+// IDENTITY: providerKey(ClassCommand, word, parent). A nested invocation looks up
+// `command:<word>:<parent>`; a top-level one (parent=="") looks up `command:<word>`.
+// The former order-dependent parking heuristic is deleted with the incomplete
+// declaration it worked around.
 func (r *Registry) resolveCommand(word, parent string) (Provider, bool) {
-	if parent != "" {
-		r.mu.RLock()
-		p, ok := r.byKey[provKey(ClassCommand, word)+":"+parent]
-		r.mu.RUnlock()
-		if ok {
-			return p, true
-		}
-	}
-	return r.resolve(ClassCommand, word)
+	return r.resolveIdentity(ClassCommand, word, parent)
 }
 
 // Typed resolvers — what the call sites use. They never branch on transport.
@@ -284,12 +269,12 @@ func (r *Registry) allServedUnits() []PluginUnit {
 	for _, u := range builtinPluginUnits {
 		units = append(units, u)
 		for _, p := range u.Providers {
-			inUnit[provKey(p.Class(), p.Reserved())] = true
+			inUnit[providerIdentity(p)] = true
 		}
 	}
 	var rest []Provider
 	for _, p := range r.allProviders() {
-		if !inUnit[provKey(p.Class(), p.Reserved())] {
+		if !inUnit[providerIdentity(p)] {
 			rest = append(rest, p)
 		}
 	}
