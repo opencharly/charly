@@ -2535,6 +2535,128 @@ check-preflight-local:
 
                 == Your task == Run that probe and confirm the image is present. Do NOT modify anything, do not build or deploy, do not create or delete files. Report the probe output and done.
 # =============================================================================
+# docs-site-app + check-docs — the R10 bed for the opencharly.ai documentation site.
+#
+# The bed builds the SITE ITSELF inside a disposable box: `npm ci` against the committed
+# lockfile, then the production Astro build, then a set of checks asserting the built site's
+# SHAPE. It is the acceptance gate for candy/plugin-docs (the runtime `charly docs` plugin) and
+# for the published docs repo's committed content at the pinned DOCS_REF — a generator regression
+# and a site-source regression both surface here, at image build, rather than as a broken deploy
+# on Cloudflare. (The docs repo is standalone since the de-submodule cutover; its own deploy
+# workflow owns generation, the content-drift gate, the Astro build and the publish — this bed
+# proves the recipe still works against the current site.)
+#
+# The load-bearing assertion lives in the docs-site candy: a page for a plugin that is NOT in
+# compiled_plugins (plugin-cdp), rendering both its runtime placement and its CUE parameter
+# schema. That step fails the moment the generator narrows to documenting only what is compiled
+# into the binary — the exact failure mode the catalog design exists to prevent.
+# =============================================================================
+docs-site-app:
+    candy:
+        version: 2026.243.0300
+        base: quay.io/fedora/fedora:43
+        description: |-
+            The documentation-site box: a minimal Fedora base composing the docs-site candy,
+            which clones the published docs repo, installs its node dependencies from the
+            committed lockfile, and runs the production Astro build. The candy's checks run in
+            BOTH contexts, so `charly check box docs-site-app` proves the site builds and has the
+            right shape without deploying anything, and `charly check live` re-proves the same
+            shape against the running pod — which is what makes the bed's fresh-rebuild leg
+            assert the site rather than merely that the container is up.
+        # The distro tag chain is load-bearing, not decoration: the package resolver walks the
+        # IMAGE's declared chain most-specific-first, so a box that declares `base:` alone
+        # matches no per-distro section and silently installs nothing. Omitting it is why the
+        # first bed run died with `git: command not found` — docs-site's distro.fedora.package
+        # never resolved, and no dnf step was emitted at all. Mirrors check-k8s-deploy-app.
+        distro:
+            - fedora:43
+            - fedora
+        candy:
+            - '@github.com/opencharly/layer-docs-site:v2026.243.0408'
+check-docs:
+    pod:
+        image: docs-site-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for the opencharly.ai documentation site. Deploying it to steady state proves the docs-site box — whose image build ran `npm ci` + the production Astro build and asserted the built site's shape (a generated CLI page, a candy page carrying its published acceptance plan, a recipe card with rewritten cross-references, a RUNTIME out-of-process plugin's page with its CUE schema, and the provider cross-index) — builds, starts, and stays up. The generator's own cross-reference integrity gate (an unresolvable /charly-x:y reference fails generation) is covered by the plugin's Go tests; this bed covers the artifact those produce. Content staleness against the pinned charly is gated by the docs repo's own deploy workflow, not here.
+        plan:
+            - check: the docs-site pod reached steady state (the built site's box runs)
+              id: docs-pod-running
+              exit_status: 0
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-docs
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: the built site is present in the running container, entry point included
+              id: docs-pod-site-present
+              exit_status: 0
+              stdout:
+                - contains: OpenCharly
+              context:
+                - runtime
+              command: cat /srv/docs/dist/index.html
+# =============================================================================
+# marketplace-app + check-marketplace — the R10 bed for the published marketplace corpus.
+#
+# The bed builds a minimal box composing the plugin-marketplace candy, whose plan: clones the
+# PUBLISHED opencharly/marketplace repo at the immutable MARKETPLACE_REF and gates its SHAPE:
+# the per-harness catalogs parse and their entries resolve (Claude/Codex/kimi/pi), the
+# per-family manifests carry no version field (commit-SHA versioning) and the marketplace
+# repository URL, the baked skill headers carry the generator marker + the two-key frontmatter,
+# — the same gates the marketplace repo's own deploy workflow runs. The generator's fail-closed
+# drift gate + the ADE checks are covered by the plugin's Go tests and by that workflow; this bed
+# covers the published ARTIFACT at the pin.
+# =============================================================================
+marketplace-app:
+    candy:
+        version: 2026.218.1200
+        base: quay.io/fedora/fedora:43
+        description: |-
+            The marketplace-corpus box: a minimal Fedora base composing the plugin-marketplace
+            candy, whose plan: clones the published opencharly/marketplace repo at the pinned
+            MARKETPLACE_REF and gates its shape (catalogs, manifests, baked headers, setup).
+            The checks run in BOTH contexts, so `charly check box marketplace-app` proves the
+            published corpus shape without deploying anything, and `charly check live` re-proves
+            it against the running pod.
+        # The distro tag chain is load-bearing (the docs-site-app precedent).
+        distro:
+            - fedora:43
+            - fedora
+        candy:
+            - '@github.com/opencharly/plugin-marketplace/candy/plugin-marketplace:v2026.241.1105'
+check-marketplace:
+    pod:
+        image: marketplace-app
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 bed for the published marketplace corpus. Building the marketplace-app box ran the plugin-marketplace candy's plan: — the clone at the pinned MARKETPLACE_REF plus the shape gates (catalogs, no-version manifests, baked skill headers, executable pinned-commit check); deploying the pod to steady state proves the box builds, starts, and stays up. The generator's fail-closed drift gate + the Go coverage are covered by the plugin's Go tests and the marketplace repo's own deploy workflow; this bed covers the published artifact those produce.
+        plan:
+            - check: the marketplace-app pod reached steady state (the corpus-gating box runs)
+              id: marketplace-pod-running
+              exit_status: 0
+              stdout:
+                - contains: '"kind": "pod"'
+                - contains: check-marketplace
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} status --json
+                in_container: false
+            - check: the published marketplace clone is present in the running pod
+              id: marketplace-clone-present
+              exit_status: 0
+              stdout:
+                - contains: charly-plugins
+              context:
+                - runtime
+              command: cat /srv/marketplace/.claude-plugin/marketplace.json
+# =============================================================================
 # dsh-app + check-dsh-pod — the R10 bed for the deepseek-harness dsh candy + the
 # compiled-in plugin-dsh management plugin (command:dsh + verb:dsh).
 #
