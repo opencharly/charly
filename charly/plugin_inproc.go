@@ -26,6 +26,7 @@ type inprocProvider struct {
 func (p *inprocProvider) Invoke(ctx context.Context, op *Operation) (*Result, error) {
 	rep, err := p.srv.Invoke(ctx, &pb.InvokeRequest{
 		Reserved: op.Reserved, Op: op.Op, ParamsJson: op.Params, EnvJson: op.Env, Class: string(p.class),
+		CommandParent: p.cmdParent,
 	})
 	if err != nil {
 		return nil, err
@@ -59,21 +60,11 @@ func buildUnitInProc(meta pb.PluginMetaServer, srv pb.ProviderServer) (*PluginUn
 	// registerPluginUnitSchema exactly like an external's (zero distinction).
 	// The capability-lift loop is shared with buildUnit via liftCapabilities (R3): the compiled-in
 	// factory wraps the SAME capMeta in an inprocProvider (its only extra is the in-proc
-	// pb.ProviderServer). Placement is invisible above the registry.
+	// pb.ProviderServer). Placement is invisible above the registry — INCLUDING a nested
+	// command's parent, which now travels on the wire ProvidedCapability.command_parent
+	// (read by buildCapMeta/commandParentOf), so a compiled-in and an out-of-process nested
+	// command key IDENTICALLY with no plugin-code sniffing.
 	providers, inputDefs, err := liftCapabilities(caps.GetProvided(), "compiled-in plugin", func(meta capMeta, _ *pb.ProvidedCapability) Provider {
-		// A COMPILED-IN command candy may NEST its command(s) under a parent command word
-		// (e.g. candy/plugin-box's generate/validate/… under `box`). The parent rides an
-		// optional Go interface on the plugin's own provider (the SAME srv-interface-detection
-		// pattern registerCompiledPlugin uses for spec.DocParser / spec.RefsDownloader), so
-		// the compiled-in inprocProvider surfaces it via capMeta.CommandParent() and
-		// collectExternalCommandPlugins nests the dynamic Kong subcommand under that parent. This
-		// is the compiled-in placement of nesting; an out-of-process command declares no parent
-		// (top-level) — no live out-of-process nested command exists.
-		if meta.class == ClassCommand {
-			if ncp, ok := srv.(interface{ CommandParent() string }); ok {
-				meta.cmdParent = ncp.CommandParent()
-			}
-		}
 		return &inprocProvider{capMeta: meta, srv: srv}
 	})
 	if err != nil {

@@ -300,7 +300,7 @@ func TestResolveCommandPluginBinary_OverrideOutranksTheBakedManifest(t *testing.
 
 	var bin string
 	var err error
-	stderr := captureStderr(t, func() { bin, err = resolveCommandPluginBinary(context.Background(), word) })
+	stderr := captureStderr(t, func() { bin, err = resolveCommandPluginBinary(context.Background(), word, "") })
 	if err != nil {
 		t.Fatalf("resolveCommandPluginBinary with an override for the plugin's repo: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestResolveCommandPluginBinary_OverrideOutranksTheBakedManifest(t *testing.
 	// the shortcut exists for) — and this time with the candy DECLARED in the project, so the scan
 	// really did run and the seam really did answer "no".
 	t.Setenv(proc.RepoOverrideEnv, "")
-	bin2, err2 := resolveCommandPluginBinary(context.Background(), word)
+	bin2, err2 := resolveCommandPluginBinary(context.Background(), word, "")
 	if err2 != nil || bin2 != bakedBin {
 		t.Fatalf("with no override the baked shortcut must serve unchanged; got (%q,%v), want %q", bin2, err2, bakedBin)
 	}
@@ -346,7 +346,7 @@ func TestResolveCommandPluginBinary_BakedServesWithNoProjectHit(t *testing.T) {
 	// baked shortcut is the whole answer (the deployed-container path).
 	t.Chdir(t.TempDir())
 
-	bin, err := resolveCommandPluginBinary(context.Background(), word)
+	bin, err := resolveCommandPluginBinary(context.Background(), word, "")
 	if err != nil || bin != bakedBin {
 		t.Fatalf("a project-less baked command must serve unchanged; got (%q,%v), want %q", bin, err, bakedBin)
 	}

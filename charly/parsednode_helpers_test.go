@@ -45,7 +45,7 @@ func singleParsedNode(t *testing.T, doc string) spec.ParsedNode {
 func resetDeclaredPrescanRegistries() {
 	declaredDeployMu.Lock()
 	declaredDeploySubstrate = map[string]bool{}
-	declaredExternalCommand = map[string]bool{}
+	declaredExternalCommand = map[string]string{}
 	declaredKind = map[string]bool{}
 	declaredDeployMu.Unlock()
 }
