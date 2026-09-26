@@ -3873,6 +3873,71 @@ check-kindcluster-nerdctl:
                 kube_resource: namespaces
               stdout:
                 - contains: kube-system
+
+# =============================================================================
+# check-kindcluster-lock — R10 regression witness for the charly#680 LEDGER-LOCK
+# deadlock, exercising the PRODUCTION propagation path (withLedgerLockHeld threaded
+# into deploykit.TearDownMembers) end to end.
+#
+# Shape: an external-in-place kindcluster ROOT with a deploy-level kindcluster
+# MEMBER. No image anywhere — kindcluster is external-in-place (venue "none"), so
+# the member needs NO image build. On teardown the check runner runs
+# `deploy del <root>`; the ROOT holds the ledger transaction lock and its
+# TearDownMembers forks a peer `deploy del <root>.<member>`. That forked child is
+# the exact pre-#680 deadlock site (it re-acquired the lock its own ancestor held).
+# A PASS — teardown completing instead of stalling 30 min on `.ledger.lock` —
+# proves the propagation half of the fix. disposable: true authorizes destroy+rebuild.
+# =============================================================================
+check-kindcluster-lock:
+    kindcluster:
+        from: check-kindcluster-cluster
+        disposable: true
+        lifecycle: dev
+        add_candy:
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.269.0814'
+        description: >-
+            R10 regression for charly#680: a disposable kindcluster ROOT (external-in-place)
+            with a deploy-level kindcluster MEMBER. Teardown runs the root's `deploy del`,
+            which holds the ledger lock and forks the member's `deploy del` — the pre-#680
+            deadlock site. A completing teardown proves the lock-inheritance fix on the
+            production propagation path.
+        plan:
+            - check: the kindcluster-lock cluster exists on the podman engine
+              id: kl-cluster-exists
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster-lock"
+              command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters'
+    # Deploy-level member: teardown forks this member's own `deploy del` — the
+    # pre-#680 self-deadlock site. Root and member reference the SAME shared
+    # `check-kindcluster-cluster` template (R3 — no duplicated kindcluster block);
+    # the kind cluster NAME derives from the deploy name (plugin-kube
+    # kindClusterName(p.Name)), so the two clusters stay distinct without a per-bed
+    # template. The member's plan check is authored HERE (mirror check-group-member):
+    # a composed candy's plan never reaches a deploy-scope check runner for a
+    # non-image deploy, so a check authored only on the template would never run.
+    check-kindcluster-lock-member:
+        kindcluster:
+            from: check-kindcluster-cluster
+            description: >-
+                The deploy-level kindcluster MEMBER of check-kindcluster-lock: on teardown
+                the root's `deploy del` forks this member's `deploy del`, the pre-#680
+                self-deadlock site. Shares the check-kindcluster-cluster template with its
+                root (R3); its own kind cluster name derives from this deploy's name.
+            plan:
+                - check: the lock bed's deploy-level member cluster exists on the podman engine
+                  id: kl-member-cluster-exists
+                  description: >-
+                    The nested member's own kindcluster came up (its name contains "member"),
+                    so the teardown fork it triggers is the real deadlock site.
+                  context:
+                    - runtime
+                  exit_status: 0
+                  stdout:
+                    - contains: "member"
+                  command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters'
 # =============================================================================
 # check-pkg-uninstall — R10 witness for the `{{pkgName .}}` uninstall render
 # (opencharly/charly#667). A candy may pin an EXACT package version in
