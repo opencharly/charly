@@ -205,8 +205,8 @@ github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026266.1239 h1:VbUd61jl53I
 github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026266.1239/go.mod h1:jBiRSOuou7hVwV1qPcnrCvU9O2aA/ySMVnkLgsbjvUE=
 github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026237.1426 h1:EqAn+xKlMTKuyvVa9n6Ym36WIms7SCmiYShBT8sNg3o=
 github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026237.1426/go.mod h1:e6WvuQ3Uf3Kf66rw+aIy/Q47Ro3OdusIAtSegMuE+mc=
-github.com/opencharly/plugin-package/candy/plugin-package v0.2026237.1426 h1:MxwuZLwJh7KN5zPYket9TYGHfaLnia3YIdcnwRjIN9s=
-github.com/opencharly/plugin-package/candy/plugin-package v0.2026237.1426/go.mod h1:+4P44PCWLIKqo97xYFZV5O9qMVB4ageA1e9E29LzxMw=
+github.com/opencharly/plugin-package/candy/plugin-package v0.2026269.2238 h1:qoMeYV293KU+Bn6h6L3uI8RbhVQ6V8FeXXyHa15f7jQ=
+github.com/opencharly/plugin-package/candy/plugin-package v0.2026269.2238/go.mod h1:1lDsWntq13L89VYGtp/jV2XYh8bOXLm5gEZzkqrY6so=
 github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026266.1109 h1:YmuF3LKk++G91X0lWsAbXmAuxAbwSt6f9exvuHTu/j4=
 github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026266.1109/go.mod h1:klvG8SsPH0fpBLcQOc4zF699P11/4I6BEjOHZcF0xCA=
 github.com/opencharly/plugin-port/candy/plugin-port v0.2026237.1411 h1:gyUvXC6VniBdWZ7dcdXzT5h/FMltfyYxTohzEUpiIcg=
@@ -219,8 +219,8 @@ github.com/opencharly/plugin-refs/candy/plugin-refs v0.2026237.1427 h1:J5Lh4axk4
 github.com/opencharly/plugin-refs/candy/plugin-refs v0.2026237.1427/go.mod h1:9fn8rOBQ3NOgdZDhVBVqAAQ2aFVkIYFbN95iJ7v5bdE=
 github.com/opencharly/plugin-resource/candy/plugin-resource v0.2026237.1427 h1:f4PvYO6R4v/P6/af/s2Xf1NSG1Rhx/1QBtF0qVRR0Pg=
 github.com/opencharly/plugin-resource/candy/plugin-resource v0.2026237.1427/go.mod h1:Uwe4TvH/3LJ+Rff7Z9jJL1hJRaxWIy6BbI1d/B/kHTE=
-github.com/opencharly/plugin-service/candy/plugin-service v0.2026242.2146 h1:si339zgMyu1IUeSnw628m6VhHmtkf8hJIuV+OAqkwZQ=
-github.com/opencharly/plugin-service/candy/plugin-service v0.2026242.2146/go.mod h1:jOnluRLSRmxI733Z94JE+uBW0Gxc/ITRLCnRhOAK5mU=
+github.com/opencharly/plugin-service/candy/plugin-service v0.2026269.2248 h1:Lfpfj3ZD1kI9HF0kdXkE681XDCT0y60j1PNfn1PXNbY=
+github.com/opencharly/plugin-service/candy/plugin-service v0.2026269.2248/go.mod h1:gDowKL+5o6UKAsQKg/QzMphtbA8eXheAM1SsQNEi15c=
 github.com/opencharly/plugin-settings/candy/plugin-settings v0.2026237.1428 h1:VL72RMgbN380wyKf8KVG8+V331foXWA1wQubW9q/CDw=
 github.com/opencharly/plugin-settings/candy/plugin-settings v0.2026237.1428/go.mod h1:qUXtK2srh5NBG+Tk3xFShWfJkXrsfluYcQf0E+O88A4=
 github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026237.1428 h1:KlbJHkFcd1xRjkNqTbALMKzTgJ8OuSyzVuFv2R26/r4=
@@ -243,10 +243,10 @@ github.com/opencharly/plugin-user/candy/plugin-user v0.2026242.2148 h1:Qd7xae43/
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026242.2148/go.mod h1:X+COgIvHq7NIpaK3rraNOeyDESN3R8ZhGD99sNcFZms=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026269.2256 h1:RDY+YnR+xa5Zepv40AWCBD4NB7IaSTw1vQs8VvtC2jc=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026269.2256/go.mod h1:LxhRAhbiwRpUMXccIR8jO+0Y4Mzya8vX+NEBqgIblmQ=
-github.com/opencharly/sdk v0.2026269.2108 h1:hu/Schp+yD31yTiHM8AebKaR3j6p+pDFLQUwUPQ+ufI=
-github.com/opencharly/sdk v0.2026269.2108/go.mod h1:Peg7bicBYQZ8Iv/IRct6i2f+AdlNtJt+KovS5/hu1Oo=
-github.com/opencharly/spec v0.2026269.1703 h1:LMRL38c/NlSBLmMNJg+Ce08JxVTvPu45CxVMP8U8LSs=
-github.com/opencharly/spec v0.2026269.1703/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/sdk v0.2026269.2222 h1:q07g0XmItvlVN8nGQDr4EKsNltz/vE/I8DfTtpjLyv0=
+github.com/opencharly/sdk v0.2026269.2222/go.mod h1:FXRiQKvZWDmOd1NC2CoH3LG6lK8Qi89lolfaVYJ093A=
+github.com/opencharly/spec v0.2026269.2150 h1:otqgFkCJN1sb4BfXulNNw1976sniGNQHevt/MrqeCLc=
+github.com/opencharly/spec v0.2026269.2150/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
