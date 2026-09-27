@@ -821,7 +821,7 @@ check-kubevirt-operator:
             # (the kindcluster bed add_candy's it for the same reason); plugin-kubevirt
             # serves `kubevirt:`. Neither is compiled into charly, so the bed must
             # reference them or the verb resolves "no provider registered".
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.268.2341'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.270.0155'
             - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.269.1640'
         env:
             K3S_SERVER_HOSTNAME: 127.0.0.1
@@ -3394,7 +3394,7 @@ check-kindcluster:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.268.2341'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.270.0155'
         description: >-
             Sole R10 witness of the externalized deploy:kindcluster substrate: a disposable local
             Kubernetes-in-Docker cluster provisioned by kind on the operator's container engine
@@ -3481,7 +3481,7 @@ check-kindcluster-docker:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.269.0814'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.270.0155'
         description: >-
             R10 witness of deploy:kindcluster on the DOCKER engine: a disposable local
             Kubernetes-in-Docker cluster provisioned by kind on docker, probed with the
@@ -3548,7 +3548,7 @@ check-kindcluster-nerdctl:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.269.0814'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.270.0155'
         description: >-
             R10 witness of deploy:kindcluster on the ROOTLESS NERDCTL engine: a disposable
             local Kubernetes-in-Docker cluster provisioned by kind on rootless nerdctl
@@ -3606,6 +3606,78 @@ check-kindcluster-nerdctl:
                 - contains: kube-system
 
 # =============================================================================
+# check-kindcluster-workload — R10 for the deploy:kindcluster WORKLOAD leg +
+# engine-aware image loading (plan Phase 6). A disposable kind cluster on podman
+# with the locally-built check-k8s-deploy-app image loaded INTO the kind node via
+# the engine-aware path (`kind load image-archive` — `kind load docker-image` is
+# broken on podman, §2 #11) and applied through the SHARED kubernetes generator
+# (the kindcluster cluster-policy surface is projected onto a #Kubernetes body, R3),
+# then probed with the `kube:` verb. Proves the provider's workload preresolve
+# (resolveWorkloadImage + materializeKustomize), the engine-aware load, and
+# `kubectl apply -k` end to end. disposable: true authorizes destroy+rebuild.
+# =============================================================================
+check-kindcluster-workload:
+    kindcluster:
+        from: check-kindcluster-cluster
+        disposable: true
+        lifecycle: dev
+        add_candy:
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.270.0155'
+        image: check-k8s-deploy-app
+        description: >-
+            R10 for the deploy:kindcluster WORKLOAD leg + engine-aware image loading: a
+            disposable kind cluster on podman with the locally-built check-k8s-deploy-app
+            image loaded into the kind node (`kind load image-archive`, the podman path)
+            and applied through the shared kubernetes generator (Kustomize). Proves the
+            provider's workload preresolve (resolveWorkloadImage + materializeKustomize)
+            and the engine-aware load + `kubectl apply -k` end to end; the kube: probes
+            assert the workload Deployment object landed.
+        plan:
+            - check: the kindcluster-workload cluster exists on the podman engine
+              id: kwl-cluster-exists
+              context:
+                - runtime
+              exit_status: 0
+              stdout:
+                - contains: "check-kindcluster-workload"
+              command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters'
+            - check: the cluster reports at least one Ready node
+              id: kwl-node-ready
+              context:
+                - runtime
+              kube:
+                method: wait-nodes
+                kube_context: kind-check-kindcluster-workload
+                kube_count: 1
+              timeout: 180s
+              stdout:
+                - contains: "Ready"
+            - check: the workload Deployment object landed on the kind cluster (the externalized apply ran)
+              id: kwl-deployment
+              context:
+                - runtime
+              kube:
+                method: raw
+                kube_context: kind-check-kindcluster-workload
+                kube_resource: deployments
+                kube_group: apps
+                kube_version: v1
+                namespace: default
+                name: check-kindcluster-workload
+              stdout:
+                - contains: "check-kindcluster-workload"
+            - check: the applied Deployment's controller scheduled the workload pod onto the cluster (the engine-aware image load reached the node)
+              id: kwl-pod-scheduled
+              context:
+                - runtime
+              kube:
+                method: pods
+                kube_context: kind-check-kindcluster-workload
+                namespace: default
+              stdout:
+                - contains: "check-kindcluster-workload"
+
+# =============================================================================
 # check-kindcluster-lock — R10 regression witness for the charly#680 LEDGER-LOCK
 # deadlock, exercising the PRODUCTION propagation path (withLedgerLockHeld threaded
 # into deploykit.TearDownMembers) end to end.
@@ -3625,7 +3697,7 @@ check-kindcluster-lock:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.269.0814'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.270.0155'
         description: >-
             R10 regression for charly#680: a disposable kindcluster ROOT (external-in-place)
             with a deploy-level kindcluster MEMBER. Teardown runs the root's `deploy del`,
