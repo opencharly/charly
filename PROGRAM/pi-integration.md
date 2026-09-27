@@ -41,7 +41,7 @@ before the first tool call of every task, and produces PR bodies that pass the
 The validator caught 4 issues across 3+ rounds. Each round was a different failure mode:
 
 1. **No evidence in PR body** → missing `## How tested`, no pasted output, no `*Assisted-by:*` footer
-2. **Missing bed gate** → `charly check box docs-site-app` not run for the docs-site config change
+2. **Missing bed gate** → the docs-site config change was not exercised by the docs-site R10 bed before merge (that bed has since moved to its owning repo, `opencharly/layer-docs-site`)
 3. **Wrong attribution tier** → claimed `fully tested and validated` without the bed gate
 4. **R2 deferred split** → sdk+spec bumps deferred without naming a thematic batch
 5. **Missing rule-compliance section** → no `## Project-rulebook rule-compliance` table
