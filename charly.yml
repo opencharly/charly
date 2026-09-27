@@ -3391,6 +3391,7 @@ check-kindcluster-cluster:
 check-kindcluster:
     kindcluster:
         from: check-kindcluster-cluster
+        engine: podman
         disposable: true
         lifecycle: dev
         add_candy:
@@ -3478,6 +3479,7 @@ check-kindcluster-docker-cluster:
 check-kindcluster-docker:
     kindcluster:
         from: check-kindcluster-docker-cluster
+        engine: docker
         disposable: true
         lifecycle: dev
         add_candy:
@@ -3545,6 +3547,7 @@ check-kindcluster-nerdctl-cluster:
 check-kindcluster-nerdctl:
     kindcluster:
         from: check-kindcluster-nerdctl-cluster
+        engine: nerdctl
         disposable: true
         lifecycle: dev
         add_candy:
@@ -3619,6 +3622,7 @@ check-kindcluster-nerdctl:
 check-kindcluster-workload:
     kindcluster:
         from: check-kindcluster-cluster
+        engine: podman
         disposable: true
         lifecycle: dev
         add_candy:
@@ -3694,6 +3698,7 @@ check-kindcluster-workload:
 check-kindcluster-lock:
     kindcluster:
         from: check-kindcluster-cluster
+        engine: podman
         disposable: true
         lifecycle: dev
         add_candy:
