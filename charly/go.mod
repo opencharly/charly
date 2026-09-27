@@ -62,12 +62,12 @@ require (
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026237.1428
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026237.1428
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026250.552
-	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026269.14
+	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026269.1716
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026237.1429
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026237.1429
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026237.1430
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026242.2148
-	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026266.1235
+	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026269.2256
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.61.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -130,7 +130,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.1402
-	github.com/opencharly/spec v0.2026269.1640
+	github.com/opencharly/spec v0.2026269.1703
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
