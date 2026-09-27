@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,12 +47,6 @@ func TestNoSubstrateWordSwitchInDeployConsult(t *testing.T) {
 		"deploy_nodeform.go": true,
 		"deploy_add_cmd.go":  true, // `target` string dispatch (not `.Target`); classifyNodeTarget itself moved to deploykit.ClassifyNodeTarget (W4)
 		"plugin_prescan.go":  true, // recognizedDeploySubstrate registry gate
-		// deploykit lib: findVmDeploy reads the PERSISTED deploy state, where
-		// node.Descent is stripped on save (deploy_state.go: "loader-DERIVED,
-		// never operator-authored"), so the trait is unavailable and it must read
-		// the persisted Target. Fully closing it needs Descent PERSISTED in the
-		// deploy state — a state-schema cutover beyond P9 (tracked follow-up).
-		"deploy_state.go": true,
 	}
 	allowed := func(f string) bool {
 		if allowExact[f] {
@@ -72,9 +67,18 @@ func TestNoSubstrateWordSwitchInDeployConsult(t *testing.T) {
 	// P9: the gate ALSO covers the sdk/deploykit lib (the deploy Mechanism), not
 	// just charly-core — the descent/traits de-branching spans both. A regrown
 	// node.Target word-switch in the deploy chain/tree there must trip this too.
-	dkFiles, err := filepath.Glob("../sdk/deploykit/*.go")
+	// The sdk is a PROXY-RESOLVED module since the sdk de-submodule cutover (there
+	// is no in-tree `../sdk` directory), so the source is located through the
+	// build's own module resolution — a stale `../sdk` glob would match NOTHING and
+	// silently drop the gate's sdk coverage (which is exactly how the C6
+	// deploy_state.go allowance rotted into a no-op).
+	dkDir := sdkDeploykitSourceDir(t)
+	dkFiles, err := filepath.Glob(filepath.Join(dkDir, "*.go"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(dkFiles) == 0 {
+		t.Fatalf("gate: no sdk/deploykit sources found under %q — the gate must not silently pass with zero sdk coverage", dkDir)
 	}
 	files = append(files, dkFiles...)
 	fset := token.NewFileSet()
@@ -126,4 +130,25 @@ func TestNoSubstrateWordSwitchInDeployConsult(t *testing.T) {
 	if len(violations) > 0 {
 		t.Fatalf("P9 word-switch gate violated — a deploy consult site branches on a concrete substrate kind word instead of reading node.Descent traits (nodeTraits/deployTraitDescent). Read the DECLARED #DeployTraits (venue/machine_venue/leaf_only/…) off the stamped descent; the trait table lives in candy/plugin-substrate:\n  %s", strings.Join(violations, "\n  "))
 	}
+}
+
+// sdkDeploykitSourceDir locates the deploykit package of the sdk contract module
+// this build resolves — the module cache dir for the pinned proxy version, or a
+// local directory when go.mod replaces the module (go list -m reports the
+// effective dir in both cases). The former `../sdk/deploykit` glob assumed an
+// in-tree sdk submodule; after the sdk de-submodule cutover that path no longer
+// exists, so the glob matched nothing and the gate silently lost its coverage of
+// the deploy Mechanism. A gate that scans nothing must not pass: every failure
+// path here is a t.Fatal.
+func sdkDeploykitSourceDir(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/opencharly/sdk").Output()
+	if err != nil {
+		t.Fatalf("gate: locating the sdk module source (go list -m github.com/opencharly/sdk): %v", err)
+	}
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		t.Fatal("gate: go list -m github.com/opencharly/sdk returned an empty dir — the gate must not silently pass")
+	}
+	return filepath.Join(dir, "deploykit")
 }
