@@ -42,7 +42,7 @@ type ProvisionActor interface {
 }
 
 // stepConstructCtx is the narrow, pre-resolved envelope TypedStepProvider.ConstructStep
-// consumes — the 4 scalar fields materializeStep actually reads, replacing a direct
+// consumes — the 4 scalar fields the candy's MaterializeStep consumes, replacing a direct
 // leak of the R-item typed shapes deploykit.CandyModel + *buildkit.ResolvedBox into
 // this core-defined interface (the kernel/plugin boundary law: a core interface takes
 // scalars, never a concrete kind's typed shape). RunAsUser is the ALREADY-RESOLVED
@@ -61,17 +61,17 @@ type stepConstructCtx struct {
 
 // TypedStepProvider is the do:act half of a verb provider whose build/deploy install
 // timeline lowers into a TYPED InstallStep — NOT a RenderProvisionScript shell string.
-// The ONE current member is `service`: its act constructs a ServicePackagedStep whose
-// Reverse() records the LOAD-BEARING reversals (ReverseOpServiceDisable / RestoreEnabled
-// / RemoveDropin) a shell string would drop. hostBuildConstructStep (the "construct-step"
-// seam handler) resolves a `plugin:` verb's provider and, when it implements this,
-// returns ConstructStep (the typed step flows
-// through the SAME ServicePackagedStep.Emit{OCI,Local,VM} + Reverse() as before) instead
-// of falling through to a generic OpStep. LowersTo names the step kind (the now-removed
-// VerbSpec.LowersTo field's role — package/service were its only users, so the field was
-// deleted and the lowering target lives on the provider); ConstructStep builds the step
-// from the op's plugin_input + the pre-resolved stepConstructCtx. A TypedStepProvider
-// therefore also "acts in build/deploy" (opActsInBuildDeploy) even though it is not a
+// Its current members are `service` (ServicePackagedStep, whose Reverse() records the
+// LOAD-BEARING reversals ReverseOpServiceDisable / RestoreEnabled / RemoveDropin a shell
+// string would drop) and `package` (SystemPackagesStep). hostBuildConstructStep (the
+// "construct-step" seam handler) resolves a `plugin:` verb's provider and, when it
+// implements this, returns ConstructStep (the typed step flows through the SAME
+// ServicePackagedStep/SystemPackagesStep.Emit{OCI,Local,VM} + Reverse() as before)
+// instead of falling through to a generic OpStep. LowersTo names the step kind;
+// ConstructStep builds the step from the op's plugin_input + the pre-resolved
+// stepConstructCtx — both DELEGATE to the candy's checkstep.StepProvider (StepKind +
+// MaterializeStep), so core holds NO per-kind switch (C7). A TypedStepProvider therefore
+// also "acts in build/deploy" (opActsInBuildDeploy) even though it is not a
 // ProvisionActor.
 type TypedStepProvider interface {
 	Provider

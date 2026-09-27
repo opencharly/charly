@@ -3,7 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/opencharly/spec/checkstep"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -79,37 +78,5 @@ func TestRelocatedMatchingVerb_Wiring(t *testing.T) {
 	}
 	if _, isCheck := prov.(CheckVerbProvider); isCheck {
 		t.Fatalf("matching provider is a CheckVerbProvider (%T), want a plain pb Provider", prov)
-	}
-}
-
-// TestMaterializeStep proves the core adapter's materialization of a kit candy's
-// checkstep.StepDescriptor into the real InstallPlan step — the Format/Phase/cross-distro
-// name resolution the host materializer performs (kitVerbActStepAdapter.ConstructStep →
-// materializeStep). This is a CORE mechanism (the adapter), so its test stays in core;
-// the candy-side half (StepKind + ConstructStepDescriptor decoding plugin_input) is
-// covered by candy/plugin-package + candy/plugin-service's own tests.
-func TestMaterializeStep(t *testing.T) {
-	// SystemPackages: image format + install phase + the cross-distro-resolved name.
-	step := materializeStep(checkstep.StepDescriptor{
-		SystemPackages: &checkstep.SystemPackagesDesc{Package: "openssh", PackageMap: map[string]string{"fedora": "openssh-server"}},
-	}, stepConstructCtx{CandyName: "net", PkgFormat: "rpm", DistroTags: []string{"fedora:43", "fedora"}})
-	sps, ok := step.(*spec.SystemPackagesStep)
-	if !ok {
-		t.Fatalf("materializeStep returned %T, want *SystemPackagesStep", step)
-	}
-	if sps.Format != "rpm" || sps.Phase != spec.PhaseInstall || len(sps.Packages) != 1 || sps.Packages[0] != "openssh-server" {
-		t.Fatalf("SystemPackagesStep = %+v, want Format=rpm Phase=Install Packages=[openssh-server] (cross-distro map applied)", sps)
-	}
-
-	// ServicePackaged: unit + enable + the candy name.
-	step2 := materializeStep(checkstep.StepDescriptor{
-		ServicePackaged: &checkstep.ServicePackagedDesc{Unit: "nginx", Enable: true},
-	}, stepConstructCtx{CandyName: "mylayer"})
-	sps2, ok := step2.(*spec.ServicePackagedStep)
-	if !ok {
-		t.Fatalf("materializeStep returned %T, want *ServicePackagedStep", step2)
-	}
-	if sps2.Unit != "nginx" || !sps2.Enable || sps2.CandyName != "mylayer" {
-		t.Fatalf("ServicePackagedStep = %+v, want Unit=nginx Enable=true CandyName=mylayer", sps2)
 	}
 }
