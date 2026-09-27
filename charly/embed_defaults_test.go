@@ -30,8 +30,7 @@ func TestEmbeddedDefaults_SchemaConformance(t *testing.T) {
 // still resolves the default distro/builder vocabulary from the binary embed.
 func TestEmbeddedBuildDefaults_NoBuildYml(t *testing.T) {
 	dir := t.TempDir()
-	writeFixture(t, dir, "charly.yml", `version: `+LatestSchemaVersion().String()+`
-defaults:
+	writeFixture(t, dir, "charly.yml", `defaults:
   registry: ghcr.io/example
 `)
 	uf, _, err := LoadUnified(dir)
@@ -57,8 +56,7 @@ defaults:
 // overlay that wins.
 func TestEmbeddedBuildDefaults_ProjectWins(t *testing.T) {
 	dir := t.TempDir()
-	writeFixture(t, dir, "charly.yml", `version: `+LatestSchemaVersion().String()+`
-fedora:
+	writeFixture(t, dir, "charly.yml", `fedora:
   distro:
     version: "99"
     bootstrap:
@@ -133,8 +131,7 @@ func TestEmbeddedDefaults_SameLoaderPath(t *testing.T) {
 // own go:embed, K-wave 2 cone R3, so a project's own sidecar is the sole source).
 func TestEmbeddedDefaults_SidecarProjectWins(t *testing.T) {
 	dir := t.TempDir()
-	writeFixture(t, dir, "charly.yml", `version: `+LatestSchemaVersion().String()+`
-tailscale:
+	writeFixture(t, dir, "charly.yml", `tailscale:
   sidecar:
     image: example.com/custom-tailscale:pinned
 `)
@@ -160,8 +157,7 @@ tailscale:
 // embedded config now being node-form YAML.
 func TestEmbeddedDefaults_AllVocabKindsOverridable(t *testing.T) {
 	dir := t.TempDir()
-	writeFixture(t, dir, "charly.yml", `version: `+LatestSchemaVersion().String()+`
-pixi:
+	writeFixture(t, dir, "charly.yml", `pixi:
   builder:
     detect_config: marker99
 mybuilder:
@@ -240,8 +236,7 @@ amd-gpu:
 // exercises the same closed-schema rejection via the loader seam's
 // ValidateEntityClosedCUE directly, the still-live sibling.
 func TestProjectVocabOverride_IsSchemaValidated(t *testing.T) {
-	proj := []byte(`version: ` + LatestSchemaVersion().String() + `
-builder:
+	proj := []byte(`builder:
   badbuilder:
     bogus_field: true
 `)
@@ -296,8 +291,7 @@ func TestNoHardcodedYAMLFilenames(t *testing.T) {
 // builder. FAILS without the mise: builder block in the embedded charly.yml.
 func TestEmbeddedMiseBuilderVocabulary(t *testing.T) {
 	dir := t.TempDir()
-	writeFixture(t, dir, "charly.yml", `version: `+LatestSchemaVersion().String()+`
-pixi:
+	writeFixture(t, dir, "charly.yml", `pixi:
   builder:
     detect_config: marker99
 `)

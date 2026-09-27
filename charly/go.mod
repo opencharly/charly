@@ -13,7 +13,7 @@ require (
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026237.1414
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026269.652
 	github.com/opencharly/plugin-box/candy/plugin-box v0.2026269.645
-	github.com/opencharly/plugin-build/candy/plugin-build v0.2026269.606
+	github.com/opencharly/plugin-build/candy/plugin-build v0.2026270.1414
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026237.1415
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026266.1435
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026237.1416
@@ -27,7 +27,7 @@ require (
 	github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026237.1419
 	github.com/opencharly/plugin-dsh/candy/plugin-dsh v0.2026269.2116
 	github.com/opencharly/plugin-egress/candy/plugin-egress v0.2026269.4
-	github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026237.1419
+	github.com/opencharly/plugin-enc/candy/plugin-enc v0.2026270.1425
 	github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap v0.2026237.1419
 	github.com/opencharly/plugin-example-command/candy/plugin-example-command v0.2026237.1420
 	github.com/opencharly/plugin-example-external/candy/plugin-example-external v0.2026237.1420
@@ -35,7 +35,7 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026237.1421
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026242.2145
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026269.1836
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026270.1319
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026254.600
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026237.1423
@@ -46,18 +46,18 @@ require (
 	github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param v0.2026237.1424
 	github.com/opencharly/plugin-loader/candy/plugin-loader v0.2026254.2014
 	github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026237.1425
-	github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026249.2144
+	github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026270.1359
 	github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026237.1426
 	github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026266.1239
 	github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026237.1426
-	github.com/opencharly/plugin-package/candy/plugin-package v0.2026269.2238
+	github.com/opencharly/plugin-package/candy/plugin-package v0.2026270.1351
 	github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026266.1109
 	github.com/opencharly/plugin-port/candy/plugin-port v0.2026237.1411
 	github.com/opencharly/plugin-preempt/candy/plugin-preempt v0.2026250.552
 	github.com/opencharly/plugin-process/candy/plugin-process v0.2026237.1427
 	github.com/opencharly/plugin-refs/candy/plugin-refs v0.2026237.1427
 	github.com/opencharly/plugin-resource/candy/plugin-resource v0.2026237.1427
-	github.com/opencharly/plugin-service/candy/plugin-service v0.2026269.2248
+	github.com/opencharly/plugin-service/candy/plugin-service v0.2026270.1351
 	github.com/opencharly/plugin-settings/candy/plugin-settings v0.2026237.1428
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026237.1428
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026237.1428
@@ -102,7 +102,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026270.1024 // indirect
+	github.com/opencharly/sdk v0.2026270.1147 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
@@ -130,7 +130,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.1402
-	github.com/opencharly/spec v0.2026269.2150
+	github.com/opencharly/spec v0.2026270.938
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect

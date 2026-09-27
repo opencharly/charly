@@ -253,36 +253,6 @@ func TestPackagingSystemdDeclarations(t *testing.T) {
 	}
 }
 
-// TestPackagingConfigDeclared — the packaging.config section ships a system-wide
-// project charly.yml (/etc/charly/charly.yml) carrying the plugin candy ref the
-// systemd-started MCP server needs (plugin-mcp), so the server resolves a local
-// project (via WorkingDirectory=/etc/charly) instead of falling back to a network
-// fetch of opencharly/charly. sdk/packagekit renders it into the package; the
-// per-distro install tests assert the box-validate passes on the installed file
-// (the shipped system project is a valid charly.yml at the declared schema version).
-func TestPackagingConfigDeclared(t *testing.T) {
-	pkg := loadPackaging(t)
-	cfg := pkg.Config
-	if cfg == nil {
-		t.Fatal("packaging.config is missing")
-	}
-	if cfg.Path != "/etc/charly/charly.yml" {
-		t.Errorf("config.path = %q, want /etc/charly/charly.yml", cfg.Path)
-	}
-	if cfg.Version == "" {
-		t.Error("config.version is empty (must be the packaged charly's schema version — what charly migrate would produce)")
-	}
-	if cfg.Description == "" {
-		t.Error("config.description is empty")
-	}
-	if len(cfg.Plugins) == 0 {
-		t.Fatal("config.plugins is empty (the systemd MCP server would have no plugin source)")
-	}
-	if !strings.Contains(cfg.Plugins[0], "plugin-mcp") {
-		t.Errorf("config.plugins[0] = %q, want a plugin-mcp candy ref", cfg.Plugins[0])
-	}
-}
-
 // optdepNames returns the sorted keys of a format's optdepends map.
 func optdepNames(f *spec.PackagingFormat) []string {
 	if f == nil {
@@ -445,10 +415,10 @@ func TestCharlyDevCandyDeclared(t *testing.T) {
 // resolution; this test is what makes deleting it safe.
 func TestInlineCandySourceDirIsProjectRoot(t *testing.T) {
 	root := t.TempDir()
-	manifest := "version: 2026.261.1747\n" +
+	manifest := "" +
 		"inline-copy-candy:\n" +
 		"    candy:\n" +
-		"        version: 2026.261.1747\n" +
+		"" +
 		"        description: |-\n" +
 		"            Inline candy carrying a relative copy: path, the charly-dev shape.\n" +
 		"        plan:\n" +

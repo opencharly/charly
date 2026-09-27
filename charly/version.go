@@ -3,7 +3,6 @@ package main
 import (
 	"time"
 
-	"github.com/opencharly/spec/calver"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -66,14 +65,10 @@ func ComputeCalVerAt(t time.Time) string {
 // ParsedCalVer in spec because spec already binds `CalVer = string`, the CUE wire scalar.) W0
 // deleted the former in-core CalVer/ParseCalVer aliases — every consumer reads
 // calver.ParsedCalVer/calver.ParseCalVer directly; calver.ParseCalVer is the strict canonical
-// "YYYY.DDD.HHMM" parser: a non-canonical value parses as ok=false, which the schema gate and
-// migration runner treat as "older than every real CalVer".
-
-// LatestSchemaVersion is the HEAD schema CalVer — the curated constant every
-// versioned file is stamped to and the value the load-time gate requires. The
-// authoritative value lives in the spec module's calver package (shared with the
-// candy's migration registry, whose calver-schema step stamps to it); this is the
-// in-core shim.
-func LatestSchemaVersion() calver.ParsedCalVer {
-	return calver.LatestSchemaCalVer()
-}
+// "YYYY.DDD.HHMM" parser: a non-canonical value parses as ok=false, which the migration runner
+// treats as "older than every real CalVer".
+//
+// The former in-core LatestSchemaVersion() shim was DELETED with the schema-versioning removal
+// cutover: there is no schema HEAD, no version stamp, and no load-time version gate. Compatibility
+// has ONE mechanism — the CLOSED CUE schema, which rejects a leftover `version:` with a hard
+// `field not allowed` error; `charly migrate` strips the key.

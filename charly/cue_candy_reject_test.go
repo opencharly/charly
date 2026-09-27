@@ -11,11 +11,11 @@ func TestCandyCUESchema_Rejects(t *testing.T) {
 		yaml string
 	}{
 		{"non-calver version", "candy:\n  version: 4\n  name: x\n  description: d\n  plan:\n  - check: c\n    file: /x\n"},
-		{"uppercase name", "candy:\n  version: 2026.144.1443\n  name: BadName\n  description: d\n  plan:\n  - check: c\n    file: /x\n"},
-		{"empty description", "candy:\n  version: 2026.144.1443\n  name: x\n  description: \"\"\n  plan:\n  - check: c\n    file: /x\n"},
-		{"two keywords in one step", "candy:\n  version: 2026.144.1443\n  name: x\n  description: d\n  plan:\n  - run: r\n    check: c\n    file: /x\n"},
+		{"uppercase name", "candy:\n  name: BadName\n  description: d\n  plan:\n  - check: c\n    file: /x\n"},
+		{"empty description", "candy:\n  name: x\n  description: \"\"\n  plan:\n  - check: c\n    file: /x\n"},
+		{"two keywords in one step", "candy:\n  name: x\n  description: d\n  plan:\n  - run: r\n    check: c\n    file: /x\n"},
 		{"missing version", "candy:\n  name: x\n  description: d\n  plan:\n  - check: c\n    file: /x\n"},
-		{"unknown top-level field (closedness — a typo'd key is rejected, not silently dropped)", "candy:\n  version: 2026.144.1443\n  name: x\n  description: d\n  bogus_typo_field: true\n  plan:\n  - check: c\n    file: /x\n"},
+		{"unknown top-level field (closedness — a typo'd key is rejected, not silently dropped)", "candy:\n  name: x\n  description: d\n  bogus_typo_field: true\n  plan:\n  - check: c\n    file: /x\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

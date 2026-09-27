@@ -21,14 +21,12 @@ func TestLoadUnified_NodeForm_Discovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(filepath.Join(dir, "charly.yml"), `version: "`+latestSchemaVersion.String()+`"
-discover:
+	must(filepath.Join(dir, "charly.yml"), `discover:
   - candy
   - box
 `)
 	must(filepath.Join(dir, "candy", "redis", "charly.yml"), `redis:
   candy:
-    version: "2026.150.0000"
     description: in-memory store
     plan:
       - check: the binary exists

@@ -16,8 +16,7 @@ import (
 // catalog (claude / codex), validated at load against the plugin's served #AgentInput.
 func TestLoadUnified_AgentPluginKind(t *testing.T) {
 	dir := t.TempDir()
-	doc := `version: "` + latestSchemaVersion.String() + `"
-claude:
+	doc := `claude:
   agent:
     description: Anthropic Claude Code CLI
     command: [claude, -p, "${PROMPT}"]

@@ -19,8 +19,7 @@ import (
 // candy/plugin-fleet/deploy_state_writer_test.go's TestDeployNode_DisposableFalseRoundTrip_Writer.
 func TestDeployNode_DisposableFalseRoundTrip_Loader(t *testing.T) {
 	dir := t.TempDir()
-	src := `version: "` + latestSchemaVersion.String() + `"
-locked-pod:
+	src := `locked-pod:
     pod:
         image: foo
         disposable: false

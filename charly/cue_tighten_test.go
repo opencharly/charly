@@ -46,7 +46,7 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 		}
 		return b.String()
 	}
-	const candyHead = "  version: 2026.144.1443\n  name: x\n  description: d\n"
+	const candyHead = "  name: x\n  description: d\n"
 	const candyPlan = "  plan:\n  - check: c\n    file: /x\n"
 
 	cases := []struct {

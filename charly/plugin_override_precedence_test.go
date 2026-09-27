@@ -246,11 +246,11 @@ func TestRepoOverrideRootFor_SkipsTheSeamForARepolessSource(t *testing.T) {
 func writeCommandPluginProject(t *testing.T, root, name, word, source string) string {
 	t.Helper()
 	srcDir := writeMinimalPluginModule(t, root, name)
-	candyYAML := name + ":\n    candy:\n        version: 2026.175.0001\n        description: a command-plugin fixture candy.\n        plugin:\n            providers:\n                - command:" + word + "\n            source: " + source + "\n        plan:\n            - check: command=true\n              id: " + name + "-check\n              context:\n                  - build\n              command: \"true\"\n"
+	candyYAML := name + ":\n    candy:\n        description: a command-plugin fixture candy.\n        plugin:\n            providers:\n                - command:" + word + "\n            source: " + source + "\n        plan:\n            - check: command=true\n              id: " + name + "-check\n              context:\n                  - build\n              command: \"true\"\n"
 	if err := os.WriteFile(filepath.Join(srcDir, "charly.yml"), []byte(candyYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rootYAML := "version: " + LatestSchemaVersion().String() + "\ndiscover:\n    - path: candy\n      recursive: true\n"
+	rootYAML := "discover:\n    - path: candy\n      recursive: true\n"
 	if err := os.WriteFile(filepath.Join(root, "charly.yml"), []byte(rootYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
