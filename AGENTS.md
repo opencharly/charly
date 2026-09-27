@@ -7,6 +7,14 @@ History belongs only in `CHANGELOG/`.
 
 ## R0. Skills first
 
+> **MANDATORY — NON-OPTIONAL. Read the skills BEFORE ANY code change.** The moment a task
+> will make ANY change to a repository — edit a file, create a branch, commit, push, open
+> or update a PR, touch a submodule, or run a git/`gh` action — the owning skill(s) MUST be
+> loaded FIRST, and `/charly-internals:git-workflow` before ANY git/PR action. A change
+> made before loading them is an R0 violation and is not landable. If a harness cannot load
+> a skill by name, it reads the `SKILL.md` by path — it does not proceed without the
+> procedure.
+
 Before reading source, running repository commands, delegating, planning, or
 editing, load every skill selected by the dispatcher below. Use a registered
 project skill when available — the harness loads it from the opencharly/marketplace
