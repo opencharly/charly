@@ -348,7 +348,9 @@ After the final gate:
    branching; if another session owns it, coordinate on the issue thread instead of
    opening a competing PR. Whenever you REPLACE a PR or an issue with a new one,
    comment on the OLD one referencing the new one, so other agents can follow the
-   progress. Full mechanics: `/charly-internals:git-workflow` (B2b + B5).
+   progress. Every issue resolved by a PR must be closed by an agent once that PR
+   merges, with a comment linking the merge. Full mechanics:
+   `/charly-internals:git-workflow` (B2b + B5).
 7. **Before EVERY push, read the new comments on the PR AND on every related issue**
    (and the latest validation results), and act on each — never push onto a stale
    thread.
