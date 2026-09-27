@@ -3807,6 +3807,20 @@ check-kindcluster-workload:
                 method: raw
                 kube_context: kind-check-kindcluster-workload
                 kube_resource: deployments
+                kube_group: apps
+                kube_version: v1
+                namespace: default
+                name: check-kindcluster-workload
+              stdout:
+                - contains: "check-kindcluster-workload"
+            - check: the applied Deployment's controller scheduled the workload pod onto the cluster (the engine-aware image load reached the node)
+              id: kwl-pod-scheduled
+              context:
+                - runtime
+              kube:
+                method: pods
+                kube_context: kind-check-kindcluster-workload
+                namespace: default
               stdout:
                 - contains: "check-kindcluster-workload"
 
