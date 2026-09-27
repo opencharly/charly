@@ -95,7 +95,6 @@ The first lines of its output:
 agentteams [testing]
 agentteams-manager [testing]
 agentteams-worker [testing]
-alpine-repo-box [testing]
 arch.arch [testing]
 …
 ```
