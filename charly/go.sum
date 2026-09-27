@@ -175,8 +175,8 @@ github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422 h1:78p
 github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026237.1422/go.mod h1:prli9Ifi8tMCvaDve467zshWv66IiBvfg7zJpAW24dE=
 github.com/opencharly/plugin-file/candy/plugin-file v0.2026242.2145 h1:qwLvz0aUJg2fFh90woFyEBPAZnK55vUDO5oX1p1KltU=
 github.com/opencharly/plugin-file/candy/plugin-file v0.2026242.2145/go.mod h1:rDRPywq16JlcG1R3bAI0JspWH4L4eCpkl6fWFlWCGSY=
-github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845 h1:w5NX80kiApaXyT8JmGbrW9i02WZns2uO8CKcFU6+B48=
-github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845/go.mod h1:cnet2p4CbE6oh9DEoPewlkArwUEGdKZsqAr3aBzCpGY=
+github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026269.1836 h1:86QFpSaUT1Zk+No7xQlZ0aWjWGy6q97wNKjC2hYUFJI=
+github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026269.1836/go.mod h1:DqhqtveE2wbgthM75pXVwp5Pn3gKjKCLHMKSW8YPr/Q=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422 h1:AtNtEGkYinQC7MsK3l7RdESfdz10iiBaqHHHDMFw9uc=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026237.1422/go.mod h1:n48imd5B164vFBOvdc51ybXAxJHop2uXWYMfvjVJso0=
 github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026254.600 h1:SC3PQIGXGiZ3r2d3u6Y3SBDP4G8s9VNSHm2evo242VM=
