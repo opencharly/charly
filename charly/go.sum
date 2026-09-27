@@ -197,8 +197,8 @@ github.com/opencharly/plugin-loader/candy/plugin-loader v0.2026270.1446 h1:QlgC9
 github.com/opencharly/plugin-loader/candy/plugin-loader v0.2026270.1446/go.mod h1:IdAijeAt9GC7+aaS7BBIEmFPmLf+9YYlJvRscrvsP7k=
 github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026237.1425 h1:8CdIvBw1Bnep7SZWBQp7AZO6xN3wJSrAzVpOxLrsZ3U=
 github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026237.1425/go.mod h1:gIaY1ftm091L5fh6O6W4dJEt0Am48NRd3Gmp8Bnc6rU=
-github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026270.1359 h1:yK9LOXGLC6za9/jfvCYi53yc4WAdZNzyR9585zoSA2M=
-github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026270.1359/go.mod h1:8I/qWLci/Sfm6VK5zyO1IMIdRK5NaVHIUTwa2I95lqM=
+github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026270.1917 h1:iJjMXgJcxhS5e84ZcAun/TtEbOyuoiQDE2Pb2aN9HTQ=
+github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026270.1917/go.mod h1:8I/qWLci/Sfm6VK5zyO1IMIdRK5NaVHIUTwa2I95lqM=
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026237.1426 h1:9xJNRZwM/CZ17i4fPg/bufHr6U4a7m5s5n9VgsSQWyw=
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026237.1426/go.mod h1:UZPYGJffJW8DR/v/eThFSpXYNLPyv+Bdze+9JyNer0c=
 github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026270.1458 h1:b0ikgU1t4qbzZihS+KchIsThoHGeOIgkH+g4VrCx3RY=

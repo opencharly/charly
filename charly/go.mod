@@ -46,7 +46,7 @@ require (
 	github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param v0.2026237.1424
 	github.com/opencharly/plugin-loader/candy/plugin-loader v0.2026270.1446
 	github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026237.1425
-	github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026270.1359
+	github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026270.1917
 	github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026237.1426
 	github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026270.1458
 	github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026270.1719
