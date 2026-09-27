@@ -1,6 +1,5 @@
 pixi:
     candy:
-        version: 2026.144.1443
         plan:
             - run: command=echo "installing pixi"
               command: echo "installing pixi"

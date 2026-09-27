@@ -284,16 +284,10 @@ func TestValidate_CargoWithoutSrc(t *testing.T) {
 	mustValidateErr(t, dir, "requires src/")
 }
 
-// TestValidate_CandyMissingVersion ← TestValidateCandyMissingVersion. A local candy with no version:
-// fails the CUE-conformance gate (the mandatory-CalVer rule is #Candy-enforced, host-natural).
-func TestValidate_CandyMissingVersion(t *testing.T) {
-	mustValidateErr(t, fx(t, `mycandy:
-  candy:
-    description: |-
-      c.
-    package: [curl]
-    plan: [{check: x, command: "true", context: [build]}]`), `candy "mycandy"`, "version")
-}
+// TestValidate_CandyMissingVersion was DELETED with the schema-versioning removal:
+// there is no mandatory-CalVer rule on a candy (the `version:` field is gone from
+// #Candy), so a candy with no version is valid by construction. The CUE-closedness
+// rejection of a LEFTOVER `version:` is covered by cue_candy_reject_test.go.
 
 // ---------------------------------------------------------------------------
 // Volume / alias rules (validateVolume / validateAliases — plugin-box)

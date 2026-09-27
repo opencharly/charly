@@ -196,8 +196,8 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 		// --- cutover #9: CalVer format (replaces deleted validateVersionFields) ---
 		{"candy bad version format rejected", "candy",
 			candy("  version: not-calver\n  name: x\n  description: d\n" + candyPlan), true},
-		{"candy missing version rejected", "candy",
-			candy("  name: x\n  description: d\n" + candyPlan), true},
+		{"candy missing version accepted (the version stamp is removed)", "candy",
+			candy("  name: x\n  description: d\n" + candyPlan), false},
 		{"candy bad status rejected", "candy",
 			candy(candyHead + candyPlan + "  status: flaky\n"), true},
 		{"candy extract relative dest rejected", "candy",

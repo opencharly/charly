@@ -1,6 +1,5 @@
 generate-packages:
     candy:
-        version: 2026.230.0645
         description: |-
             Superproject declaration of the OUT-OF-TREE `charly generate-packages` command
             plugin — the nFPM packaging engine that builds charly's own native packages

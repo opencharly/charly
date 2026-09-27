@@ -1,6 +1,5 @@
 charly:
     candy:
-        version: 2026.162.1430
         description: |
             The full charly toolchain on a deployment — the on-PATH charly CLI plus its composed VM / encrypted-storage / console-relay stack.
             Full charly toolchain — the CLI binary + the VM stack (virtualization),
@@ -385,20 +384,6 @@ charly:
                   description: Charly MCP server (user session, Streamable HTTP on 127.0.0.1:18765)
                   restart: on-failure
                   working_directory: /etc/charly
-            # config — a system-wide project charly.yml shipped in the package
-            # (/etc/charly/charly.yml): the plugin config the systemd-started MCP
-            # server resolves via its WorkingDirectory=/etc/charly, so the server
-            # uses a local project instead of falling back to a network fetch of
-            # opencharly/charly. version: is the SCHEMA version of the packaged
-            # charly — the repo's current schema version (what charly migrate
-            # would produce); the charly/packaging_test.go variant+config tests
-            # assert it parses.
-            config:
-                path: /etc/charly/charly.yml
-                version: 2026.261.1747
-                description: System-wide charly MCP server project (started via systemd)
-                plugins:
-                    - '@github.com/opencharly/plugin-mcp/candy/plugin-mcp:v2026.250.0635'
         plan:
             - check: the charly binary resolves on the deployment's PATH
               exit_status: 0
