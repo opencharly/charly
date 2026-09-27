@@ -340,6 +340,18 @@ After the final gate:
    live unfinished bed revokes PASS.
 5. After `main` advances, update interacting PRs and run a risk-proportional
    delta gate. Never guess across divergent submodule lineage.
+6. **Issue-first coordination.** Before any non-trivial work (and before filing
+   anything), search for an existing issue/PR covering it and ADD to that thread
+   rather than duplicating; if none exists, file ONE proper issue
+   (title/problem/evidence/scope) and reference it from the PR. The issue is the
+   coordination point: check its owner and CLAIM it (comment + assign) BEFORE
+   branching; if another session owns it, coordinate on the issue thread instead of
+   opening a competing PR. Whenever you REPLACE a PR or an issue with a new one,
+   comment on the OLD one referencing the new one, so other agents can follow the
+   progress. Full mechanics: `/charly-internals:git-workflow` (B2b + B5).
+7. **Before EVERY push, read the new comments on the PR AND on every related issue**
+   (and the latest validation results), and act on each — never push onto a stale
+   thread.
 
 The worktree LAYOUT (where a session roots, how its worktree is placed, and how
 parallel sessions share the umbrella) is owned by the umbrella `AGENTS.md`, not
