@@ -147,76 +147,24 @@ func (a kitVerbActAdapter) Invoke(ctx context.Context, op *Operation) (*Result, 
 // kitVerbActStepAdapter is the variant for a host-coupled verb candy whose kit verb ALSO
 // implements checkstep.StepProvider — a TYPED-STEP state-provision verb (service/package) whose
 // build/deploy act lowers into a typed InstallStep, not a shell. It adds the package-main
-// TypedStepProvider role (LowersTo + ConstructStep), materializing the candy's
-// checkstep.StepDescriptor into the real ServicePackagedStep / SystemPackagesStep — so
-// hostBuildConstructStep (the "construct-step" seam handler) lowers it exactly as
-// the typed builtin verb did, and the load-bearing
-// Reverse() stays in package main. Embeds kitVerbActAdapter (service/package are also
-// ProvisionActors — the runtime act-shell half).
+// TypedStepProvider role (LowersTo + ConstructStep) and DELEGATES both halves to the candy:
+// LowersTo returns the candy's StepKind() (the internal IR spec.StepKind), and ConstructStep
+// calls the candy's MaterializeStep(op, the four ctx scalars) — so core holds NO per-kind
+// switch (the kernel/plugin boundary law: a kind switch in core is an incomplete seam). The
+// load-bearing Reverse() stays on the step the candy builds (package main owns the reversal
+// timeline). Embeds kitVerbActAdapter (service/package are also ProvisionActors — the runtime
+// act-shell half).
 type kitVerbActStepAdapter struct {
 	kitVerbActAdapter
 	sp checkstep.StepProvider
 }
 
 func (a kitVerbActStepAdapter) LowersTo() spec.StepKind {
-	return kitStepKindToCharly(a.sp.StepKind())
+	return a.sp.StepKind()
 }
 
 func (a kitVerbActStepAdapter) ConstructStep(op *spec.Op, ctx stepConstructCtx) spec.InstallStep {
-	return materializeStep(a.sp.ConstructStepDescriptor(op), ctx)
-}
-
-// kitStepKindToCharly maps the checkstep.StepKindName to charly's internal StepKind enum.
-//
-// WHY THIS SWITCH STAYS CORE (K-wave 2 test migration, task #24): the per-kind
-// kitStepKindToCharly + materializeStep pair is NOT cleanly separable to the kit-shape
-// candies' (service/package) own registration. The materializer needs the host-computed
-// stepConstructCtx (RunAsUser / CandyName / PkgFormat / DistroTags — a core-defined type
-// a candy module cannot import), and the checkstep contract deliberately keeps the candy
-// decoupled from the IR types ("the candy never imports an IR type" — it returns a neutral
-// StepDescriptor; the host rebuilds the real spec.InstallStep). Moving the mapping would
-// require changing the checkstep.StepProvider interface (StepKind() returning spec.StepKind
-// instead of the deliberately-separate StepKindName, plus a MaterializeStep method taking
-// the 4 ctx scalars as parameters), rippling through spec/checkstep, sdk/kit, and both
-// candies. Documented, not forced — a future move needs exactly that plugin-side
-// materializer contract.
-func kitStepKindToCharly(k checkstep.StepKindName) spec.StepKind {
-	switch k {
-	case checkstep.StepKindNameServicePackaged:
-		return spec.StepKindServicePackaged
-	case checkstep.StepKindNameSystemPackages:
-		return spec.StepKindSystemPackages
-	}
-	panic("kitStepKindToCharly: unknown kit step kind " + string(k))
-}
-
-// materializeStep rebuilds the real package-main InstallStep from a candy's
-// checkstep.StepDescriptor and the pre-resolved stepConstructCtx (the run-as-resolved scope,
-// the candy name, the image package format + distro tags — the 4 scalars this function
-// actually reads, never a full layer/img handle). The load-bearing Reverse() lives on
-// the built step (package main), unchanged from the typed builtin verb's ConstructStep.
-// See kitStepKindToCharly for why this per-kind switch stays core (task #24).
-func materializeStep(desc checkstep.StepDescriptor, ctx stepConstructCtx) spec.InstallStep {
-	switch {
-	case desc.ServicePackaged != nil:
-		return &spec.ServicePackagedStep{
-			Unit:        desc.ServicePackaged.Unit,
-			TargetScope: spec.OpStepScope(ctx.RunAsUser),
-			Enable:      desc.ServicePackaged.Enable,
-			CandyName:   ctx.CandyName,
-		}
-	case desc.SystemPackages != nil:
-		// Repos/Copr/Options come from the top-level package cascade
-		// (compileSystemPackageSteps), NOT a per-op run: {package} step — match the
-		// pre-extraction lowering (Format + PhaseInstall + the cross-distro-resolved name).
-		return &spec.SystemPackagesStep{
-			Format:   ctx.PkgFormat,
-			Phase:    spec.PhaseInstall,
-			Packages: []string{checkstep.ResolvePackageName(desc.SystemPackages.Package, desc.SystemPackages.PackageMap, ctx.DistroTags)},
-		}
-	default:
-		panic("materializeStep: empty StepDescriptor for verb in candy " + ctx.CandyName)
-	}
+	return a.sp.MaterializeStep(op, ctx.RunAsUser, ctx.CandyName, ctx.PkgFormat, ctx.DistroTags)
 }
 
 // registerCompiledCheckVerb registers a COMPILED-IN host-coupled verb candy: it wraps

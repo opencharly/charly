@@ -38,7 +38,8 @@ var builtinProviderInstances = []Provider{
 	// interface/addr/matching/file/user/unix_group/kernel-param/mount/command/package/service)
 	// are ALL relocated to compiled-in candies (candy/plugin-*), each registering the same way.
 	// `command` is the install-task-act member and `package`/`service` are the TWO typed-step
-	// members of that set (their step materialization stays in package main via materializeStep).
+	// members of that set (their typed step is built by the candy's own
+	// StepProvider.MaterializeStep; package main keeps the load-bearing Reverse()).
 	// wl is NOT here either — it is an EXTERNAL-CHARLY-VERB served OUT-OF-PROCESS
 	// (candy/plugin-wl), like dbus/record/cdp/vnc/mcp. wl was the LAST live-container verb
 	// compiled into charly; after it externalized, ZERO check verbs are in-core and the

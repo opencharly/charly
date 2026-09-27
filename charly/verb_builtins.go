@@ -16,7 +16,8 @@ import (
 //     file/user/unix_group/kernel-param/mount/command/package/service) — RegisterBuiltinPluginUnit
 //     candies. `package`/`service` are TypedStepProviders (their act lowers to a
 //     SystemPackagesStep / ServicePackagedStep with load-bearing reversals via the host's
-//     materializeStep — the one piece that stays in package main); file/user/unix_group/
+//     via the candy's own StepProvider.MaterializeStep — package main keeps the
+//     load-bearing Reverse()); file/user/unix_group/
 //     kernel-param/mount are ProvisionActors; `command` is the install-task emitCmd branch.
 //   - NO compiled-in live-container verb remains: `wl` (the last one) externalized into
 //     candy/plugin-wl, an out-of-process plugin (below). After it externalized, the
