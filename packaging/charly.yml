@@ -208,7 +208,7 @@ charly:
                         cloudflared-bin: Cloudflare tunnels (AUR)
                         gvisor-tap-vsock: podman-machine networking — provides /usr/lib/podman/gvproxy (AUR)
                         nvidia-utils: nvidia-smi GPU detection + nvidia-ctk CDI generation (GPU targets only)
-                        kubectl: Kubernetes deploys + charly eval k8s probes (kind:k8s targets only)
+                        kubectl: Kubernetes deploys + charly eval k8s probes + the `kindcluster` deploy substrate's workload apply (`kubectl apply -k`)
                         kind: local Kubernetes-in-Docker clusters — the `kindcluster` deploy substrate (docker/podman/nerdctl engines)
                         android-tools: "host adb for the remote `target: android` package-download install path"
                         libsecret: secret-tool CLI + pinentry-qt Secret Service passphrase auto-retrieval; the bundled plugin-secrets credential store uses the pure-Go go-keyring D-Bus client
