@@ -193,17 +193,20 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 			candy(candyHead + candyPlan + "  route:\n    port: 8080\n"), true},
 		{"candy route bad port rejected", "candy",
 			candy(candyHead + candyPlan + "  route:\n    host: svc.localhost\n    port: 99999\n"), true},
-		// --- cutover #9: CalVer format (replaces deleted validateVersionFields) ---
-		{"candy bad version format rejected", "candy",
-			candy("  version: not-calver\n  name: x\n  description: d\n" + candyPlan), true},
+		// --- the schema-versioning-removal cutover deleted the CalVer rule: a
+		// candy/box `version:` is now an UNKNOWN (closed) field, rejected by
+		// closedness — not a format rule. The bare "missing version" case is
+		// deleted (a version-less candy/box is valid). ---
+		{"candy a retired version field rejected (closedness)", "candy",
+			candy("  version: 2026.150.0000\n  name: x\n  description: d\n" + candyPlan), true},
 		{"candy missing version accepted (the version stamp is removed)", "candy",
 			candy("  name: x\n  description: d\n" + candyPlan), false},
 		{"candy bad status rejected", "candy",
 			candy(candyHead + candyPlan + "  status: flaky\n"), true},
 		{"candy extract relative dest rejected", "candy",
 			candy(candyHead + candyPlan + "  extract:\n  - source: img:tag\n    path: /a\n    dest: rel\n"), true},
-		{"box bad version format rejected", "box",
-			"name: x\nbase: y\nversion: not-calver\n", true},
+		{"box a retired version field rejected (closedness)", "box",
+			"name: x\nbase: y\nversion: 2026.150.0000\n", true},
 		// --- cutover #9: box jobs>=1 / podman_jobs_cap>=1 (replaces validateBuildTunables range) ---
 		{"box jobs zero rejected", "box",
 			"name: x\nbase: y\njobs: 0\n", true},

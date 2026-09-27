@@ -253,6 +253,42 @@ func TestPackagingSystemdDeclarations(t *testing.T) {
 	}
 }
 
+// TestPackagingShipsSystemProject — the charly-mcp systemd units resolve their
+// project from WorkingDirectory=/etc/charly, so the packaging MUST ship
+// /etc/charly/charly.yml. The former packaging.config section (#PackagingConfig)
+// was REMOVED by the schema-versioning-removal cutover (spec#183), so the
+// surviving mechanism is a packaging plan run-step that emits the file into the
+// package/install; this test pins it (it replaces the deleted
+// TestPackagingConfigDeclared).
+func TestPackagingShipsSystemProject(t *testing.T) {
+	data, err := os.ReadFile(candyCharlyYML)
+	if err != nil {
+		t.Fatalf("read %s: %v", candyCharlyYML, err)
+	}
+	var doc struct {
+		Charly struct {
+			Candy struct {
+				Plan []struct {
+					Run     string `yaml:"run"`
+					Command string `yaml:"command"`
+				} `yaml:"plan"`
+			} `yaml:"candy"`
+		} `yaml:"charly"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse %s: %v", candyCharlyYML, err)
+	}
+	ships := false
+	for _, step := range doc.Charly.Candy.Plan {
+		if strings.Contains(step.Command, "/etc/charly/charly.yml") && strings.Contains(step.Command, "plugin-mcp") {
+			ships = true
+		}
+	}
+	if !ships {
+		t.Errorf("charly: plan has no run-step shipping /etc/charly/charly.yml with a plugin-mcp ref (the systemd charly-mcp units' WorkingDirectory project)")
+	}
+}
+
 // optdepNames returns the sorted keys of a format's optdepends map.
 func optdepNames(f *spec.PackagingFormat) []string {
 	if f == nil {
