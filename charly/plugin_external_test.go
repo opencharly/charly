@@ -86,8 +86,8 @@ func TestExternalPluginEndToEnd(t *testing.T) {
 // TestPluginSchemaEmptyRejectedUnconditionally pins the cutover's uniform rule at
 // the HOST gate: an EMPTY served schema is rejected no matter what — including the
 // former carve-out case (a plugin declaring NO InputDef on any capability). Before
-// the carve-out was deleted, `registerPluginUnitSchema(`{InputDefs:nil}“ with an
-// empty CueSource returned nil (the "stub-gate relaxation"); it now hard-fails, so
+// the carve-out was deleted, a PluginSchema with an empty CueSource and nil
+// InputDefs returned nil (the "stub-gate relaxation"); it now hard-fails, so
 // this test FAILS without the change. A non-empty DOC schema that declares no
 // InputDef — the shape every pass-through command / substrate kind / deploy target
 // now ships — is ACCEPTED (the one allowance: the schema is present, the input def
