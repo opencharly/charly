@@ -1,6 +1,5 @@
 charly:
     candy:
-        version: 2026.162.1430
         description: |
             The full charly toolchain on a deployment — the on-PATH charly CLI plus its composed VM / encrypted-storage / console-relay stack.
             Full charly toolchain — the CLI binary + the VM stack (virtualization),
