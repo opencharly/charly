@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Check the single canonical agent rulebook and the generated per-harness
-developer profiles."""
+"""Check the single canonical agent rulebook and the Codex project
+configuration."""
 
 from __future__ import annotations
 
@@ -68,10 +68,13 @@ CONFIDENCE_TIERS = (
     "syntax check only",
     "theoretical suggestion",
 )
+# Harness-specific CONFIG identifiers a neutral rulebook must not embed. The
+# harness *names* (Claude Code, Codex, Kimi Code) are deliberately NOT listed:
+# AGENTS.md is the single harness-neutral rulebook and names its consumer
+# harnesses in its R0 loading prose.
 FORBIDDEN_GENERIC_RULEBOOK_MARKERS = (
     "CODEX_HOME",
     ".codex",
-    "Kimi Code",
     "~/.kimi-code",
 )
 
