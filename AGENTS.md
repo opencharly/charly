@@ -73,8 +73,8 @@ match, load ALL their skills before doing anything.
 | Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`) | `/charly-distros:fedora-test` |
 | Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`) | `/charly-distros:nvidia` |
 | Git/`gh` workflow — `feat/` branch, commit, PR-only landing (NO direct push to main), branch protection, the `pr-validator` fresh-evaluator gate, native auto-merge + tag-on-merge CalVer-at-merge, worktree, sync-to-upstream, branch/worktree prune, cross-repo R10 landing | `/charly-internals:git-workflow` |
-| Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:go-quality` |
-| Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:strict-policy` |
+| Go code-quality / AGENTS.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:go-quality` |
+| Go code-quality / AGENTS.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:strict-policy` |
 | Go source work (adding/modifying `charly` commands) | `/charly-internals:go` |
 | Hard-cutover concerns / rename sweeps | `/charly-internals:cutover-policy` |
 | IR / InstallPlan / EmitTarget / OCITarget | `/charly-internals:install-plan` |
@@ -495,8 +495,6 @@ second copy of them.
 - `VISION.md`: thesis and direction.
 - `PROGRAM/`: binding program north-star documents (one file per program, named in every spawn brief).
 - `AGENTS.md`: complete current harness-neutral mandates and dispatcher.
-- `CLAUDE.md`: a **symlink** to `AGENTS.md` — one rulebook, no hand-kept copy to
-  drift (the former hand-synced mirror had already diverged).
 - the opencharly/marketplace repo's `<family>/skills/<skill>/SKILL.md`: detailed
   procedures and technical ownership (the harness loads it; read it directly from
   the marketplace repo).

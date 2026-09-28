@@ -1,4 +1,4 @@
-# golangci-lint v2 config — the deterministic backbone of the CLAUDE.md-compliance audit.
+# golangci-lint v2 config — the deterministic backbone of the AGENTS.md-compliance audit.
 # Scope: "broadest" code-quality/idiom/duplication/dead-code — NOT security scanning.
 # gosec is deliberately excluded: on this CLI its findings are dominated by the LEGITIMATE
 # subprocess pattern (charly IS the orchestrator of podman/virsh/systemctl), i.e. the exact

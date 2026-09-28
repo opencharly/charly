@@ -13,7 +13,7 @@ before the first tool call of every task, and produces PR bodies that pass the
 | Surface | Mechanism | Detail |
 |---|---|---|
 | Mechanical gates (force-push, direct-main push, commit bypass, aliases) | `.pi/extensions/charly-gates.ts` intercepts `tool_call` for bash, runs `.claude/hooks/pre-commit-gate.sh` + `pre-push-gate.sh` via stdin | Exit 2 → `{ block: true }`. Guards mechanics only, per AGENTS.md "Hooks" doctrine. |
-| Rulebook context | Pi auto-loads `AGENTS.md` and `CLAUDE.md` as context files (both exist at repo root) | Loaded in startup header, included in system prompt. Survives `/reload`. |
+| Rulebook context | Pi auto-loads `AGENTS.md` as a context file (it exists at repo root) | Loaded in startup header, included in system prompt. Survives `/reload`. |
 | Skill discovery | Pi auto-discovers `~/.agents/skills/` and `.agents/skills/` (project) | 150+ skills visible via `<skill>` tags in system prompt. Agent must `read` SKILL.md to load content. |
 | Project packages | `settings.json` pins pi-mcp-adapter, pi-subagents, pi-plan-mode, pi-memory, pi-ollama-cloud, rpiv-todo | Installed automatically on project trust. |
 | git-flow test suite | `gate_test.py` covers commit + push gate edges | Run via `python3 -B gate_test.py` from `.claude/hooks/`. |
@@ -46,7 +46,7 @@ The validator caught 4 issues across 3+ rounds. Each round was a different failu
 4. **R2 deferred split** → sdk+spec bumps deferred without naming a thematic batch
 5. **Missing rule-compliance section** → no `## Project-rulebook rule-compliance` table
 
-The common thread: **the agent had all the rules in context files (AGENTS.md/CLAUDE.md) but did not follow them.** The rules were in the context but not in the system prompt, and after compaction or across turns, the model lost track of specific requirements like "every PR body must have a rule-compliance section."
+The common thread: **the agent had all the rules in the context file (AGENTS.md) but did not follow them.** The rules were in the context but not in the system prompt, and after compaction or across turns, the model lost track of specific requirements like "every PR body must have a rule-compliance section."
 
 ## Implementation plan
 
@@ -69,7 +69,7 @@ extensions shows this exact pattern for `.claude/rules/*.md` files.
 pi.on("before_agent_start", async (event) => {
   const { systemPrompt, systemPromptOptions } = event;
 
-  // systemPromptOptions.contextFiles contains the loaded AGENTS.md/CLAUDE.md paths
+  // systemPromptOptions.contextFiles contains the loaded AGENTS.md paths
   // systemPromptOptions.skills contains the loaded skill descriptions
   // These are already in the system prompt via pi's built-in loading.
   // We add the condensed rules that the model tends to forget.
