@@ -83,6 +83,36 @@ func TestExternalPluginEndToEnd(t *testing.T) {
 	}
 }
 
+// TestPluginSchemaEmptyRejectedUnconditionally pins the cutover's uniform rule at
+// the HOST gate: an EMPTY served schema is rejected no matter what — including the
+// former carve-out case (a plugin declaring NO InputDef on any capability). Before
+// the carve-out was deleted, `registerPluginUnitSchema(`{InputDefs:nil}“ with an
+// empty CueSource returned nil (the "stub-gate relaxation"); it now hard-fails, so
+// this test FAILS without the change. A non-empty DOC schema that declares no
+// InputDef — the shape every pass-through command / substrate kind / deploy target
+// now ships — is ACCEPTED (the one allowance: the schema is present, the input def
+// is optional), proving the rule rejects emptiness, not inputlessness.
+func TestPluginSchemaEmptyRejectedUnconditionally(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
+	// Negative control: empty schema, no input defs → REJECT (was nil pre-cutover).
+	if err := registerPluginUnitSchema("empty-schema-negative-control", PluginSchema{}); err == nil {
+		t.Fatal("an EMPTY served schema must be rejected unconditionally (no schema-less plugin), got nil")
+	}
+	// Negative control: empty schema WITH input defs → still REJECT (unchanged).
+	if err := registerPluginUnitSchema("empty-schema-with-defs-negative-control", PluginSchema{
+		InputDefs: map[string]string{"verb:foo": "#FooInput"},
+	}); err == nil {
+		t.Fatal("an EMPTY served schema with a declared input def must be rejected, got nil")
+	}
+	// Positive control: a non-empty DOC schema with NO InputDefs → ACCEPT.
+	docSchema := PluginSchema{
+		CueSource: "#Docmarker: {\n\tmarker?: string\n}\n",
+	}
+	if err := registerPluginUnitSchema("doc-schema-only-accepted", docSchema); err != nil {
+		t.Fatalf("a non-empty doc schema with no InputDefs must be accepted: %v", err)
+	}
+}
+
 // TestPluginSchemaSpliceValidation proves the VALIDATION half of the per-plugin
 // CUE contract through the REAL gate + validator (no disk read at runtime — the
 // schema source here is the fixture, fed in as a unit would serve it). The

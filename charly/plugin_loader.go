@@ -58,14 +58,17 @@ var pluginSchemas = &pluginSchemaSet{inputDefs: map[string]string{}}
 // base ++ Σ. (directive: a proper schema is evaluated every time a plugin loads.)
 func registerPluginUnitSchema(name string, s PluginSchema) error {
 	if strings.TrimSpace(s.CueSource) == "" {
-		// Stub-gate relaxation (schema-compaction cutover): a plugin declaring NO
-		// authored input (no InputDef on any capability) needs no schema — the
-		// former requirement forced ~46 near-identical stub files. A plugin that
-		// DOES declare an input def must still serve the schema defining it.
-		if len(s.InputDefs) > 0 {
-			return fmt.Errorf("plugin %q declares input defs but served an EMPTY CUE schema", name)
-		}
-		return nil
+		// NO SCHEMA-LESS PLUGINS (the former stub-gate relaxation is DELETED). Every
+		// plugin MUST serve a non-empty, self-contained CUE schema — its single
+		// source for typed params, charly.yml/env configuration, runtime validation,
+		// and Go code generation. There is no input-less exemption: a plugin whose
+		// capability declares no structured input (a pass-through command, a
+		// substrate kind, a deploy target) still ships its schema — the "doc schema"
+		// — so EVERY plugin presents the same CUE-validated, code-generated surface
+		// with no exceptions. The sdk enforces the same rule on the serving side
+		// (BuildCapabilitiesWithRequires), so a plugin cannot reach the wire without
+		// one; this gate is the host's byte-identical enforcement of it.
+		return fmt.Errorf("plugin %q served an EMPTY CUE schema: every plugin MUST serve a non-empty schema (there is no schema-less plugin)", name)
 	}
 	pluginSchemas.mu.Lock()
 	defer pluginSchemas.mu.Unlock()
