@@ -1,4 +1,3 @@
-version: 2026.261.1747
 # Canonical repo identity. After the 2026-06 box inversion main imports the five
 # active distro submodules (arch / cachyos / debian / fedora / ubuntu)
 # ONE-DIRECTIONALLY to reference their relocated boxes; the submodules no longer
@@ -283,7 +282,6 @@ charly-vm:
 # =============================================================================
 charly-dev:
     candy:
-        version: 2026.243.0300
         description: |
             The in-development charly toolchain installed from LOCAL SOURCE — the on-PATH
             charly CLI baked from the repo-root `bin/charly` that `scripts/bootstrap-charly.sh`
@@ -910,7 +908,6 @@ check-kubevirt-operator:
 # "main owns no boxes" inversion (which concerns the shipped image catalog).
 check-k8s-deploy-app:
     candy:
-        version: 2026.180.1000
         base: quay.io/fedora/fedora:43
         description: |-
             Minimal Fedora base box — the check-k8s-deploy bed's target:kubernetes workload
@@ -2529,7 +2526,6 @@ check-preflight-local:
 # =============================================================================
 agentteams:
     candy:
-        version: 2026.243.0300
         base: cachyos.cachyos
         description: |-
             The AgentTeams top box: a cachyos base composing the agentteams top
@@ -2552,7 +2548,6 @@ agentteams:
             - '@github.com/opencharly/layer-agentteams:v2026.240.0118'
 agentteams-manager:
     candy:
-        version: 2026.243.0300
         base: cachyos.cachyos
         tag: manager
         description: |-
@@ -2581,7 +2576,6 @@ agentteams-manager:
             - '@github.com/opencharly/pod-agentteams-manager:v2026.239.1603'
 agentteams-worker:
     candy:
-        version: 2026.243.0300
         base: cachyos.cachyos
         tag: worker
         description: |-
@@ -2817,7 +2811,6 @@ check-agentteams-vm:
 # =============================================================================
 check-retention-app:
     candy:
-        version: 2026.228.0400
         enabled: false
         base: quay.io/fedora/fedora:43
         description: |-
@@ -2842,7 +2835,6 @@ check-retention-app:
 # =============================================================================
 check-boxload-app:
     candy:
-        version: 2026.243.0300
         base: quay.io/fedora/fedora:43
         description: |-
             Fixture box for the `charly box load` bed: a minimal Fedora base composing
