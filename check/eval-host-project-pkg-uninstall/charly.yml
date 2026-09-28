@@ -29,10 +29,8 @@
 # deploy-level member's plan is NOT surfaced to a deploy-scope check runner. The
 # root plan reads the GLOBAL guest state (the per-bed ledger file + pacman's DB),
 # which includes the member's records.
-version: 2026.261.1747
 check-pkg-uninstall-root-candy:
     candy:
-        version: 2026.268.1917
         description: |-
             Benign root fixture: installs an ordinary Arch package (ripgrep) so the inner
             bed's ROOT has a deterministic, distinct deploy effect. Its candy name differs
@@ -53,7 +51,6 @@ check-pkg-uninstall-root-candy:
                 in_container: false
 check-pkg-uninstall-fixture:
     candy:
-        version: 2026.268.1917
         description: |-
             Fixture: installs an EXACT-VERSION-PINNED charly from the published charly-arch
             repo via the `distro: arch. package:/repo:` path, so the deploy's teardown
