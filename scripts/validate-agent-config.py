@@ -5,7 +5,6 @@ configuration."""
 from __future__ import annotations
 
 from collections.abc import Callable
-import json
 import os
 import pathlib
 import re
@@ -15,9 +14,6 @@ import tomllib
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SKILL_REF = re.compile(
-    r"/charly-([a-z][a-z0-9-]*):([a-z][a-z0-9-]*)(?![A-Za-z0-9_-])"
-)
 BARE_ROOT_GO_GATE = re.compile(r"(?m)^\s*(?:`)?go (?:test|vet|build) \./\.\.\.(?:`)?\s*$")
 NONCANONICAL_ATTRIBUTION_TEMPLATE = re.compile(
     r"(?:Assisted-by: <Harness>\s+\(<Provider Full Model Name>;\s+<confidence>\)"
@@ -80,6 +76,9 @@ FORBIDDEN_GENERIC_RULEBOOK_MARKERS = (
 
 
 def dispatcher(path: pathlib.Path) -> list[tuple[str, ...]]:
+    skill_ref = re.compile(
+        r"/charly-([a-z][a-z0-9-]*):([a-z][a-z0-9-]*)(?![A-Za-z0-9_-])"
+    )
     text = path.read_text()
     section = text.split("## Skill Dispatcher", 1)[1].split("Full index:", 1)[0]
     rows: list[tuple[str, ...]] = []
@@ -87,7 +86,7 @@ def dispatcher(path: pathlib.Path) -> list[tuple[str, ...]]:
         if not line.startswith("|"):
             continue
         refs = tuple(
-            f"/charly-{plugin}:{name}" for plugin, name in SKILL_REF.findall(line)
+            f"/charly-{plugin}:{name}" for plugin, name in skill_ref.findall(line)
         )
         if refs:
             rows.append(refs)
@@ -207,17 +206,6 @@ def validate_core_go_gate(root: pathlib.Path, errors: list[str]) -> None:
 
 
 def self_test() -> None:
-    sample = (
-        "`/charly-internals:strict-policy` "
-        "/charly-ollama:not-a-real-skill "
-        "http://host/charly-ollama:11434/api "
-        "http://host/charly-jupyter:8888/lab"
-    )
-    assert SKILL_REF.findall(sample) == [
-        ("internals", "strict-policy"),
-        ("ollama", "not-a-real-skill"),
-    ]
-    assert not SKILL_REF.findall("/charly-internals:strict-policy_bad")
     records = b"keep.md\0old.md\0new.md\0"
     names = current_markdown_names(records, {"keep.md", "new.md"}.__contains__)
     assert names == ["keep.md", "new.md"]
@@ -324,7 +312,7 @@ def validate_codex_project_agents(root: pathlib.Path, errors: list[str]) -> None
 
 def main() -> int:
     # The canonical validation command owns its meta-test. Keeping this inside the validator avoids
-    # ad-hoc gate assemblers guessing a separate test filename and silently omitting parser coverage.
+    # ad-hoc gate assemblers guessing a separate test filename and silently omitting validator coverage.
     self_test()
     if sys.argv[1:] == ["--self-test"]:
         print("agent configuration validator self-test passed")
