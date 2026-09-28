@@ -122,8 +122,24 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 			continue
 		}
 		for word, ref := range refsForRepo {
-			if prev, dup := wordRefs[word]; dup && prev != ref {
-				return nil, nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+			prev, dup := wordRefs[word]
+			if dup && prev != ref {
+				// A word may be declared by BOTH a compiled-in plugin AND an external
+				// one — the by-design coexist the runtime per-word loader allows
+				// (charly#686): e.g. `kind:kubevirt` is the compiled-in
+				// plugin-substrate STRUCTURAL kind, re-declared by the external
+				// plugin-kubevirt alongside its OWN deploy/verb/command words. The
+				// compiled-in provider owns the word; do not error. Two EXTERNAL
+				// providers for one word is still a hard error (one canonical
+				// external provider per word).
+				prevC, thisC := refCompiled(names, prev), refCompiled(names, ref)
+				if prevC == thisC {
+					return nil, nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+				}
+				if thisC {
+					wordRefs[word] = ref // the compiled-in provider wins the word
+				}
+				continue
 			}
 			wordRefs[word] = ref
 		}
@@ -282,6 +298,18 @@ func readCorpus(root, path string) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+// refCompiled reports whether a provider ref's repo is a compiled-in plugin repo, so the
+// duplicate-word rule can prefer the compiled-in provider (the runtime per-word coexist).
+func refCompiled(names []string, ref string) bool {
+	for _, n := range names {
+		root := "github.com/opencharly/" + n
+		if ref == root || strings.HasPrefix(ref, root+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // repoSetCompiled reports whether a repo path is one of the compiled-in plugin repos

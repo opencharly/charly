@@ -812,8 +812,8 @@ check-kubevirt-operator:
             # (the kindcluster bed add_candy's it for the same reason); plugin-kubevirt
             # serves `kubevirt:`. Neither is compiled into charly, so the bed must
             # reference them or the verb resolves "no provider registered".
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
-            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.275.0411'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
+            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.276.1453'
         env:
             K3S_SERVER_HOSTNAME: 127.0.0.1
         install_opts:
@@ -891,6 +891,184 @@ check-kubevirt-operator:
               stdout: {contains: "Client Version"}
               context: [runtime]
               command: /usr/bin/virtctl version --client
+# =============================================================================
+# check-kubevirt-vm — disposable R10 for the FULL guest-VM leg: a charly-built VM
+# box booted as a KubeVirt containerDisk.
+#
+# The k3s node is the group root's own vm: body (a disposable libvirt Arch k3s VM
+# whose libvirt cpu mode DEFAULTS to host-passthrough — the renderer appends
+# +vmx/+svm — so nested KVM reaches the guest, the
+# shared k3s-vm entity + k3s-server + layer-kubevirt-operator (KubeVirt + CDI)
+# + layer-kubevirt (virtctl)). The bed's own [deploy] plan step BUILDS the box
+# (`charly vm build --container-disk` → /disk/disk.img) and RETAGS it to a stable
+# ref (`charly vm retag`); the sibling `check-kubevirt-vm-guest` member, a
+# `kubevirt:` deploy of the `check-kubevirt-vm-vmi` template, then delivers that
+# image into the node's containerd (the member's own PrepareVenue,
+# plugin-kubevirt's containerDisk delivery) and applies the VM CR, waiting on VMI
+# Ready + AgentConnected. The host-side plan then probes the platform + the VMI +
+# the guest agent, and the guest member's own plan runs IN the booted VMI over the
+# managed port-forward alias. The runner's fresh `charly update` rebuild is the R10
+# gate (no bed-side second-deploy YAML).
+# =============================================================================
+# The kind:vm disk SOURCE the box is built from (a plain cloud_image base).
+check-kubevirt-vm-box:
+    vm:
+        source:
+            kind: cloud_image
+            url: https://geo.mirror.pkgbuild.com/images/v20260701.551070/Arch-Linux-x86_64-cloudimg-20260701.551070.qcow2
+            checksum:
+                type: sha256
+                value: a99844dda491606f81f463ce96851ae03d90ca8fa727671cac2da86a07a7cd61
+            base_user: arch
+            distro: arch
+        disk_size: 10G
+        ram: 2G
+        cpu: 2
+        machine: q35
+        firmware: bios
+        ssh:
+            user: arch
+            port_auto: true
+            key_source: generate
+        cloud_init:
+            timezone: UTC
+            package:
+                - sudo
+            charly_install:
+                strategy: auto
+# The kind:kubevirt TEMPLATE (authors source:; a deploy names it via from:).
+check-kubevirt-vm-vmi:
+    kubevirt:
+        cluster: check-kubevirt-vm-ctx
+        namespace: default
+        memory: 2G
+        cpu:
+            cores: 2
+        machine: q35
+        run_strategy: Always
+        source:
+            kind: container_disk
+            image: localhost/charly-check-kubevirt-vm-box:latest
+            pull_policy: Never
+            # plugin-vm's box emission keeps /disk.qcow2 as the default (plugin-vm#50's
+            # opt-in design), so KubeVirt needs the explicit in-image path.
+            disk_path_in_image: /disk.qcow2
+        cloud_init:
+            timezone: UTC
+            charly_install:
+                strategy: auto
+        description: >-
+            A charly-built VM box (the /disk/disk.img containerDisk layout) booted
+            as a KubeVirt containerDisk on the check-kubevirt-vm k3s node.
+# The bed's OWN per-deploy-domain kind:kubernetes profile (task #18). The bed's
+# root is the shared k3s-vm entity, so its context is domain-scoped.
+check-kubevirt-vm-ctx:
+    kubernetes:
+        box: ""
+        kubeconfig_context: vm-check-kubevirt-vm
+check-kubevirt-vm:
+    vm:
+        from: k3s-vm
+        disposable: true
+        cpu: 2
+        # 8G: the 4G node's ~3.8G allocatable could not fit a 2G guest VMI alongside
+        # k3s + KubeVirt + CDI + the virt-* pods (+284MB VMI overhead) — the guest VMI
+        # was Unschedulable "1 Insufficient memory". Host headroom is ample.
+        ram: 8G
+        lifecycle: dev
+        add_candy:
+            - k3s-server
+            - '@github.com/opencharly/layer-kubevirt-operator:v2026.269.1736' # KubeVirt + CDI, in-venue
+            - '@github.com/opencharly/layer-kubevirt:v2026.269.0037' # virtctl (client candy)
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350' # merged: loud-resolve + k3s-post fail-loud
+            - '@github.com/opencharly/plugin-vm/candy/plugin-vm:feat/kubevirt-vmbox-stable-tag' # LOCAL R10: stable :latest handle (branch pin — feature not yet merged; see the named task in the PR body)
+            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.276.1453' # merged: containerDisk delivery + loud resolve + fixed sdk
+        env:
+            K3S_SERVER_HOSTNAME: 127.0.0.1
+        install_opts:
+            with_service: true
+            allow_repo_changes: true
+            skip_incompatible: true
+            verify: true
+        description: >-
+            R10 for the full guest-VM leg: a charly-built VM box (charly vm build --container-disk → /disk/disk.img) retagged to a stable ref (charly vm retag) and booted as a KubeVirt containerDisk on a disposable libvirt Arch k3s VM (the shared k3s-vm entity + k3s-server + layer-kubevirt-operator (KubeVirt + CDI) + layer-kubevirt (virtctl), cpu.mode host-passthrough for nested KVM). The sibling check-kubevirt-vm-guest member (a kubevirt: deploy) delivers the box into the node's containerd (plugin-kubevirt's self-contained PrepareVenue delivery) and applies the VM CR, waiting VMI Ready + AgentConnected. The host-side plan asserts the KubeVirt platform Deployed, the VMI Ready, and the guest agent connected; the guest member's own plan runs in the booted VMI over the managed port-forward. A fresh `charly update` destroy+rebuild+recheck is the R10 gate.
+        plan:
+            - check: the k3s control plane reports a Ready node before the KubeVirt probes
+              id: kvv-wait-nodes
+              kube:
+                method: wait-nodes
+                cluster: "check-kubevirt-vm-ctx"
+                kube_count: 1
+              timeout: "300s"
+              stdout: {contains: "Ready"}
+              context: [runtime]
+            - check: the KubeVirt VirtualMachineInstance CRD is Established (the platform registered the VMI API)
+              id: kvv-vmi-crd
+              kube:
+                method: raw
+                cluster: "check-kubevirt-vm-ctx"
+                kube_resource: customresourcedefinitions
+                kube_group: apiextensions.k8s.io
+                kube_version: v1
+                name: virtualmachineinstances.kubevirt.io
+              stdout: {contains: "virtualmachineinstances.kubevirt.io"}
+              context: [runtime]
+            - check: the KubeVirt CR reports the Deployed phase — the platform finished reconciling
+              id: kvv-platform-deployed
+              kubevirt:
+                method: wait-ready
+                namespace: kubevirt
+                cluster: "check-kubevirt-vm-ctx"
+              timeout: "600s"
+              context: [runtime]
+            - check: the VMI is Ready — the charly-built containerDisk booted on the node
+              id: kvv-vmi-ready
+              kubevirt:
+                method: wait-ready
+                name: charly-check-kubevirt-vm-guest
+                namespace: default
+                cluster: "check-kubevirt-vm-ctx"
+              timeout: "600s"
+              context: [runtime]
+            - check: the guest agent is connected — the VMI reported AgentConnected
+              id: kvv-agent-connected
+              kubevirt:
+                method: guest-info
+                name: charly-check-kubevirt-vm-guest
+                namespace: default
+                cluster: "check-kubevirt-vm-ctx"
+              timeout: "300s"
+              stdout: {contains: "agent-connected=true"}
+              context: [runtime]
+            - check: the virt-launcher pod for the VMI is scheduled on the node
+              id: kvv-launcher-pod
+              kube:
+                method: pods
+                cluster: "check-kubevirt-vm-ctx"
+                namespace: default
+              stdout: {contains: "virt-launcher"}
+              context: [runtime]
+    # DEPLOY-LEVEL member: the VMI, a kubevirt: deploy of the template. Its own
+    # PrepareVenue delivers the built box into the node's containerd and applies the
+    # CR; its plan runs IN the booted guest over the managed port-forward alias.
+    check-kubevirt-vm-guest:
+        kubevirt:
+            from: check-kubevirt-vm-vmi
+            plan:
+                - check: the booted VMI guest reports a Linux kernel
+                  id: kvv-guest-uname
+                  command: uname -s
+                  stdout: {contains: "Linux"}
+                  context: [runtime]
+    # The BOX-SOURCE member. A check bed's own plan is verify-only, so a mutating
+    # `[deploy]` run step never fires; the runner's member-build arm is the runnable
+    # hook. Declaring the containerDisk box's source entity as a VM MEMBER makes the
+    # runner run `charly vm build check-kubevirt-vm-box` BEFORE members-up — which
+    # emits the box at /disk/disk.img (the ONE layout) — so the guest member's
+    # PrepareVenue has the image to deliver into the node's containerd.
+    check-kubevirt-vm-boxrun:
+        vm:
+            from: check-kubevirt-vm-box
 # check-k8s-deploy-app — the check-k8s-deploy bed's target:kubernetes WORKLOAD fixture.
 # A minimal Fedora base box composed from LOCAL pure-rpm candies (supervisord +
 # os-layer; no builder, no @github candy refs), so it builds from the root project —

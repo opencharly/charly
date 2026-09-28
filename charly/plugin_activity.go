@@ -233,6 +233,19 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 					reset()
 				}
 			case <-timer.C:
+				// A progress event may already be buffered but not yet serviced (this
+				// goroutine was descheduled, so `select` sees BOTH `wake` and `timer.C`
+				// ready and — choosing randomly among ready cases — may pick the
+				// deadline). A pending progress event ALWAYS beats the deadline: drain
+				// it and reset rather than false-killing a progressing call. Without
+				// this, an event-driven guard still has a residual race (tiny windows
+				// under load exposed it — TestInvokeProvider_ProgressingLongCallIsNotKilled).
+				select {
+				case <-wake:
+					reset()
+					continue
+				default:
+				}
 				cancel(errPluginCallIdle)
 				return
 			}
