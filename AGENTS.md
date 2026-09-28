@@ -17,14 +17,16 @@ History belongs only in `CHANGELOG/`.
 
 Before reading source, running repository commands, delegating, planning, or
 editing, load every skill selected by the dispatcher below. Use a registered
-project skill when available — the harness loads it from the opencharly/marketplace
-repo (Claude Code's `charly-plugins` marketplace, pi's `git:` package, Kimi's
-plugin, Codex's catalog); otherwise read the corresponding
-`<family>/skills/<skill>/SKILL.md` in the opencharly/marketplace repo (the
-standalone marketplace since the de-submodule cutover — every checkout's harness
-loads it natively; `opencharly.github.io/marketplace` hosts the catalogs).
-Load all matches before acting. Missing registration is a project-profile
-defect, not permission to skip the skill.
+project skill when available — every supported harness loads the
+opencharly/marketplace repo through its own plugin market, package, or catalog
+(the per-harness install table lives in that repo's README); a harness that
+cannot resolve the canonical `/charly-<family>:<skill>` form reads the
+corresponding `<family>/skills/<skill>/SKILL.md` by path in the
+opencharly/marketplace repo (the standalone marketplace since the de-submodule
+cutover — every checkout's harness loads it natively;
+`opencharly.github.io/marketplace` hosts the catalogs). Load all matches
+before acting. Missing registration is a project-profile defect, not permission
+to skip the skill.
 
 Work from the superproject root. Run submodule Git through literal
 `git -C <absolute-path>` commands; never root a worker in a submodule. Use this
