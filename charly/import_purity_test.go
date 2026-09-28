@@ -1,7 +1,7 @@
 package main
 
 // The IMPORT-PURITY + ZERO-ALIASES gate (P16, step 7 of #55's import-purity
-// program) — the mechanical enforcement of CLAUDE.md's "Core is a PLUGIN HOST"
+// program) — the mechanical enforcement of AGENTS.md's "Core is a PLUGIN HOST"
 // standing rules, REPLACING the former file-allowlist gate
 // (the former file-allowlist gate, since removed): rather than
 // pinning charly/'s file SET, this gate asserts every file's IMPORT SURFACE

@@ -29,8 +29,8 @@ charly:
             # pinned here (post-cutover) so the project closure vendors them and the lazy-connect
             # pass-1 finds them by word without a version-less remote fetch.
             - '@github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch:v2026.237.1420'
-            - '@github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap:v2026.237.1419'
-            - '@github.com/opencharly/plugin-example-command/candy/plugin-example-command:v2026.237.1420'
+            - '@github.com/opencharly/plugin-example-bootstrap/candy/plugin-example-bootstrap:v2026.270.1737'
+            - '@github.com/opencharly/plugin-example-command/candy/plugin-example-command:v2026.270.1758'
             - '@github.com/opencharly/plugin-example-deploy/candy/plugin-example-deploy:v2026.237.1420'
             - '@github.com/opencharly/plugin-example-external/candy/plugin-example-external:v2026.237.1420'
             - '@github.com/opencharly/plugin-example-kind/candy/plugin-example-kind:v2026.237.1421'

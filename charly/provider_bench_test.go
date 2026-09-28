@@ -6,7 +6,7 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// The E3 perf go/no-go gate, locked as a test (CLAUDE.md RDD; the
+// The E3 perf go/no-go gate, locked as a test (AGENTS.md RDD; the
 // EVERY-KIND-IS-A-PLUGIN plan's "E3 perf-RDD spike — the go/no-go gate for the
 // whole vision"). The architecture's load-bearing invariant: a BUILT-IN provider
 // dispatches through its typed fast path (CheckVerbProvider.RunVerb /

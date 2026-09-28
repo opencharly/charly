@@ -1,7 +1,7 @@
 package main
 
 // TestNoKindSwitchInKernel is a W5-terminus CI tells-test (task #16) enforcing the
-// kernel/plugin boundary law's core clause (CLAUDE.md "The kernel/plugin boundary
+// kernel/plugin boundary law's core clause (AGENTS.md "The kernel/plugin boundary
 // law"): "a kind-word switch... is an incomplete seam". It complements the narrower,
 // pre-existing TestNoSubstrateWordSwitchInDeployConsult (no_substrate_word_switch_gate_test.go,
 // P9) — that gate only catches a bare `.Target == "word"` BinaryExpr over the substrate
@@ -264,7 +264,7 @@ func TestNoKindSwitchInKernel(t *testing.T) {
 	}
 	if len(unexempt) > 0 {
 		sort.Strings(unexempt)
-		t.Errorf("kernel/plugin boundary law violated — %d kind-word switch/if-chain dispatch site(s) in charly/ core (an incomplete seam per CLAUDE.md's boundary law; move the behaviour to the plugin that owns the kind, dispatch via the registry/InvokeProvider instead):\n  %s",
+		t.Errorf("kernel/plugin boundary law violated — %d kind-word switch/if-chain dispatch site(s) in charly/ core (an incomplete seam per AGENTS.md's boundary law; move the behaviour to the plugin that owns the kind, dispatch via the registry/InvokeProvider instead):\n  %s",
 			len(unexempt), strings.Join(unexempt, "\n  "))
 	}
 }

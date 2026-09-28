@@ -17,14 +17,16 @@ History belongs only in `CHANGELOG/`.
 
 Before reading source, running repository commands, delegating, planning, or
 editing, load every skill selected by the dispatcher below. Use a registered
-project skill when available — the harness loads it from the opencharly/marketplace
-repo (Claude Code's `charly-plugins` marketplace, pi's `git:` package, Kimi's
-plugin, Codex's catalog); otherwise read the corresponding
-`<family>/skills/<skill>/SKILL.md` in the opencharly/marketplace repo (the
-standalone marketplace since the de-submodule cutover — every checkout's harness
-loads it natively; `opencharly.github.io/marketplace` hosts the catalogs).
-Load all matches before acting. Missing registration is a project-profile
-defect, not permission to skip the skill.
+project skill when available — every supported harness loads the
+opencharly/marketplace repo through its own plugin market, package, or catalog
+(the per-harness install table lives in that repo's README); a harness that
+cannot resolve the canonical `/charly-<family>:<skill>` form reads the
+corresponding `<family>/skills/<skill>/SKILL.md` by path in the
+opencharly/marketplace repo (the standalone marketplace since the de-submodule
+cutover — every checkout's harness loads it natively;
+`opencharly.github.io/marketplace` hosts the catalogs). Load all matches
+before acting. Missing registration is a project-profile defect, not permission
+to skip the skill.
 
 Work from the superproject root. Run submodule Git through literal
 `git -C <absolute-path>` commands; never root a worker in a submodule. Use this
@@ -73,8 +75,8 @@ match, load ALL their skills before doing anything.
 | Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`) | `/charly-distros:fedora-test` |
 | Fedora images / `fedora*` / `box/fedora` submodule (incl. the GPU base `nvidia` / `python-ml` + `sway-browser-vnc`) | `/charly-distros:nvidia` |
 | Git/`gh` workflow — `feat/` branch, commit, PR-only landing (NO direct push to main), branch protection, the `pr-validator` fresh-evaluator gate, native auto-merge + tag-on-merge CalVer-at-merge, worktree, sync-to-upstream, branch/worktree prune, cross-repo R10 landing | `/charly-internals:git-workflow` |
-| Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:go-quality` |
-| Go code-quality / CLAUDE.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:strict-policy` |
+| Go code-quality / AGENTS.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:go-quality` |
+| Go code-quality / AGENTS.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml` | `/charly-internals:strict-policy` |
 | Go source work (adding/modifying `charly` commands) | `/charly-internals:go` |
 | Hard-cutover concerns / rename sweeps | `/charly-internals:cutover-policy` |
 | IR / InstallPlan / EmitTarget / OCITarget | `/charly-internals:install-plan` |
@@ -354,6 +356,19 @@ After the final gate:
 7. **Before EVERY push, read the new comments on the PR AND on every related issue**
    (and the latest validation results), and act on each — never push onto a stale
    thread.
+8. **Agent identity & comment coordination.** On a triggered scope — two or more
+   agents on one issue/PR, or a blocking dependency (`BLOCKS`/`UNBLOCKS` in play) —
+   EVERY agent-authored comment and PR body carries the two-line identity footer
+   (`Agent:` line FIRST, `Assisted-by:` LAST — ONE order on BOTH surfaces, a comment
+   and a PR body alike) and a coordination comment OPENS with one label from the
+   closed verb set (`CLAIM` · `OWNING` · `HANDING OVER` · `TAKING OVER` · `BLOCKS` ·
+   `UNBLOCKS` · `STATUS` · `RESOLVED`). Optional off a triggered scope; mandatory on
+   it. The canonical statement — the footer order, the verb grammar, the 60-minute
+   takeover window, and the sign-off forms — lives in the `AI_REVIEW_PROMPT` rulebook
+   and `/charly-internals:git-workflow` (B2b.1); this file and every other surface
+   REFERENCE it, never restate it divergently. A governance change is reconciled
+   across ALL FOUR surfaces (the validator rulebook, the umbrella `AGENTS.md`, this
+   file, and the skill source + its generated projection) in the same change.
 
 The worktree LAYOUT (where a session roots, how its worktree is placed, and how
 parallel sessions share the umbrella) is owned by the umbrella `AGENTS.md`, not
@@ -409,7 +424,9 @@ Every AI-authored commit, including a merge commit, ends with:
 `Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)`
 
 Use the exact harness, provider, and full model name exposed by the authoring
-runtime. Every AI-authored issue or PR ends with the matching italicized line.
+runtime. Every AI-authored issue or PR ends with the matching italicized line
+(when a two-line agent-identity footer is used, the `Agent:` line precedes the
+`Assisted-by:` trailer — see Post-Execution Policies rule 8).
 A 100% human-authored contribution carries no AI attribution. A body emitted by a
 fixed, model-free CI generator (a committed `printf/echo` block with no LLM in the
 loop) has no AI provider or model: it ends with `*Assisted-by: <Harness> <Runtime>
@@ -480,8 +497,6 @@ second copy of them.
 - `VISION.md`: thesis and direction.
 - `PROGRAM/`: binding program north-star documents (one file per program, named in every spawn brief).
 - `AGENTS.md`: complete current harness-neutral mandates and dispatcher.
-- `CLAUDE.md`: a **symlink** to `AGENTS.md` — one rulebook, no hand-kept copy to
-  drift (the former hand-synced mirror had already diverged).
 - the opencharly/marketplace repo's `<family>/skills/<skill>/SKILL.md`: detailed
   procedures and technical ownership (the harness loads it; read it directly from
   the marketplace repo).

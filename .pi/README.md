@@ -1,7 +1,7 @@
 # Pi project config (`.pi/`)
 
 Project-local configuration for [pi](https://pi.dev) agent sessions in this
-repository. Pi auto-loads `AGENTS.md`/`CLAUDE.md` as context, and loads the
+repository. Pi auto-loads `AGENTS.md` as context, and loads the
 OpenCharly skill corpus as a pi PACKAGE — `git:github.com/opencharly/marketplace`
 in `settings.json` below, installed automatically at startup after the project
 is trusted (the marketplace repo's root `package.json` declares the `pi` resource
@@ -44,7 +44,7 @@ untokenizable commit commands, forbidden alias forms — are enforced by hooks.
 `.reasonix/settings.json` wires the gates, and kimi delegates to them from
 `~/.kimi-code/config.toml`. The charly repo's `.claude/settings.json` declares
 no `PreToolUse` hooks, so under Claude Code the agent is itself the enforcement
-(see `CLAUDE.md` "Hooks"). Pi has no built-in hooks system, so this extension
+(see `AGENTS.md` "Hooks"). Pi has no built-in hooks system, so this extension
 reproduces the wiring through pi's `tool_call` event, running the exact same gate
 scripts.
 
