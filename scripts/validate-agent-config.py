@@ -64,15 +64,28 @@ CONFIDENCE_TIERS = (
     "syntax check only",
     "theoretical suggestion",
 )
-# Harness-specific CONFIG identifiers a neutral rulebook must not embed. The
-# harness *names* (Claude Code, Codex, Kimi Code) are deliberately NOT listed:
-# AGENTS.md is the single harness-neutral rulebook and names its consumer
-# harnesses in its R0 loading prose.
+# Harness names and config identifiers a neutral rulebook must never embed.
+# AGENTS.md is the single harness-neutral policy surface: per-harness
+# primitives (plugin markets/packages/catalogs, config paths, sub-agent
+# registries, TODO ledgers) belong to the harness-specific skills — the
+# per-harness install table lives in the marketplace README, the primitives in
+# `/charly-internals:agents`. Every marker here is an unambiguous substring:
+# `Claude` covers `Claude Code`/`CLAUDE.md`, `Kimi` covers `Kimi Code`, `Codex`
+# covers the Codex harness and its config. `pi` alone is a bare two-letter word
+# (it would match `api`, `pipeline`, `capabilities`, …) so it is matched with
+# word boundaries via a pattern.
 FORBIDDEN_GENERIC_RULEBOOK_MARKERS = (
+    "Claude",
+    "Codex",
+    "Kimi",
+    "opencode",
+    "reasonix",
+    "cursor",
     "CODEX_HOME",
     ".codex",
     "~/.kimi-code",
 )
+FORBIDDEN_GENERIC_RULEBOOK_PATTERNS = (re.compile(r"\bpi\b"),)
 
 
 def dispatcher(path: pathlib.Path) -> list[tuple[str, ...]]:
@@ -116,6 +129,13 @@ def rulebook_contract_errors(text: str) -> list[str]:
         if marker in text:
             errors.append(
                 f"AGENTS.md contains harness-specific policy marker {marker!r}"
+            )
+    for pattern in FORBIDDEN_GENERIC_RULEBOOK_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            errors.append(
+                "AGENTS.md contains harness-specific policy marker "
+                f"{match.group(0)!r}"
             )
     return errors
 
@@ -233,9 +253,35 @@ def self_test() -> None:
     policy_errors = rulebook_contract_errors(missing_policy)
     assert any("shared policy marker" in error for error in policy_errors)
 
-    branded_generic = f"{contract_fixture}\nCODEX_HOME=/tmp/x"
-    branded_errors = rulebook_contract_errors(branded_generic)
-    assert any("harness-specific policy marker" in error for error in branded_errors)
+    branded_markers = (
+        "Claude Code",
+        "Codex",
+        "Kimi Code",
+        "opencode",
+        "reasonix",
+        "cursor",
+        "CODEX_HOME=/tmp/x",
+        ".codex/config.toml",
+        "~/.kimi-code/config.toml",
+    )
+    for branded_marker in branded_markers:
+        branded_errors = rulebook_contract_errors(
+            f"{contract_fixture}\n{branded_marker}"
+        )
+        assert any(
+            "harness-specific policy marker" in error for error in branded_errors
+        ), branded_marker
+    # `pi` is word-boundary matched, so substrings of ordinary words are safe.
+    assert any(
+        "harness-specific policy marker" in error
+        for error in rulebook_contract_errors(f"{contract_fixture}\nthe pi package")
+    )
+    assert not any(
+        "harness-specific policy marker" in error
+        for error in rulebook_contract_errors(
+            f"{contract_fixture}\napi pipeline capabilities"
+        )
+    )
 
     assert attribution_contract_errors(
         "fixture",
