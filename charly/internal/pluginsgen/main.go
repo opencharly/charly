@@ -132,7 +132,8 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 				// compiled-in provider owns the word; do not error. Two EXTERNAL
 				// providers for one word is still a hard error (one canonical
 				// external provider per word).
-				prevC, thisC := refCompiled(names, prev), refCompiled(names, ref)
+				_, prevC := repoSetCompiled(names, prev)
+				_, thisC := repoSetCompiled(names, ref)
 				if prevC == thisC {
 					return nil, nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
 				}
@@ -300,23 +301,14 @@ func readCorpus(root, path string) []string {
 	return out
 }
 
-// refCompiled reports whether a provider ref's repo is a compiled-in plugin repo, so the
-// duplicate-word rule can prefer the compiled-in provider (the runtime per-word coexist).
-func refCompiled(names []string, ref string) bool {
-	for _, n := range names {
-		root := "github.com/opencharly/" + n
-		if ref == root || strings.HasPrefix(ref, root+"/") {
-			return true
-		}
-	}
-	return false
-}
-
 // repoSetCompiled reports whether a repo path is one of the compiled-in plugin repos
 // (github.com/opencharly/<name>) — a compiled repo that cannot be indexed is fatal.
 func repoSetCompiled(names []string, repo string) (string, bool) {
 	for _, n := range names {
-		if repo == "github.com/opencharly/"+n {
+		root := "github.com/opencharly/" + n
+		// root OR a subpath: a candy/provider REF is "<root>/candy/<x>", while a repo
+		// PATH is exactly <root> — one predicate serves both (R3).
+		if repo == root || strings.HasPrefix(repo, root+"/") {
 			return n, true
 		}
 	}
