@@ -354,6 +354,19 @@ After the final gate:
 7. **Before EVERY push, read the new comments on the PR AND on every related issue**
    (and the latest validation results), and act on each — never push onto a stale
    thread.
+8. **Agent identity & comment coordination.** On a triggered scope — two or more
+   agents on one issue/PR, or a blocking dependency (`BLOCKS`/`UNBLOCKS` in play) —
+   EVERY agent-authored comment and PR body carries the two-line identity footer
+   (`Agent:` line FIRST, `Assisted-by:` LAST — ONE order on BOTH surfaces, a comment
+   and a PR body alike) and a coordination comment OPENS with one label from the
+   closed verb set (`CLAIM` · `OWNING` · `HANDING OVER` · `TAKING OVER` · `BLOCKS` ·
+   `UNBLOCKS` · `STATUS` · `RESOLVED`). Optional off a triggered scope; mandatory on
+   it. The canonical statement — the footer order, the verb grammar, the 60-minute
+   takeover window, and the sign-off forms — lives in the `AI_REVIEW_PROMPT` rulebook
+   and `/charly-internals:git-workflow` (B2b.1); this file and every other surface
+   REFERENCE it, never restate it divergently. A governance change is reconciled
+   across ALL FOUR surfaces (the validator rulebook, the umbrella `AGENTS.md`, this
+   file, and the skill source + its generated projection) in the same change.
 
 The worktree LAYOUT (where a session roots, how its worktree is placed, and how
 parallel sessions share the umbrella) is owned by the umbrella `AGENTS.md`, not
@@ -409,7 +422,9 @@ Every AI-authored commit, including a merge commit, ends with:
 `Assisted-by: <Harness> <Provider Full Model Name> (<confidence>)`
 
 Use the exact harness, provider, and full model name exposed by the authoring
-runtime. Every AI-authored issue or PR ends with the matching italicized line.
+runtime. Every AI-authored issue or PR ends with the matching italicized line
+(when a two-line agent-identity footer is used, the `Agent:` line precedes the
+`Assisted-by:` trailer — see Post-Execution Policies rule 8).
 A 100% human-authored contribution carries no AI attribution. A body emitted by a
 fixed, model-free CI generator (a committed `printf/echo` block with no LLM in the
 loop) has no AI provider or model: it ends with `*Assisted-by: <Harness> <Runtime>
