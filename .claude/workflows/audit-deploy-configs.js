@@ -76,7 +76,7 @@ const HEALTH_SCHEMA = {
 }
 
 // Phase 1 — config correctness (cheap, no build). A warning is not a pass
-// (CLAUDE.md zero-warnings gate) — surface them so the caller can clear them.
+// (AGENTS.md zero-warnings gate) — surface them so the caller can clear them.
 phase('Validate')
 const validation = await agent(
   'Run `charly box validate` in this project. Return {ok, warnings, errors} — list every warning and error verbatim. Do not build or deploy anything.',

@@ -250,7 +250,7 @@ func main() {
 	// Preflight-phase pre-pass (K5 seam-death): every PhasePreflight provider gets a chance to
 	// hard-refuse this invocation BEFORE any command dispatch — candy/plugin-doctor's
 	// verb:freshness-guard is the sole provider today, folding the former CheckBinaryFreshness
-	// (CLAUDE.md R9 + the 2026-05-09 cuda-cudnn cache-mount incident) and CheckBinaryStamped
+	// (AGENTS.md R9 + the 2026-05-09 cuda-cudnn cache-mount incident) and CheckBinaryStamped
 	// (#74: the twice-recurred unstamped-binary gate defect) checks into one Invoke. See
 	// preflight_phase.go + candy/plugin-doctor/freshness.go for the full rationale.
 	runPreflightPhase(ctx.Command())
@@ -260,7 +260,7 @@ func main() {
 	// /tmp/charly-* leftovers from prior SIGKILL'd charly invocations. See
 	// cleanup.go for the full design.
 	//
-	// Plugin-leak hygiene (CLAUDE.md R3): reap every connected out-of-process
+	// Plugin-leak hygiene (AGENTS.md R3): reap every connected out-of-process
 	// plugin server on exit so charly never orphans `__plugin serve` children.
 	// Three layers, because os.Exit skips deferred funcs: a shutdown hook covers
 	// catchable signals (Ctrl-C / `systemctl stop`), the defer covers a normal

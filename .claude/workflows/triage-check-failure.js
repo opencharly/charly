@@ -1,7 +1,7 @@
 export const meta = {
   name: 'triage-check-failure',
   description:
-    'Competing-hypotheses RCA of a FAILED kind:check bed run (CLAUDE.md R1). Fans out N independent root-cause hypotheses, validates EACH on the live disposable bed, cross-checks them adversarially, converges on the surviving root cause, and returns a concrete fix to apply before re-running the real bed. Use after `charly check run <bed>` exits non-zero. Read-mostly probing on the bed; never edits source or commits.',
+    'Competing-hypotheses RCA of a FAILED kind:check bed run (AGENTS.md R1). Fans out N independent root-cause hypotheses, validates EACH on the live disposable bed, cross-checks them adversarially, converges on the surviving root cause, and returns a concrete fix to apply before re-running the real bed. Use after `charly check run <bed>` exits non-zero. Read-mostly probing on the bed; never edits source or commits.',
   phases: [
     { title: 'Reproduce', detail: 'inspect the failing bed run + summary.yml/logs' },
     { title: 'Hypothesize', detail: 'N independent root-cause theories, each bed-validated' },
