@@ -40,10 +40,8 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 	// the repo ROOT (Phase-4 shape — a bare ref, no candy/ subpath), and the
 	// committed APK fixture ships at tests/data/ under that root.
 	podRoot := t.TempDir()
-	podManifest := "" +
-		"android-emulator-layer:\n" +
-		"    candy:\n" +
-		""
+	podManifest := "android-emulator-layer:\n" +
+		"    candy:\n"
 	if err := os.WriteFile(filepath.Join(podRoot, spec.UnifiedFileName), []byte(podManifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -57,8 +55,7 @@ func TestCandySourceDirs_OverrideAnchorsRemoteApk(t *testing.T) {
 	// Synthetic box bed composing the standalone pod candy by its BARE ref — the
 	// post-cutover shape of the distro box/android-emulator candy list.
 	boxDir := t.TempDir()
-	boxManifest := "" +
-		"synthetic-box:\n" +
+	boxManifest := "synthetic-box:\n" +
 		"    candy:\n" +
 		"        candy:\n" +
 		"            - '@github.com/opencharly/pod-android-emulator-layer:v2026.237.938'\n"

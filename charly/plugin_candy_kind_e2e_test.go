@@ -80,13 +80,11 @@ func TestCandyKind_BothShapesByteEquivalent(t *testing.T) {
 const IMG_DOC = "my-image:\n" +
 	"    candy:\n" +
 	"        base: fedora\n" +
-	"" +
 	"        candy:\n" +
 	"            - redis\n"
 
 const LAYER_DOC = "my-layer:\n" +
 	"    candy:\n" +
-	"" +
 	"        description: a layer\n" +
 	"        package:\n" +
 	"            - git\n" +
