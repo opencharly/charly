@@ -279,13 +279,47 @@ func TestPackagingShipsSystemProject(t *testing.T) {
 		t.Fatalf("parse %s: %v", candyCharlyYML, err)
 	}
 	ships := false
+	var emitted string
 	for _, step := range doc.Charly.Candy.Plan {
 		if strings.Contains(step.Command, "/etc/charly/charly.yml") && strings.Contains(step.Command, "plugin-mcp") {
 			ships = true
+			// Extract the heredoc body between the `<<'YAML'` marker and `YAML`,
+			// de-indent it (the run-step command is YAML-indented), and validate it.
+			if i := strings.Index(step.Command, "<<'YAML'"); i >= 0 {
+				body := step.Command[i+len("<<'YAML'"):]
+				if j := strings.Index(body, "\nYAML"); j >= 0 {
+					body = body[:j]
+				}
+				for _, ln := range strings.Split(strings.Trim(body, "\n"), "\n") {
+					emitted += strings.TrimPrefix(ln, "                ") + "\n"
+				}
+			}
 		}
 	}
 	if !ships {
 		t.Errorf("charly: plan has no run-step shipping /etc/charly/charly.yml with a plugin-mcp ref (the systemd charly-mcp units' WorkingDirectory project)")
+	}
+	// The emitted file must be a VALID charly project (non-vacuous: a malformed
+	// /etc/charly/charly.yml — wrong root shape, bad ref — must fail here).
+	if emitted != "" {
+		var proj struct {
+			Repo  string   `yaml:"repo"`
+			Candy []string `yaml:"candy"`
+		}
+		if err := yaml.Unmarshal([]byte(emitted), &proj); err != nil {
+			t.Errorf("emitted /etc/charly/charly.yml does not parse: %v\n%s", err, emitted)
+		}
+		if proj.Repo == "" {
+			t.Errorf("emitted /etc/charly/charly.yml has no `repo:` key:\n%s", emitted)
+		}
+		if len(proj.Candy) == 0 {
+			t.Errorf("emitted /etc/charly/charly.yml has no `candy:` refs:\n%s", emitted)
+		}
+		for _, c := range proj.Candy {
+			if !strings.Contains(c, "@github.com/opencharly/") || !strings.Contains(c, ":v") {
+				t.Errorf("emitted candy ref %q is not a valid @github:<tag> ref", c)
+			}
+		}
 	}
 }
 
