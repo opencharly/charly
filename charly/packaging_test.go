@@ -299,26 +299,20 @@ func TestPackagingShipsSystemProject(t *testing.T) {
 	if !ships {
 		t.Errorf("charly: plan has no run-step shipping /etc/charly/charly.yml with a plugin-mcp ref (the systemd charly-mcp units' WorkingDirectory project)")
 	}
-	// The emitted file must be a VALID charly project (non-vacuous: a malformed
-	// /etc/charly/charly.yml — wrong root shape, bad ref — must fail here).
+	// The emitted file must be a VALID charly project — validated against the
+	// CLOSED CUE schema via the project loader (non-vacuous: a wrong root shape
+	// or a bad ref must fail here), not merely the author's own keys.
 	if emitted != "" {
+		if _, err := requireProjectLoader().CueDocFromYAML("/etc/charly/charly.yml", []byte(emitted)); err != nil {
+			t.Errorf("emitted /etc/charly/charly.yml fails the closed CUE schema: %v\n%s", err, emitted)
+		}
 		var proj struct {
 			Repo  string   `yaml:"repo"`
 			Candy []string `yaml:"candy"`
 		}
-		if err := yaml.Unmarshal([]byte(emitted), &proj); err != nil {
-			t.Errorf("emitted /etc/charly/charly.yml does not parse: %v\n%s", err, emitted)
-		}
-		if proj.Repo == "" {
-			t.Errorf("emitted /etc/charly/charly.yml has no `repo:` key:\n%s", emitted)
-		}
-		if len(proj.Candy) == 0 {
-			t.Errorf("emitted /etc/charly/charly.yml has no `candy:` refs:\n%s", emitted)
-		}
-		for _, c := range proj.Candy {
-			if !strings.Contains(c, "@github.com/opencharly/") || !strings.Contains(c, ":v") {
-				t.Errorf("emitted candy ref %q is not a valid @github:<tag> ref", c)
-			}
+		_ = yaml.Unmarshal([]byte(emitted), &proj)
+		if proj.Repo == "" || len(proj.Candy) == 0 {
+			t.Errorf("emitted /etc/charly/charly.yml missing repo:/candy: keys:\n%s", emitted)
 		}
 	}
 }
