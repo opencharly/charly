@@ -396,7 +396,7 @@ charly:
               command: |
                 install -d /etc/charly
                 cat > /etc/charly/charly.yml <<'YAML'
-                repo: github.com/opencharly/opencharly
+                repo: github.com/opencharly/charly
                 candy:
                     - '@github.com/opencharly/plugin-mcp/candy/plugin-mcp:v2026.272.0329'
                 YAML
