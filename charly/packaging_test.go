@@ -314,6 +314,16 @@ func TestPackagingShipsSystemProject(t *testing.T) {
 		if proj.Repo == "" || len(proj.Candy) == 0 {
 			t.Errorf("emitted /etc/charly/charly.yml missing repo:/candy: keys:\n%s", emitted)
 		}
+		// The system project stands in for THIS repo — a wrong-but-non-empty repo
+		// value must fail (the negative control only exercises the schema).
+		if proj.Repo != "github.com/opencharly/charly" {
+			t.Errorf("emitted /etc/charly/charly.yml repo: = %q, want github.com/opencharly/charly", proj.Repo)
+		}
+		for _, c := range proj.Candy {
+			if !strings.Contains(c, "@github.com/opencharly/") || !strings.Contains(c, ":v") {
+				t.Errorf("emitted candy ref %q is not a valid @github:<tag> ref", c)
+			}
+		}
 	}
 }
 
