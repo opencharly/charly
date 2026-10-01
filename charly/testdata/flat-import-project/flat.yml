@@ -10,7 +10,6 @@
 # here (the plugin ref is never seen -> `examplekind` never registers -> "no kind discriminator").
 pin:
     candy:
-        version: 2026.242.0529
         description: Pins the out-of-tree example-kind plugin so its kind word is prescanned.
         require:
             - '@github.com/opencharly/plugin-example-kind/candy/plugin-example-kind:v2026.272.0055'
