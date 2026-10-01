@@ -1,5 +1,11 @@
 # Program: Pi → Charly Integration
 
+> **UPDATE (rule 8 reversal, #317):** harness config now lives ONLY in the umbrella
+> (`opencharly/opencharly`). The Pi extension `charly-gates.ts`, the `.claude/hooks/*`
+> gate scripts, `.claude/settings.json`, and `opencode.json` this document references
+> have MOVED there; `charly/` no longer carries any of them. Read the paths below as
+> `<umbrella>/…`. The mechanism is unchanged — the gates still run, from the umbrella.
+
 **North-star:** Pi sessions on the charly repository follow the same R0–R10
 discipline as Claude Code sessions, enforced mechanically where possible and
 guided by prompt injection where it is not. The agent loads the right skill
