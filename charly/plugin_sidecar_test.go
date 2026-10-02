@@ -51,8 +51,7 @@ func sidecarBodyImage(t *testing.T, body json.RawMessage) string {
 // own go:embed, K-wave 2 cone R3).
 func TestLoadUnified_SidecarPluginKind(t *testing.T) {
 	dir := t.TempDir()
-	doc := `version: "` + latestSchemaVersion.String() + `"
-mysidecar:
+	doc := `mysidecar:
   sidecar:
     description: a project-declared sidecar
     image: example.com/mysidecar:1

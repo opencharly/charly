@@ -17,7 +17,6 @@ func TestPluginProvidersCmd(t *testing.T) {
 	dir := t.TempDir()
 	manifest := `plugin-secrets:
     candy:
-        version: 2026.178.2100
         description: |-
             Serves verb:credential and command:secrets — go-keyring lives here.
     plugin-secrets-decl:

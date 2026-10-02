@@ -68,7 +68,7 @@ func TestSelectGPUByVendor(t *testing.T) {
 // typed core map (the former uf.Resource).
 func TestResourceKind_Loads(t *testing.T) {
 	dir := t.TempDir()
-	doc := `version: "` + LatestSchemaVersion().String() + `"
+	doc := `
 nvidia-gpu:
   resource:
     gpu:

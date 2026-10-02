@@ -253,33 +253,77 @@ func TestPackagingSystemdDeclarations(t *testing.T) {
 	}
 }
 
-// TestPackagingConfigDeclared — the packaging.config section ships a system-wide
-// project charly.yml (/etc/charly/charly.yml) carrying the plugin candy ref the
-// systemd-started MCP server needs (plugin-mcp), so the server resolves a local
-// project (via WorkingDirectory=/etc/charly) instead of falling back to a network
-// fetch of opencharly/charly. sdk/packagekit renders it into the package; the
-// per-distro install tests assert the box-validate passes on the installed file
-// (the shipped system project is a valid charly.yml at the declared schema version).
-func TestPackagingConfigDeclared(t *testing.T) {
-	pkg := loadPackaging(t)
-	cfg := pkg.Config
-	if cfg == nil {
-		t.Fatal("packaging.config is missing")
+// TestPackagingShipsSystemProject — the charly-mcp systemd units resolve their
+// project from WorkingDirectory=/etc/charly, so the packaging MUST ship
+// /etc/charly/charly.yml. The former packaging.config section (#PackagingConfig)
+// was REMOVED by the schema-versioning-removal cutover (spec#183), so the
+// surviving mechanism is a packaging plan run-step that emits the file into the
+// package/install; this test pins it (it replaces the deleted
+// TestPackagingConfigDeclared).
+func TestPackagingShipsSystemProject(t *testing.T) {
+	data, err := os.ReadFile(candyCharlyYML)
+	if err != nil {
+		t.Fatalf("read %s: %v", candyCharlyYML, err)
 	}
-	if cfg.Path != "/etc/charly/charly.yml" {
-		t.Errorf("config.path = %q, want /etc/charly/charly.yml", cfg.Path)
+	var doc struct {
+		Charly struct {
+			Candy struct {
+				Plan []struct {
+					Run     string `yaml:"run"`
+					Command string `yaml:"command"`
+				} `yaml:"plan"`
+			} `yaml:"candy"`
+		} `yaml:"charly"`
 	}
-	if cfg.Version == "" {
-		t.Error("config.version is empty (must be the packaged charly's schema version — what charly migrate would produce)")
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse %s: %v", candyCharlyYML, err)
 	}
-	if cfg.Description == "" {
-		t.Error("config.description is empty")
+	ships := false
+	var emitted string
+	for _, step := range doc.Charly.Candy.Plan {
+		if strings.Contains(step.Command, "/etc/charly/charly.yml") && strings.Contains(step.Command, "plugin-mcp") {
+			ships = true
+			// Extract the heredoc body between the `<<'YAML'` marker and `YAML`,
+			// de-indent it (the run-step command is YAML-indented), and validate it.
+			if i := strings.Index(step.Command, "<<'YAML'"); i >= 0 {
+				body := step.Command[i+len("<<'YAML'"):]
+				if j := strings.Index(body, "\nYAML"); j >= 0 {
+					body = body[:j]
+				}
+				for _, ln := range strings.Split(strings.Trim(body, "\n"), "\n") {
+					emitted += strings.TrimPrefix(ln, "                ") + "\n"
+				}
+			}
+		}
 	}
-	if len(cfg.Plugins) == 0 {
-		t.Fatal("config.plugins is empty (the systemd MCP server would have no plugin source)")
+	if !ships {
+		t.Errorf("charly: plan has no run-step shipping /etc/charly/charly.yml with a plugin-mcp ref (the systemd charly-mcp units' WorkingDirectory project)")
 	}
-	if !strings.Contains(cfg.Plugins[0], "plugin-mcp") {
-		t.Errorf("config.plugins[0] = %q, want a plugin-mcp candy ref", cfg.Plugins[0])
+	// The emitted file must be a VALID charly project — validated against the
+	// CLOSED CUE schema via the project loader (non-vacuous: a wrong root shape
+	// or a bad ref must fail here), not merely the author's own keys.
+	if emitted != "" {
+		if _, err := requireProjectLoader().CueDocFromYAML("/etc/charly/charly.yml", []byte(emitted)); err != nil {
+			t.Errorf("emitted /etc/charly/charly.yml fails the closed CUE schema: %v\n%s", err, emitted)
+		}
+		var proj struct {
+			Repo  string   `yaml:"repo"`
+			Candy []string `yaml:"candy"`
+		}
+		_ = yaml.Unmarshal([]byte(emitted), &proj)
+		if proj.Repo == "" || len(proj.Candy) == 0 {
+			t.Errorf("emitted /etc/charly/charly.yml missing repo:/candy: keys:\n%s", emitted)
+		}
+		// The system project stands in for THIS repo — a wrong-but-non-empty repo
+		// value must fail (the negative control only exercises the schema).
+		if proj.Repo != "github.com/opencharly/charly" {
+			t.Errorf("emitted /etc/charly/charly.yml repo: = %q, want github.com/opencharly/charly", proj.Repo)
+		}
+		for _, c := range proj.Candy {
+			if !strings.Contains(c, "@github.com/opencharly/") || !strings.Contains(c, ":v") {
+				t.Errorf("emitted candy ref %q is not a valid @github:<tag> ref", c)
+			}
+		}
 	}
 }
 
@@ -445,10 +489,8 @@ func TestCharlyDevCandyDeclared(t *testing.T) {
 // resolution; this test is what makes deleting it safe.
 func TestInlineCandySourceDirIsProjectRoot(t *testing.T) {
 	root := t.TempDir()
-	manifest := "version: 2026.261.1747\n" +
-		"inline-copy-candy:\n" +
+	manifest := "inline-copy-candy:\n" +
 		"    candy:\n" +
-		"        version: 2026.261.1747\n" +
 		"        description: |-\n" +
 		"            Inline candy carrying a relative copy: path, the charly-dev shape.\n" +
 		"        plan:\n" +

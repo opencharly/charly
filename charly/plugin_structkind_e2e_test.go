@@ -60,8 +60,6 @@ func TestExternalStructKind_StructuralDecode(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(srcCandy, "go.mod")); err != nil {
 		t.Fatalf("example structkind plugin module not found at %s: %v", srcCandy, err)
 	}
-	ver := LatestSchemaVersion().String()
-
 	// --- Bed 1: the EXTERNAL structural plugin kind (examplestructkind) ---
 	pluginDir := t.TempDir()
 	if err := testkit.CopyCandyFixReplace(srcCandy, filepath.Join(pluginDir, "candy", "plugin-example-structkind"), charlyDir); err != nil {
@@ -69,7 +67,7 @@ func TestExternalStructKind_StructuralDecode(t *testing.T) {
 	}
 	// The deploy-config scalars (disposable/lifecycle/description) ride op.Params; the AUTHORED
 	// members ride op.Env (host-pre-decoded, F5 input-threading) — the plugin attaches them.
-	pluginYAML := "version: " + ver + `
+	pluginYAML := `
 discover:
     - path: candy
       recursive: true
@@ -91,7 +89,7 @@ check-structkind-e2e:
 	// unroll-group-deploy migrate row writes. The plugin bed must reconstruct the same
 	// member-decode truth the builtin loader folds for the migrated spelling. ---
 	baseDir := t.TempDir()
-	baseYAML := "version: " + ver + `
+	baseYAML := `
 check-structkind-e2e:
     pod:
         disposable: true

@@ -8,7 +8,6 @@ import "testing"
 func TestValidateCandyManifestCUE_NodeForm(t *testing.T) {
 	ok := `redis:
   candy:
-    version: "2026.150.0000"
     description: in-memory store
     package: [redis]
     plan:
@@ -21,7 +20,6 @@ func TestValidateCandyManifestCUE_NodeForm(t *testing.T) {
 	// missing required description → concrete validation must fail.
 	bad := `redis:
   candy:
-    version: "2026.150.0000"
     package: [redis]
 `
 	if err := requireProjectLoader().ValidateCandyManifestCUE("bad", []byte(bad), loaderThreaded(), requireLoaderParser()); err == nil {

@@ -39,8 +39,7 @@ func TestNodeForm_KindNamedEntity(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(filepath.Join(dir, "charly.yml"), `version: "`+latestSchemaVersion.String()+`"
-discover:
+	must(filepath.Join(dir, "charly.yml"), `discover:
   - box
 `)
 	// A box NAMED after the `kubernetes` kind keyword, in node-form (an image is a

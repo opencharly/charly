@@ -819,8 +819,8 @@ check-kubevirt-operator:
             # (the kindcluster bed add_candy's it for the same reason); plugin-kubevirt
             # serves `kubevirt:`. Neither is compiled into charly, so the bed must
             # reference them or the verb resolves "no provider registered".
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.272.0236'
-            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.272.0825'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
+            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.275.0411'
         env:
             K3S_SERVER_HOSTNAME: 127.0.0.1
         install_opts:
@@ -2362,6 +2362,16 @@ check-commands-local:
               command:
                 command: "rm -rf /tmp/charly-p15-boxbed && ${CHARLY_BIN} box new project /tmp/charly-p15-boxbed && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed candy add-rpm my-candy curl && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new box my-box --base quay.io/fedora/fedora:43 --candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box validate && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box generate my-box && test -f /tmp/charly-p15-boxbed/.build/my-box/Containerfile"
                 in_container: false
+            - check: charly box reconcile --remote --dry-run reports "already reconciled" on THIS project (every repo's pins are at one version), exercising the cached, disk-persisted gitClient().LatestTag path (candy/plugin-box#22, charly#736) — the retired raw per-process git ls-remote reintroduced the 90-94 concurrent fanout the cache exists to avoid; a stale repo would print "would rewrite", so the assertion fails if the --remote path bypasses the cache and disagrees with the resolver
+              id: box-reconcile-remote-cached
+              exit_status: 0
+              stdout:
+                - contains: 'already reconciled'
+              context:
+                - runtime
+              command:
+                command: ${CHARLY_BIN} box reconcile --remote --dry-run
+                in_container: false
             - check: charly box authoring verbs (set/add-candy/rm-candy/write/cat) dispatch NESTED under the box grammar group and mutate a scratch project's charly.yml byte-faithfully, proving the authoring command plugin (candy/plugin-authoring, command:set/add-candy/rm-candy/write/cat, P14b) owns the yaml.Node candy-list edits (kit.MappingChild / kit.SaveYAMLNodeFile) + the dot-path writer (kit.SetByDotPath) + the project-rooted file escape hatch (resolveProjectFile) host-side — add-candy appends, rm-candy removes (curl absent after), set writes defaults.registry, write+cat round-trip a file. fetch/refresh stay covered by the Go tests + the golden-parity spike (they reenter core over HostBuild("cli") and hit the network, unsuitable for this bed)
               id: box-authoring-dispatches
               exit_status: 0
@@ -3387,7 +3397,7 @@ check-kindcluster:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.272.0236'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
         description: >-
             Sole R10 witness of the externalized deploy:kindcluster substrate: a disposable local
             Kubernetes-in-Docker cluster provisioned by kind on the operator's container engine
@@ -3475,7 +3485,7 @@ check-kindcluster-docker:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.272.0236'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
         description: >-
             R10 witness of deploy:kindcluster on the DOCKER engine: a disposable local
             Kubernetes-in-Docker cluster provisioned by kind on docker, probed with the
@@ -3543,7 +3553,7 @@ check-kindcluster-nerdctl:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.272.0236'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
         description: >-
             R10 witness of deploy:kindcluster on the ROOTLESS NERDCTL engine: a disposable
             local Kubernetes-in-Docker cluster provisioned by kind on rootless nerdctl
@@ -3618,7 +3628,7 @@ check-kindcluster-workload:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.272.0236'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
         image: check-k8s-deploy-app
         description: >-
             R10 for the deploy:kindcluster WORKLOAD leg + engine-aware image loading: a
@@ -3694,7 +3704,7 @@ check-kindcluster-lock:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.272.0236'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
         description: >-
             R10 regression for charly#680: a disposable kindcluster ROOT (external-in-place)
             with a deploy-level kindcluster MEMBER. Teardown runs the root's `deploy del`,
