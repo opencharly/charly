@@ -8,9 +8,10 @@ package main
 // nFPM cutover, so this file asserts (a) the section parses into the
 // spec.Packaging type with every entry a plain package name, (b) the variant
 // plugin sets are exactly the welded plugins the release workflow publishes
-// (now 12, incl. plugin-review + plugin-pipeline), and (c) the systemd: unit + config: sections the
-// package ships (the systemd-started charly MCP server's units and its
-// system-wide /etc/charly/charly.yml project).
+// (now 12, incl. plugin-review + plugin-pipeline), and (c) the systemd: unit
+// section the package ships (the systemd-started charly MCP server's units) while
+// asserting the retired config: section is NOT reintroduced — spec#183 dropped the
+// system-wide /etc/charly/charly.yml project from the package config).
 
 import (
 	"os"
@@ -253,33 +254,43 @@ func TestPackagingSystemdDeclarations(t *testing.T) {
 	}
 }
 
-// TestPackagingConfigDeclared — the packaging.config section ships a system-wide
-// project charly.yml (/etc/charly/charly.yml) carrying the plugin candy ref the
-// systemd-started MCP server needs (plugin-mcp), so the server resolves a local
-// project (via WorkingDirectory=/etc/charly) instead of falling back to a network
-// fetch of opencharly/charly. sdk/packagekit renders it into the package; the
-// per-distro install tests assert the box-validate passes on the installed file
-// (the shipped system project is a valid charly.yml at the declared schema version).
-func TestPackagingConfigDeclared(t *testing.T) {
-	pkg := loadPackaging(t)
-	cfg := pkg.Config
-	if cfg == nil {
-		t.Fatal("packaging.config is missing")
+// TestPackagingDropsSystemProject — spec#183 DELETED #PackagingConfig (the
+// retired packaging.config section) under the operator directive to fully drop
+// the system project from the package config: /etc/charly/charly.yml stays a
+// READ location only (loaderkit.DefaultSystemConfigPath), with NO package
+// artifact. This test is the witness of the DROP and fails if the deletion is
+// reverted on EITHER the field or a plan run-step. (It replaces the deleted
+// TestPackagingConfigDeclared; the behavioural drop itself lives in the sdk
+// bump — sdk v0.2026272.1813 deleted packagekit/config.go's pkg.Config render.)
+func TestPackagingDropsSystemProject(t *testing.T) {
+	data, err := os.ReadFile(candyCharlyYML)
+	if err != nil {
+		t.Fatalf("read %s: %v", candyCharlyYML, err)
 	}
-	if cfg.Path != "/etc/charly/charly.yml" {
-		t.Errorf("config.path = %q, want /etc/charly/charly.yml", cfg.Path)
+	// Parse generically: a reverted deletion must fail on EITHER surface — a
+	// re-declared `packaging.config:` field OR a plan run-step that re-ships the
+	// file. A typed struct would not see the removed field, so use the raw tree.
+	var doc map[string]any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse %s: %v", candyCharlyYML, err)
 	}
-	if cfg.Version == "" {
-		t.Error("config.version is empty (must be the packaged charly's schema version — what charly migrate would produce)")
+	body, _ := doc["charly"].(map[string]any)["candy"].(map[string]any)
+	if body == nil {
+		t.Fatalf("%s: missing charly.candy body", candyCharlyYML)
 	}
-	if cfg.Description == "" {
-		t.Error("config.description is empty")
+	if pkg, ok := body["packaging"].(map[string]any); ok {
+		if _, declared := pkg["config"]; declared {
+			t.Error("packaging.config is declared; spec#183 dropped it — the package must NOT ship /etc/charly/charly.yml")
+		}
 	}
-	if len(cfg.Plugins) == 0 {
-		t.Fatal("config.plugins is empty (the systemd MCP server would have no plugin source)")
-	}
-	if !strings.Contains(cfg.Plugins[0], "plugin-mcp") {
-		t.Errorf("config.plugins[0] = %q, want a plugin-mcp candy ref", cfg.Plugins[0])
+	if plan, ok := body["plan"].([]any); ok {
+		for _, st := range plan {
+			sm, _ := st.(map[string]any)
+			cmd, _ := sm["command"].(string)
+			if strings.Contains(cmd, "/etc/charly/charly.yml") {
+				t.Errorf("packaging plan step %v ships /etc/charly/charly.yml; spec#183 dropped the system project from the package config (the path is a read location only)", sm["run"])
+			}
+		}
 	}
 }
 
@@ -445,10 +456,8 @@ func TestCharlyDevCandyDeclared(t *testing.T) {
 // resolution; this test is what makes deleting it safe.
 func TestInlineCandySourceDirIsProjectRoot(t *testing.T) {
 	root := t.TempDir()
-	manifest := "version: 2026.261.1747\n" +
-		"inline-copy-candy:\n" +
+	manifest := "inline-copy-candy:\n" +
 		"    candy:\n" +
-		"        version: 2026.261.1747\n" +
 		"        description: |-\n" +
 		"            Inline candy carrying a relative copy: path, the charly-dev shape.\n" +
 		"        plan:\n" +

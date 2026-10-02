@@ -59,13 +59,11 @@ func writeValidateFixture(t *testing.T, files map[string]string) string {
 
 // fixtureGoodBox is the minimal valid box a broken-fixture variant mutates: a resolvable rpm box
 // composing candy/mycandy. Prepend the `version:` + `discover:` header so the loader scans candy/.
-var fixtureGoodBox = `version: "` + latestSchemaVersion.String() + `"
-discover:
+var fixtureGoodBox = `discover:
   - path: candy
     recursive: true
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       A minimal valid box for the validate fixture tests.
     base: quay.io/fedora/fedora:43
@@ -80,7 +78,6 @@ mybox:
 // fixtureGoodCandy is the minimal valid candy the good box composes.
 const fixtureGoodCandy = `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       A minimal valid candy.
     package: [curl]
@@ -142,11 +139,9 @@ func TestValidate_Success(t *testing.T) {
 // TestValidate_MissingCandy ← TestValidateMissingCandy. A box referencing a candy that does not exist.
 func TestValidate_MissingCandy(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -160,11 +155,9 @@ mybox:
 // TestValidate_MissingCandyTypo ← TestValidateMissingCandyWithTypo. A close (typo) name suggests a fix.
 func TestValidate_MissingCandyTypo(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -173,7 +166,6 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/pixi/charly.yml": `pixi:
   candy:
-    version: 2026.194.1200
     description: |-
       pixi.
     package: [curl]
@@ -187,7 +179,6 @@ mybox:
 func TestValidate_UnknownDependency(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -199,11 +190,9 @@ func TestValidate_UnknownDependency(t *testing.T) {
 // composition candy (only `candy:`) is legitimately content-less.
 func TestValidate_CandyIncludesNoInstallFiles(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -212,21 +201,18 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/pipewire/charly.yml": `pipewire:
   candy:
-    version: 2026.194.1200
     description: |-
       pw.
     package: [curl]
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/wayvnc/charly.yml": `wayvnc:
   candy:
-    version: 2026.194.1200
     description: |-
       vnc.
     package: [curl]
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/sway-desktop/charly.yml": `sway-desktop:
   candy:
-    version: 2026.194.1200
     description: |-
       composes pipewire + wayvnc, ships no install files of its own.
     candy: [pipewire, wayvnc]
@@ -238,11 +224,9 @@ mybox:
 // TestValidate_CandyIncludesCycle ← TestValidateCandyIncludesCycle. Circular `candy:` composition.
 func TestValidate_CandyIncludesCycle(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -251,14 +235,12 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/a/charly.yml": `a:
   candy:
-    version: 2026.194.1200
     description: |-
       a.
     candy: [b]
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/b/charly.yml": `b:
   candy:
-    version: 2026.194.1200
     description: |-
       b.
     candy: [a]
@@ -272,7 +254,6 @@ mybox:
 func TestValidate_CandyIncludesMissing(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     candy: [nonexistent]
@@ -288,7 +269,6 @@ func TestValidate_CandyIncludesMissing(t *testing.T) {
 func TestValidate_CandyNoInstallFiles(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     plan: [{check: x, command: "true", context: [build]}]`), "must have at least one install file")
@@ -304,16 +284,10 @@ func TestValidate_CargoWithoutSrc(t *testing.T) {
 	mustValidateErr(t, dir, "requires src/")
 }
 
-// TestValidate_CandyMissingVersion ← TestValidateCandyMissingVersion. A local candy with no version:
-// fails the CUE-conformance gate (the mandatory-CalVer rule is #Candy-enforced, host-natural).
-func TestValidate_CandyMissingVersion(t *testing.T) {
-	mustValidateErr(t, fx(t, `mycandy:
-  candy:
-    description: |-
-      c.
-    package: [curl]
-    plan: [{check: x, command: "true", context: [build]}]`), `candy "mycandy"`, "version")
-}
+// TestValidate_CandyMissingVersion was DELETED with the schema-versioning removal:
+// there is no mandatory-CalVer rule on a candy (the `version:` field is gone from
+// #Candy), so a candy with no version is valid by construction. The CUE-closedness
+// rejection of a LEFTOVER `version:` is covered by cue_candy_reject_test.go.
 
 // ---------------------------------------------------------------------------
 // Volume / alias rules (validateVolume / validateAliases — plugin-box)
@@ -323,7 +297,6 @@ func TestValidate_CandyMissingVersion(t *testing.T) {
 func TestValidate_VolumesValid(t *testing.T) {
 	mustValidateOK(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -336,7 +309,6 @@ func TestValidate_VolumesValid(t *testing.T) {
 func TestValidate_VolumesDuplicate(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     volume:
@@ -348,11 +320,9 @@ func TestValidate_VolumesDuplicate(t *testing.T) {
 // TestValidate_AliasesValid ← TestValidateAliasesValid (candy + box aliases both valid).
 func TestValidate_AliasesValid(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -363,7 +333,6 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/svc/charly.yml": `svc:
   candy:
-    version: 2026.194.1200
     description: |-
       svc.
     package: [curl]
@@ -378,7 +347,6 @@ mybox:
 func TestValidate_AliasesDuplicate(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -392,7 +360,6 @@ func TestValidate_AliasesDuplicate(t *testing.T) {
 func TestValidate_AliasesInvalidName(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -404,11 +371,9 @@ func TestValidate_AliasesInvalidName(t *testing.T) {
 // TestValidate_ImageAliasesDuplicate ← TestValidateImageAliasesDuplicate (box-level aliases).
 func TestValidate_ImageAliasesDuplicate(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -420,7 +385,6 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/svc/charly.yml": `svc:
   candy:
-    version: 2026.194.1200
     description: |-
       svc.
     package: [curl]
@@ -441,7 +405,6 @@ mybox:
 func TestValidate_CoprWithoutPackages(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     distro:
@@ -454,7 +417,6 @@ func TestValidate_CoprWithoutPackages(t *testing.T) {
 func TestValidate_ReposWithoutPackages(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     distro:
@@ -472,11 +434,9 @@ func TestValidate_ReposWithoutPackages(t *testing.T) {
 // TestValidate_AurWithoutAurBuilder ← TestValidateAurWithoutAurBuilder.
 func TestValidate_AurWithoutAurBuilder(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 arch-img:
   candy:
-    version: 2026.194.1200
     description: |-
       arch.
     base: docker.io/library/archlinux:latest
@@ -485,7 +445,6 @@ arch-img:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/aur-layer/charly.yml": `aur-layer:
   candy:
-    version: 2026.194.1200
     description: |-
       aur.
     distro:
@@ -502,11 +461,9 @@ arch-img:
 // compiler skips the aur section entirely.
 func TestValidate_AurOnFedoraImageNoError(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 fedora-img:
   candy:
-    version: 2026.194.1200
     description: |-
       fedora.
     base: quay.io/fedora/fedora:43
@@ -515,7 +472,6 @@ fedora-img:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/multi/charly.yml": `multi:
   candy:
-    version: 2026.194.1200
     description: |-
       multi-distro (rpm + aur).
     distro:
@@ -536,11 +492,9 @@ fedora-img:
 // validator must too.
 func TestValidate_AurOnArchImageWithoutAurInBuildFormats(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 arch-pac-only:
   candy:
-    version: 2026.194.1200
     description: |-
       arch pac-only.
     base: docker.io/library/archlinux:latest
@@ -549,7 +503,6 @@ arch-pac-only:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/aur-layer/charly.yml": `aur-layer:
   candy:
-    version: 2026.194.1200
     description: |-
       aur.
     distro:
@@ -567,11 +520,9 @@ arch-pac-only:
 // requires builder.pixi regardless of the image's build formats (detect_files, not detect_config).
 func TestValidate_PixiBuilderUnconditional(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 fedora-img:
   candy:
-    version: 2026.194.1200
     description: |-
       fedora.
     base: quay.io/fedora/fedora:43
@@ -580,7 +531,6 @@ fedora-img:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/pixi-layer/charly.yml": `pixi-layer:
   candy:
-    version: 2026.194.1200
     description: |-
       pixi.
     plan: [{check: x, command: "true", context: [build]}]`,
@@ -596,10 +546,8 @@ fedora-img:
 // TestValidate_ImageCycle ← TestValidateImageCycle. A box base cycle a→b→c→a.
 func TestValidate_ImageCycle(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-a:
+		"charly.yml": `a:
   candy:
-    version: 2026.194.1200
     description: |-
       a.
     base: b
@@ -607,7 +555,6 @@ a:
     plan: [{check: x, command: "true", context: [build]}]
 b:
   candy:
-    version: 2026.194.1200
     description: |-
       b.
     base: c
@@ -615,7 +562,6 @@ b:
     plan: [{check: x, command: "true", context: [build]}]
 c:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     base: a
@@ -628,11 +574,9 @@ c:
 // TestValidate_CandyCycle ← TestValidateCandyCycle. A candy `require:` cycle a→b→c→a.
 func TestValidate_CandyCycle(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -641,7 +585,6 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/a/charly.yml": `a:
   candy:
-    version: 2026.194.1200
     description: |-
       a.
     package: [curl]
@@ -649,7 +592,6 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/b/charly.yml": `b:
   candy:
-    version: 2026.194.1200
     description: |-
       b.
     package: [curl]
@@ -657,7 +599,6 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/c/charly.yml": `c:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -675,11 +616,9 @@ mybox:
 // fail-first: two missing candies + one duplicate volume all surface together.
 func TestValidate_MultipleErrors(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -688,7 +627,6 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/mycandy/charly.yml": `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     volume:
@@ -703,11 +641,9 @@ mybox:
 // problems (a missing candy) are skipped; --include-disabled would surface them.
 func TestValidate_SkipsDisabledImages(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 good:
   candy:
-    version: 2026.194.1200
     description: |-
       good.
     base: quay.io/fedora/fedora:43
@@ -716,7 +652,6 @@ good:
     plan: [{check: x, command: "true", context: [build]}]
 bad-disabled:
   candy:
-    version: 2026.194.1200
     description: |-
       bad.
     enabled: false
@@ -726,7 +661,6 @@ bad-disabled:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/pixi/charly.yml": `pixi:
   candy:
-    version: 2026.194.1200
     description: |-
       pixi.
     package: [curl]
@@ -749,7 +683,6 @@ bad-disabled:
 func TestValidate_RouteWithoutTraefik(t *testing.T) {
 	mustValidateOK(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -760,11 +693,9 @@ func TestValidate_RouteWithoutTraefik(t *testing.T) {
 // TestValidate_RouteWithTraefik ← TestValidateRouteWithTraefik.
 func TestValidate_RouteWithTraefik(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -773,14 +704,12 @@ mybox:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/traefik/charly.yml": `traefik:
   candy:
-    version: 2026.194.1200
     description: |-
       traefik.
     package: [curl]
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/svc/charly.yml": `svc:
   candy:
-    version: 2026.194.1200
     description: |-
       svc.
     package: [curl]
@@ -801,11 +730,9 @@ func portRelayBox(withSocat bool) string {
 	if withSocat {
 		candies = "[supervisord, socat, svc]"
 	}
-	return `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+	return `discover: [{path: candy, recursive: true}]
 mybox:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -820,21 +747,18 @@ func TestValidate_PortRelayValid(t *testing.T) {
 		"charly.yml": portRelayBox(true),
 		"candy/supervisord/charly.yml": `supervisord:
   candy:
-    version: 2026.194.1200
     description: |-
       supervisord.
     package: [supervisor]
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/socat/charly.yml": `socat:
   candy:
-    version: 2026.194.1200
     description: |-
       socat.
     package: [socat, iproute]
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/svc/charly.yml": `svc:
   candy:
-    version: 2026.194.1200
     description: |-
       svc.
     package: [curl]
@@ -849,7 +773,6 @@ func TestValidate_PortRelayValid(t *testing.T) {
 func TestValidate_PortRelayNotInPorts(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -862,7 +785,6 @@ func TestValidate_PortRelayNotInPorts(t *testing.T) {
 func TestValidate_PortRelayNoPorts(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -874,7 +796,6 @@ func TestValidate_PortRelayNoPorts(t *testing.T) {
 func TestValidate_PortRelayDuplicate(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -889,7 +810,6 @@ func TestValidate_PortRelayMissingSocat(t *testing.T) {
 		"charly.yml": portRelayBox(false),
 		"candy/svc/charly.yml": `svc:
   candy:
-    version: 2026.194.1200
     description: |-
       svc.
     package: [curl]
@@ -908,11 +828,9 @@ func TestValidate_PortRelayMissingSocat(t *testing.T) {
 // volume no candy in the box declares.
 func TestValidate_DataEntryUnknownVolume(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 jupyter:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -921,7 +839,6 @@ jupyter:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/jup/charly.yml": `jup:
   candy:
-    version: 2026.194.1200
     description: |-
       jup.
     package: [curl]
@@ -930,7 +847,6 @@ jupyter:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/tmpl/charly.yml": `tmpl:
   candy:
-    version: 2026.194.1200
     description: |-
       tmpl.
     data:
@@ -945,11 +861,9 @@ jupyter:
 // whose volume matches a declared volume in the box's candy chain validates clean.
 func TestValidate_DataEntryKnownVolume(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 jupyter:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -958,7 +872,6 @@ jupyter:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/jup/charly.yml": `jup:
   candy:
-    version: 2026.194.1200
     description: |-
       jup.
     package: [curl]
@@ -967,7 +880,6 @@ jupyter:
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/tmpl/charly.yml": `tmpl:
   candy:
-    version: 2026.194.1200
     description: |-
       tmpl.
     package: [curl]
@@ -987,7 +899,6 @@ jupyter:
 func TestValidate_SecretAcceptsHappyPath(t *testing.T) {
 	mustValidateOK(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1000,7 +911,6 @@ func TestValidate_SecretAcceptsHappyPath(t *testing.T) {
 func TestValidate_SecretAcceptsCollidesWithEnvAccepts(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1016,7 +926,6 @@ func TestValidate_SecretAcceptsCollidesWithEnvAccepts(t *testing.T) {
 func TestValidate_SecretRequiresCollidesWithEnvRequires(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1032,7 +941,6 @@ func TestValidate_SecretRequiresCollidesWithEnvRequires(t *testing.T) {
 func TestValidate_SecretAcceptsCollidesWithSecretRequires(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1048,7 +956,6 @@ func TestValidate_SecretAcceptsCollidesWithSecretRequires(t *testing.T) {
 func TestValidate_SecretCollidesWithEnvProvides(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1064,7 +971,6 @@ func TestValidate_SecretCollidesWithEnvProvides(t *testing.T) {
 func TestValidate_SecretAcceptsInvalidSlug(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1082,7 +988,6 @@ func TestValidate_SecretAcceptsInvalidSlug(t *testing.T) {
 func TestValidate_TaskCopyRequiresTo(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     plan:
@@ -1097,7 +1002,6 @@ func TestValidate_TaskCopyRequiresTo(t *testing.T) {
 func TestValidate_TaskUnresolvedVar(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     plan:
@@ -1112,7 +1016,6 @@ func TestValidate_TaskUnresolvedVar(t *testing.T) {
 func TestValidate_TaskReservedVarKey(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     var:
@@ -1129,7 +1032,6 @@ func TestValidate_TaskReservedVarKey(t *testing.T) {
 func TestValidate_TaskBuildOnlyAll(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     plan:
@@ -1148,7 +1050,6 @@ func TestValidate_TaskHappyPath(t *testing.T) {
 		"candy/mycandy/wrapper": "#!/bin/sh\n",
 		"candy/mycandy/charly.yml": `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     var:
@@ -1197,7 +1098,6 @@ func TestValidate_TaskHappyPath(t *testing.T) {
 func TestValidate_RejectsNoCheckStep(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       a candy with run: but no check:
     plan:
@@ -1213,7 +1113,6 @@ func TestValidate_RejectsNoCheckStep(t *testing.T) {
 func TestValidateOps_MultiVerbRejected(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1228,7 +1127,6 @@ func TestValidateOps_MultiVerbRejected(t *testing.T) {
 func TestValidateOps_RuntimeVarInBuildContext(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1242,7 +1140,6 @@ func TestValidateOps_RuntimeVarInBuildContext(t *testing.T) {
 func TestValidateOps_RuntimeVarInDeployContext(t *testing.T) {
 	mustValidateOK(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1256,7 +1153,6 @@ func TestValidateOps_RuntimeVarInDeployContext(t *testing.T) {
 func TestValidateOps_McpClean(t *testing.T) {
 	mustValidateOK(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1275,7 +1171,6 @@ func TestValidateOps_McpClean(t *testing.T) {
 func TestValidateOps_RecordClean(t *testing.T) {
 	mustValidateOK(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1294,7 +1189,6 @@ func TestValidateOps_RecordClean(t *testing.T) {
 func TestValidateOps_SpiceClean(t *testing.T) {
 	mustValidateOK(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1313,7 +1207,6 @@ func TestValidateOps_SpiceClean(t *testing.T) {
 func TestValidateOps_LibvirtClean(t *testing.T) {
 	mustValidateOK(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1339,11 +1232,9 @@ func TestValidateOps_LibvirtClean(t *testing.T) {
 // TestValidateOps_Clean ← the same. A full valid candy plan + box plan produces no error.
 func TestValidateOps_Clean(t *testing.T) {
 	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `version: "` + latestSchemaVersion.String() + `"
-discover: [{path: candy, recursive: true}]
+		"charly.yml": `discover: [{path: candy, recursive: true}]
 redis-ml:
   candy:
-    version: 2026.194.1200
     description: |-
       box.
     base: quay.io/fedora/fedora:43
@@ -1360,7 +1251,6 @@ redis-ml:
           status: 200`,
 		"candy/redis/charly.yml": `redis:
   candy:
-    version: 2026.194.1200
     description: |-
       redis.
     package: [redis]
@@ -1386,7 +1276,6 @@ redis-ml:
 func TestValidateOps_LowercaseCheckVarInClusterField(t *testing.T) {
 	bad := fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1398,7 +1287,6 @@ func TestValidateOps_LowercaseCheckVarInClusterField(t *testing.T) {
 
 	ok := fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     package: [curl]
@@ -1416,7 +1304,6 @@ func TestValidateOps_LowercaseCheckVarInClusterField(t *testing.T) {
 func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     plan:
@@ -1438,7 +1325,6 @@ func TestValidateOps_RejectsRuntimeOnlyActInBuild(t *testing.T) {
 func TestValidateCandyCUESchema_ClosednessThroughRealPipeline(t *testing.T) {
 	mustValidateErr(t, fx(t, `mycandy:
   candy:
-    version: 2026.194.1200
     description: |-
       c.
     bogus_typo_field: true

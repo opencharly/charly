@@ -80,7 +80,7 @@ func TestPluginModulePath_BuiltinFallback(t *testing.T) {
 func TestPluginModulePath_SiblingSkillEntityNoSource(t *testing.T) {
 	dir := t.TempDir()
 	writeCandy(t, dir, map[string]string{
-		"charly.yml": "my-plugin:\n\n    candy:\n        version: 2026.193.0900\n        plugin:\n            providers:\n                - command:dsh\nmy-plugin-cli-skill:\n    skill:\n        name: my-plugin-cli-skill\n",
+		"charly.yml": "my-plugin:\n\n    candy:\n        plugin:\n            providers:\n                - command:dsh\nmy-plugin-cli-skill:\n    skill:\n        name: my-plugin-cli-skill\n",
 		"go.mod":     "module github.com/opencharly/charly/candy/my-plugin\n\ngo 1.26.4\n",
 	})
 	mod, err := pluginModulePath(dir, "my-plugin")

@@ -29,8 +29,7 @@ func TestHostBuildConnectPlugins_BrokenPluginIsFatal(t *testing.T) {
 		}
 	}
 	// Project root: the candy/ dir is discovered (the plugin candy lives there).
-	must(filepath.Join(dir, "charly.yml"), `version: "`+latestSchemaVersion.String()+`"
-defaults:
+	must(filepath.Join(dir, "charly.yml"), `defaults:
   registry: ghcr.io/example
 discover:
   - path: candy
@@ -39,7 +38,6 @@ discover:
 	// The out-of-tree plugin candy whose go module FAILS to compile.
 	must(filepath.Join(dir, "candy", "broken-plugin", "charly.yml"), `broken-plugin:
   candy:
-    version: "2026.150.0000"
     description: a plugin candy whose go module fails to compile
     plugin:
       source: github.com/opencharly/broken-plugin

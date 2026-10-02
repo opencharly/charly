@@ -15,8 +15,7 @@ import (
 // the only authoring surface.
 func TestLoadUnified_AndroidNodeForm(t *testing.T) {
 	dir := t.TempDir()
-	doc := `version: "` + latestSchemaVersion.String() + `"
-pixel9a-36:
+	doc := `pixel9a-36:
   android:
     box: android-emulator
     device: pixel_9a

@@ -18,10 +18,8 @@ import (
 // flattenVenuesByPosition venue-hoist witness).
 func TestLoadUnified_NodeForm(t *testing.T) {
 	dir := t.TempDir()
-	doc := `version: "` + latestSchemaVersion.String() + `"
-redis:
+	doc := `redis:
   candy:
-    version: "2026.150.0000"
     description: in-memory store
     status: working
     plan:
@@ -48,10 +46,8 @@ shop:
 	if err != nil {
 		t.Fatalf("LoadUnified node-form: %v", err)
 	}
-	if redis, ok := spec.DecodeInlineCandy(uf.Candy["redis"]); !ok {
+	if _, ok := spec.DecodeInlineCandy(uf.Candy["redis"]); !ok {
 		t.Errorf("candy redis not loaded; candies=%v", mapKeys(uf.Candy))
-	} else if redis.Version != "2026.150.0000" {
-		t.Errorf("candy redis version = %q", redis.Version)
 	}
 	if coder, ok := uf.BoxConfig("coder"); !ok {
 		t.Errorf("box coder not loaded; boxes=%v", boxKeys(uf.Box))
@@ -99,7 +95,7 @@ func TestLoadUnified_RejectsLegacyShapes(t *testing.T) {
 		body string
 	}{
 		// legacy kind-keyed single entity: `candy: {name: …}`
-		{"kind-keyed candy", "candy:\n  name: redis\n  version: \"2026.150.0000\"\n"},
+		{"kind-keyed candy", "candy:\n  name: redis\n"},
 		// legacy root-shape collection map: `vm: {<name>: …}`
 		{"root-shape vm collection", "vm:\n  myvm:\n    source: {kind: cloud_image}\n"},
 		// legacy deploy-collection alias
@@ -108,7 +104,7 @@ func TestLoadUnified_RejectsLegacyShapes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			doc := "version: \"" + latestSchemaVersion.String() + "\"\n" + tc.body
+			doc := tc.body
 			if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(doc), 0o644); err != nil {
 				t.Fatal(err)
 			}
