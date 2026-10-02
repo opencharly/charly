@@ -258,30 +258,38 @@ func TestPackagingSystemdDeclarations(t *testing.T) {
 // retired packaging.config section) under the operator directive to fully drop
 // the system project from the package config: /etc/charly/charly.yml stays a
 // READ location only (loaderkit.DefaultSystemConfigPath), with NO package
-// artifact. This test pins the drop — the packaging candy's plan must NOT
-// reintroduce a run-step that ships the file, so the package-config surface
-// cannot silently regress (it replaces the deleted TestPackagingConfigDeclared).
+// artifact. This test is the witness of the DROP and fails if the deletion is
+// reverted on EITHER the field or a plan run-step. (It replaces the deleted
+// TestPackagingConfigDeclared; the behavioural drop itself lives in the sdk
+// bump — sdk v0.2026272.1813 deleted packagekit/config.go's pkg.Config render.)
 func TestPackagingDropsSystemProject(t *testing.T) {
 	data, err := os.ReadFile(candyCharlyYML)
 	if err != nil {
 		t.Fatalf("read %s: %v", candyCharlyYML, err)
 	}
-	var doc struct {
-		Charly struct {
-			Candy struct {
-				Plan []struct {
-					Run     string `yaml:"run"`
-					Command string `yaml:"command"`
-				} `yaml:"plan"`
-			} `yaml:"candy"`
-		} `yaml:"charly"`
-	}
+	// Parse generically: a reverted deletion must fail on EITHER surface — a
+	// re-declared `packaging.config:` field OR a plan run-step that re-ships the
+	// file. A typed struct would not see the removed field, so use the raw tree.
+	var doc map[string]any
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse %s: %v", candyCharlyYML, err)
 	}
-	for _, step := range doc.Charly.Candy.Plan {
-		if strings.Contains(step.Command, "/etc/charly/charly.yml") {
-			t.Errorf("packaging plan step %q ships /etc/charly/charly.yml; spec#183 dropped the system project from the package config (the path is a read location only)", step.Run)
+	body, _ := doc["charly"].(map[string]any)["candy"].(map[string]any)
+	if body == nil {
+		t.Fatalf("%s: missing charly.candy body", candyCharlyYML)
+	}
+	if pkg, ok := body["packaging"].(map[string]any); ok {
+		if _, declared := pkg["config"]; declared {
+			t.Error("packaging.config is declared; spec#183 dropped it — the package must NOT ship /etc/charly/charly.yml")
+		}
+	}
+	if plan, ok := body["plan"].([]any); ok {
+		for _, st := range plan {
+			sm, _ := st.(map[string]any)
+			cmd, _ := sm["command"].(string)
+			if strings.Contains(cmd, "/etc/charly/charly.yml") {
+				t.Errorf("packaging plan step %v ships /etc/charly/charly.yml; spec#183 dropped the system project from the package config (the path is a read location only)", sm["run"])
+			}
 		}
 	}
 }
