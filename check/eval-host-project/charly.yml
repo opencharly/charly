@@ -51,7 +51,7 @@ check-local:
         add_candy:
             - '@github.com/opencharly/plugin-example-step/candy/plugin-example-step:v2026.272.0141'
             - '@github.com/opencharly/layer-examplestep-deploy-consumer:v2026.274.0613'
-            - '@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local:v2026.274.2208'
+            - '@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local:v2026.275.1254'
         plan:
             - check: command=charly status --json
               id: status-shows-local
