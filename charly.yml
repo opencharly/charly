@@ -1298,6 +1298,10 @@ check-local-vm:
               id: guest-as-host-check-local
               context:
                 - runtime
+              # Builds 2 out-of-tree plugins IN-GUEST + runs a full nested check run; far
+              # exceeds the ~2m never-hang ceiling, so it needs an explicit generous timeout
+              # (a long host-orchestration step is killed mid-run without one — measured 2m51s).
+              timeout: 900s
               exit_status: 0
               command:
                 in_container: false
