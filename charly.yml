@@ -814,7 +814,7 @@ check-kubevirt-operator:
         add_candy:
             - k3s-server
             - '@github.com/opencharly/layer-kubevirt-operator:v2026.275.1217' # the standalone repo (kind-prefixed naming)
-            - '@github.com/opencharly/layer-kubevirt:v2026.275.1217' # virtctl (the client candy)
+            - '@github.com/opencharly/layer-kubevirt:v2026.272.0825' # virtctl (the client candy)
             # The verb providers the bed's plan dispatches: plugin-kube serves `kube:`
             # (the kindcluster bed add_candy's it for the same reason); plugin-kubevirt
             # serves `kubevirt:`. Neither is compiled into charly, so the bed must
