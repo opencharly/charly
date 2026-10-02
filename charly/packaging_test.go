@@ -8,9 +8,10 @@ package main
 // nFPM cutover, so this file asserts (a) the section parses into the
 // spec.Packaging type with every entry a plain package name, (b) the variant
 // plugin sets are exactly the welded plugins the release workflow publishes
-// (now 12, incl. plugin-review + plugin-pipeline), and (c) the systemd: unit + config: sections the
-// package ships (the systemd-started charly MCP server's units and its
-// system-wide /etc/charly/charly.yml project).
+// (now 12, incl. plugin-review + plugin-pipeline), and (c) the systemd: unit
+// section the package ships (the systemd-started charly MCP server's units) while
+// asserting the retired config: section is NOT reintroduced — spec#183 dropped the
+// system-wide /etc/charly/charly.yml project from the package config).
 
 import (
 	"os"
@@ -253,14 +254,14 @@ func TestPackagingSystemdDeclarations(t *testing.T) {
 	}
 }
 
-// TestPackagingShipsSystemProject — the charly-mcp systemd units resolve their
-// project from WorkingDirectory=/etc/charly, so the packaging MUST ship
-// /etc/charly/charly.yml. The former packaging.config section (#PackagingConfig)
-// was REMOVED by the schema-versioning-removal cutover (spec#183), so the
-// surviving mechanism is a packaging plan run-step that emits the file into the
-// package/install; this test pins it (it replaces the deleted
-// TestPackagingConfigDeclared).
-func TestPackagingShipsSystemProject(t *testing.T) {
+// TestPackagingDropsSystemProject — spec#183 DELETED #PackagingConfig (the
+// retired packaging.config section) under the operator directive to fully drop
+// the system project from the package config: /etc/charly/charly.yml stays a
+// READ location only (loaderkit.DefaultSystemConfigPath), with NO package
+// artifact. This test pins the drop — the packaging candy's plan must NOT
+// reintroduce a run-step that ships the file, so the package-config surface
+// cannot silently regress (it replaces the deleted TestPackagingConfigDeclared).
+func TestPackagingDropsSystemProject(t *testing.T) {
 	data, err := os.ReadFile(candyCharlyYML)
 	if err != nil {
 		t.Fatalf("read %s: %v", candyCharlyYML, err)
@@ -278,51 +279,9 @@ func TestPackagingShipsSystemProject(t *testing.T) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse %s: %v", candyCharlyYML, err)
 	}
-	ships := false
-	var emitted string
 	for _, step := range doc.Charly.Candy.Plan {
-		if strings.Contains(step.Command, "/etc/charly/charly.yml") && strings.Contains(step.Command, "plugin-mcp") {
-			ships = true
-			// Extract the heredoc body between the `<<'YAML'` marker and `YAML`,
-			// de-indent it (the run-step command is YAML-indented), and validate it.
-			if i := strings.Index(step.Command, "<<'YAML'"); i >= 0 {
-				body := step.Command[i+len("<<'YAML'"):]
-				if j := strings.Index(body, "\nYAML"); j >= 0 {
-					body = body[:j]
-				}
-				for _, ln := range strings.Split(strings.Trim(body, "\n"), "\n") {
-					emitted += strings.TrimPrefix(ln, "                ") + "\n"
-				}
-			}
-		}
-	}
-	if !ships {
-		t.Errorf("charly: plan has no run-step shipping /etc/charly/charly.yml with a plugin-mcp ref (the systemd charly-mcp units' WorkingDirectory project)")
-	}
-	// The emitted file must be a VALID charly project — validated against the
-	// CLOSED CUE schema via the project loader (non-vacuous: a wrong root shape
-	// or a bad ref must fail here), not merely the author's own keys.
-	if emitted != "" {
-		if _, err := requireProjectLoader().CueDocFromYAML("/etc/charly/charly.yml", []byte(emitted)); err != nil {
-			t.Errorf("emitted /etc/charly/charly.yml fails the closed CUE schema: %v\n%s", err, emitted)
-		}
-		var proj struct {
-			Repo  string   `yaml:"repo"`
-			Candy []string `yaml:"candy"`
-		}
-		_ = yaml.Unmarshal([]byte(emitted), &proj)
-		if proj.Repo == "" || len(proj.Candy) == 0 {
-			t.Errorf("emitted /etc/charly/charly.yml missing repo:/candy: keys:\n%s", emitted)
-		}
-		// The system project stands in for THIS repo — a wrong-but-non-empty repo
-		// value must fail (the negative control only exercises the schema).
-		if proj.Repo != "github.com/opencharly/charly" {
-			t.Errorf("emitted /etc/charly/charly.yml repo: = %q, want github.com/opencharly/charly", proj.Repo)
-		}
-		for _, c := range proj.Candy {
-			if !strings.Contains(c, "@github.com/opencharly/") || !strings.Contains(c, ":v") {
-				t.Errorf("emitted candy ref %q is not a valid @github:<tag> ref", c)
-			}
+		if strings.Contains(step.Command, "/etc/charly/charly.yml") {
+			t.Errorf("packaging plan step %q ships /etc/charly/charly.yml; spec#183 dropped the system project from the package config (the path is a read location only)", step.Run)
 		}
 	}
 }

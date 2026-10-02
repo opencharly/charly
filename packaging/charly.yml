@@ -385,21 +385,13 @@ charly:
                   restart: on-failure
                   working_directory: /etc/charly
         plan:
-            # Ship the system-wide MCP project (/etc/charly/charly.yml) that the
-            # charly-mcp systemd units resolve via WorkingDirectory=/etc/charly.
-            # Replaces the RETIRED packaging.config section (spec#183 removed
-            # #PackagingConfig): a packaging plan run-step is the surviving
-            # mechanism that emits the file into the package/install, so the
-            # systemd-started server resolves a LOCAL project instead of falling
-            # back to a network fetch of opencharly/charly.
-            - run: ship the system-wide charly MCP project (/etc/charly/charly.yml)
-              command: |
-                install -d /etc/charly
-                cat > /etc/charly/charly.yml <<'YAML'
-                repo: github.com/opencharly/charly
-                candy:
-                    - '@github.com/opencharly/plugin-mcp/candy/plugin-mcp:v2026.272.0329'
-                YAML
+            # The package intentionally does NOT ship /etc/charly/charly.yml.
+            # spec#183 DELETED #PackagingConfig (the retired packaging.config section)
+            # under the operator directive to fully drop the system project from the
+            # package config: /etc/charly/charly.yml stays a READ location only
+            # (loaderkit.DefaultSystemConfigPath), with no package artifact. The
+            # charly-mcp systemd units keep WorkingDirectory=/etc/charly, which is
+            # simply empty until a project is placed there.
             - check: the charly binary resolves on the deployment's PATH
               exit_status: 0
               command: command -v charly
