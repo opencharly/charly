@@ -80,33 +80,46 @@ refuses the node.
 
 ### What the corpus measured — the position authors actually got
 
-Measured per bed at **`origin/main`** (node indent → kind-key indent → member indent): no shipped
-bed carries an in-body member of a core resource kind. Every member the thread named as in-body
-sits at its kind key's indent — beside it, not inside it. The comments say otherwise, which is the
-whole defect in one line:
+Measured at **`origin/main`**: for each of the three beds the thread named as carrying in-body
+members, the member sits at the **same indent as its kind key** — beside it, not inside it —
+while its own comment claims the opposite. Nodes sit at indent 0 and their direct keys at indent 4:
 
 ```
-git show origin/main:charly.yml | awk  (indentation only)
+$ git show origin/main:charly.yml > /tmp/main-charly.yml
+$ awk '/^(check-builder-vm|check-group|check-kind-host-vm):$/{n=$0; print NR"| 0| "n; f=1; next}
+       f && /^[a-z]/ {f=0}
+       f {match($0,/^ */); if (RLENGTH==4) print NR"| 4| "substr($0,5,48)}' /tmp/main-charly.yml
 
 1323| 0| check-builder-vm:
-1324| 4|     vm:                      ← the kind key
-1333| 4|     check-builder-member:     ← SIBLING (the same indent as `vm:`)
+1324| 4| vm:
+1333| 4| check-builder-member:
 1372| 0| check-group:
-1373| 4|     vm:
-1385| 4|     check-group-member:       ← SIBLING
+1373| 4| vm:
+1382| 4| # NESTED under the vm node (tree position) => th
+1383| 4| # the guest via kit.NestedExecutor. No `host:` f
+1384| 4| # parent. Precedent: box/arch check-arch-vm -> a
+1385| 4| check-group-member:
 3896| 0| check-kind-host-vm:
-3897| 4|     vm:
-3916| 4|     check-kind-host-member:   ← SIBLING
-1436| 4| check-structkind-vm:
-1437| 8|     vm:
-1442| 8|     check-structkind-member:   ← SIBLING (node at 4, so both keys at 8)
-2067| 4| nested-check-vm:
-2068| 8|     vm:
-2081| 8| inner-app-pod:            ← SIBLING
+3897| 4| vm:
+3911| 4| # NESTED under the vm node (tree position) => th
+3912| 4| # lands INSIDE the guest via kit.NestedExecutor.
+3913| 4| # comes from the parent. The check is authored H
+3914| 4| # a composed candy's plan never reaches a deploy
+3915| 4| # non-image deploy.
+3916| 4| check-kind-host-member:
 ```
 
-Each of those members carries a comment claiming the opposite — `# NESTED under the vm node (tree
-position)`, `# lands INSIDE the guest` — while the authored position is the alongside one.
+**That claim is confined to those three beds; it is not a corpus-wide negative.** Two further beds
+were cited on the thread as in-body members, and they behave differently for a measured reason:
+
+- `check-structkind-member` (`charly.yml:1442`, its `vm:` key at `:1437`): the same indent, and it
+  is **not rejected** — its node's disc is `examplestructkind`, which is **absent from
+  `spec.KindValueDefs`**, and the gate returns early for any disc not in that table
+  (`charly/charly/provider_kind_invoke.go:416`, `if !ok { return nil }`). The table covers the five
+  substrate kinds plus `candy` (`:400-403`); it gates `vm`, and does not gate a plugin's structural
+  kind.
+- `inner-app-pod` (`:2081`, its `vm:` key at `:2068`): the same indent; its disc `pod` *is* in the
+  table.
 
 **So an author who wants the *into-the-venue* position is left with a spelling the gate refuses**,
 and the spelling that ships is the **alongside** one — walked as its **own root**
