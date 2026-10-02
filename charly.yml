@@ -230,13 +230,6 @@ eval-host-vm:
                 # the runtime, which needs a container engine in the guest (RCA:
                 # "engine.build: no container engine found" on a fresh disk).
                 - podman
-                # rsync: the check-local-vm bed's "guest-project-delivered" step
-                # rsyncs the pruned check-local closure into this guest over SSH —
-                # the REMOTE end needs rsync too, not just the host. Latent gap: a
-                # long-lived cached qcow2 happened to carry rsync from some prior
-                # state, so this was never exercised on a genuinely fresh disk
-                # until an operator-authorized disk purge exposed it (R9).
-                - rsync
             runcmd:
                 # The check-local bed delivers the pruned project to this path; the guest
                 # charly resolves it via CHARLY_PROJECT_DIR (`charly --host` strips -C, and
@@ -1250,7 +1243,7 @@ check-pod-overlay:
 # Formerly a top-level `host: local` bed that dropped /etc/check-local-marker + /tmp markers
 # on the OPERATOR's workstation. It is now a
 # disposable `vm:` bed: it boots eval-host-vm, welds charly-dev into the guest
-# (add_candy:[charly-dev]), rsyncs the PRUNED check-local closure into the guest
+# (add_candy:[charly-dev]), scps the PRUNED check-local closure into the guest
 # (the sdk + spec contract modules resolve from the module proxy)
 # (check/eval-host-project/), then runs `charly --host charly-check-local-vm check run
 # check-local` so the GUEST's charly applies check-local-layer to its OWN `host: local`
@@ -1273,7 +1266,7 @@ check-local-vm:
         ram: 2G
         lifecycle: dev
         description: >-
-            Guest-as-host proof of the kind:local layer-application path via ShellExecutor + HostDeployTarget, run INSIDE the disposable eval-host-vm guest (off the operator's workstation). Boots eval-host-vm, welds charly-dev (add_candy:[charly-dev] → copy: bin/charly), rsyncs the pruned check-local project (check/eval-host-project/charly.yml alone — its candy closure is pinned by @github ref and resolved by the guest, as the sdk + spec contract modules already were) into the guest, then runs `charly --host charly-check-local-vm check run check-local`: the guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies check-local-layer to its OWN host: local (guest ShellExecutor + HostDeployTarget), dropping /etc/check-local-marker + the examplestep /tmp markers in the GUEST. ALSO the witness for the STEP DEPLOY-EXECUTE leg of external plugin execution (ExternalPluginStep → InvokeWithExecutor(OpExecute) over the E3b reverse channel): the guest builds the out-of-tree examplestep + deploy:local plugins in-guest (their go.mods resolve the sdk contract module from the module proxy at the pinned require version). exit 0 from the nested run proves the kind:local path end-to-end; every side-effect is confined to the disposable guest.
+            Guest-as-host proof of the kind:local layer-application path via ShellExecutor + HostDeployTarget, run INSIDE the disposable eval-host-vm guest (off the operator's workstation). Boots eval-host-vm, welds charly-dev (add_candy:[charly-dev] → copy: bin/charly), scps the pruned check-local project (check/eval-host-project/charly.yml alone — its candy closure is pinned by @github ref and resolved by the guest, as the sdk + spec contract modules already were) into the guest, then runs `charly --host charly-check-local-vm check run check-local`: the guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies check-local-layer to its OWN host: local (guest ShellExecutor + HostDeployTarget), dropping /etc/check-local-marker + the examplestep /tmp markers in the GUEST. ALSO the witness for the STEP DEPLOY-EXECUTE leg of external plugin execution (ExternalPluginStep → InvokeWithExecutor(OpExecute) over the E3b reverse channel): the guest builds the out-of-tree examplestep + deploy:local plugins in-guest (their go.mods resolve the sdk contract module from the module proxy at the pinned require version). exit 0 from the nested run proves the kind:local path end-to-end; every side-effect is confined to the disposable guest.
         add_candy:
             # Welded charly-dev (copy: bin/charly — the local-source install, charly check
             # beds only) so the guest has `charly` on PATH + the 48 compiled_plugins — the
@@ -1283,7 +1276,7 @@ check-local-vm:
             allow_repo_changes: true
             allow_root_tasks: true
         plan:
-            - check: deliver the pruned check-local project into the eval-host-vm guest project dir (host-side rsync over the managed charly-check-local-vm ssh alias — the domain is named after this DEPLOY, not the eval-host-vm entity; cwd = this project per main.go:734; neither the candy closure nor the sdk + spec contract modules are delivered — the guest resolves both from their pinned refs)
+            - check: deliver the pruned check-local project into the eval-host-vm guest project dir (host-side scp over the managed charly-check-local-vm ssh alias — the domain is named after this DEPLOY, not the eval-host-vm entity; cwd = this project per main.go:734; neither the candy closure nor the sdk + spec contract modules are delivered — the guest resolves both from their pinned refs)
               id: guest-project-delivered
               context:
                 - runtime
@@ -1293,7 +1286,7 @@ check-local-vm:
                 command: |
                     set -euo pipefail
                     ssh charly-check-local-vm 'mkdir -p /home/arch/eval-project'
-                    rsync -a ./check/eval-host-project/charly.yml charly-check-local-vm:/home/arch/eval-project/charly.yml
+                    scp -q ./check/eval-host-project/charly.yml charly-check-local-vm:/home/arch/eval-project/charly.yml
             - check: run check-local host:local INSIDE the guest via `charly --host` — the guest charly resolves the delivered project via CHARLY_PROJECT_DIR and applies check-local-layer to its OWN host:local (guest ShellExecutor + HostDeployTarget), building the 2 out-of-tree plugins in-guest; exit 0 proves the kind:local path end-to-end off the operator's workstation
               id: guest-as-host-check-local
               context:
