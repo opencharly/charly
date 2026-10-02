@@ -42,8 +42,9 @@ And `#Local` (`spec/schema/local.cue`) no longer carries a `host:` field, so the
 as its **own root** (`sdk/deploykit/deploy_tree.go` walks only
 `root.InSubstrateMembers()` into the parent venue), so it deploys on the **host**,
 not the guest. That is the exact behaviour `30cabf27` (`#79`) moved the beds into
-VMs to prevent. The org-wide sweep found **0 in-body members** — not because
-nesting is unused, but because it is **impossible to author**.
+VMs to prevent. Nesting is not unused — it is **impossible to author**: every bed
+in the org passes `charly box validate` in CI, and the rejection pasted above is
+that gate refusing the in-body spelling, so no shipped bed can carry one.
 
 ## End-state (concrete, single codepath)
 
