@@ -75,12 +75,10 @@ jobs:
             exit 1
           fi
 
-      # golangci-lint in CI, matching what .claude/hooks/pre-commit-gate.sh already runs
-      # locally. Without it the ONLY enforcement is that local hook, so `main` accumulates
-      # lint debt between commits — and because the hook lints the WHOLE repo rather than the
-      # diff, the next contributor to touch this repo cannot commit until they have cleaned up
-      # someone else's files. Measured in opencharly/spec (2026-08-29): 11 findings sitting on
-      # a pristine `main`. Pinned by module version rather than an action so the CI and local
+      # golangci-lint in CI. The committed local git gate (carried ONLY by the
+      # umbrella `opencharly/opencharly` and installed per clone by `charly task
+      # hooks`) runs it too, so `main` does not accumulate lint debt between
+      # commits. Pinned by module version rather than an action so the CI and local
       # binaries are the same build, and so a new upstream release cannot turn `main` red on
       # its own schedule.
       - name: golangci-lint
