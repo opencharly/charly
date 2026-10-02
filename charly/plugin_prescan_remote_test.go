@@ -31,7 +31,6 @@ func TestPrescanRemoteLegRunsWithoutDiscoverBlock(t *testing.T) {
 	}
 	manifest := `plugin-prescanremote:
     candy:
-        version: 2026.242.0001
         description: a prescan test plugin candy declaring a scalar-sugar primary.
         plugin:
             source: github.com/opencharly/plugin-prescanremote/candy/plugin-prescanremote
@@ -60,10 +59,8 @@ func TestPrescanRemoteLegRunsWithoutDiscoverBlock(t *testing.T) {
 
 	// A root manifest that pins the plugin remotely and carries NO discover: block —
 	// the exact shape that used to skip the remote leg entirely.
-	root := []byte(`version: 2026.261.1747
-probe-img:
+	root := []byte(`probe-img:
     candy:
-        version: 2026.242.0001
         description: pins the plugin by @github ref, discovers nothing locally.
         base: docker.io/library/alpine:3.20
         candy:

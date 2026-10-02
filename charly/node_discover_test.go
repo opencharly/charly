@@ -21,14 +21,12 @@ func TestLoadUnified_NodeForm_Discovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(filepath.Join(dir, "charly.yml"), `version: "`+latestSchemaVersion.String()+`"
-discover:
+	must(filepath.Join(dir, "charly.yml"), `discover:
   - candy
   - box
 `)
 	must(filepath.Join(dir, "candy", "redis", "charly.yml"), `redis:
   candy:
-    version: "2026.150.0000"
     description: in-memory store
     plan:
       - check: the binary exists
@@ -50,8 +48,6 @@ discover:
 	}
 	if cands["redis"] == nil {
 		t.Errorf("discovered node-form candy redis not loaded; got %d candies", len(cands))
-	} else if cands["redis"].GetVersion() != "2026.150.0000" {
-		t.Errorf("redis candy version = %q", cands["redis"].GetVersion())
 	}
 	if _, ok := cfg.Box["coder"]; !ok {
 		t.Errorf("discovered node-form box coder not loaded; boxes present: %v", boxConfigKeys(cfg))

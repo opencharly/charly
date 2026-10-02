@@ -26,7 +26,7 @@ check-local-app:
         description: |-
             Minimal kind:local template applying check-local-layer to the guest host.
         candy:
-            - '@github.com/opencharly/layer-check-local-layer:v2026.241.1216'
+            - '@github.com/opencharly/layer-check-local-layer:v2026.271.2242'
 check-local:
     local:
         from: check-local-app
@@ -49,9 +49,9 @@ check-local:
             reverse op the host records; teardown (charly deploy del) replays it so the markers
             are gone. Every side effect is confined to the disposable guest.
         add_candy:
-            - '@github.com/opencharly/plugin-example-step/candy/plugin-example-step:v2026.239.1643'
-            - '@github.com/opencharly/layer-examplestep-deploy-consumer:v2026.241.1216'
-            - '@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local:v2026.241.1003'
+            - '@github.com/opencharly/plugin-example-step/candy/plugin-example-step:v2026.272.0141'
+            - '@github.com/opencharly/layer-examplestep-deploy-consumer:v2026.274.0613'
+            - '@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local:v2026.275.1254'
         plan:
             - check: command=charly status --json
               id: status-shows-local

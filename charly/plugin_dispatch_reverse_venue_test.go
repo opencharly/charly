@@ -487,11 +487,11 @@ func seedDispatchProject(t *testing.T, repoRoot string) string {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rootManifest := "version: 2026.261.1747\ndiscover:\n    - path: candy\n      recursive: true\n"
+	rootManifest := "discover:\n    - path: candy\n      recursive: true\n"
 	if err := os.WriteFile(filepath.Join(dir, spec.UnifiedFileName), []byte(rootManifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	seed := "fixture-seed:\n    candy:\n        version: 2026.001.0001\n        description: Dispatch fixture seed.\n        candy:\n            - '@github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch:v2026.237.1420'\n"
+	seed := "fixture-seed:\n    candy:\n        description: Dispatch fixture seed.\n        candy:\n            - '@github.com/opencharly/plugin-example-dispatch/candy/plugin-example-dispatch:v2026.237.1420'\n"
 	seedDir := filepath.Join(dir, "candy", "fixture-seed")
 	if err := os.MkdirAll(seedDir, 0o755); err != nil {
 		t.Fatal(err)
