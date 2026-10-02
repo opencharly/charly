@@ -80,27 +80,43 @@ refuses the node.
 
 ### What the corpus measured — the position authors actually got
 
-No shipped bed carries an in-body member of a core resource kind. Both beds cited on this
-thread as in-body members sit at **deploy-member indent** — a sibling of their kind key,
-whatever their own comments say. Measured by indentation on `charly/charly.yml` at this
-head:
+Measured per bed at **`origin/main`** (node indent → kind-key indent → member indent): no shipped
+bed carries an in-body member of a core resource kind. Every member the thread named as in-body
+sits at its kind key's indent — beside it, not inside it. The comments say otherwise, which is the
+whole defect in one line:
 
 ```
+git show origin/main:charly.yml | awk  (indentation only)
+
+1323| 0| check-builder-vm:
+1324| 4|     vm:                      ← the kind key
+1333| 4|     check-builder-member:     ← SIBLING (the same indent as `vm:`)
+1372| 0| check-group:
+1373| 4|     vm:
+1385| 4|     check-group-member:       ← SIBLING
+3896| 0| check-kind-host-vm:
+3897| 4|     vm:
+3916| 4|     check-kind-host-member:   ← SIBLING
 1436| 4| check-structkind-vm:
-1437| 8| vm:
-1439| 8| # NESTED under the vm node (tree position) → the kind:lo…
-1442| 8| check-structkind-member:      ← a SIBLING of `vm:` (indent 8), not a child
-2081| 8| inner-app-pod:               ← the same shape
+1437| 8|     vm:
+1442| 8|     check-structkind-member:   ← SIBLING (node at 4, so both keys at 8)
+2067| 4| nested-check-vm:
+2068| 8|     vm:
+2081| 8| inner-app-pod:            ← SIBLING
 ```
 
-`check-group` at `origin/main` had that same shape — `vm:` and `check-group-member` both at
-indent 4. So an author who wants the *into-the-venue* position is left with a spelling the
-gate refuses, and the spelling that ships is the **alongside** one. An alongside `local:`
-member is walked as its **own root** — `sdk/deploykit/deploy_tree.go:43` walks only the
-root's `InSubstrateMembers()` into the parent venue — so it lands on the **host**, not in
-the guest: the exact behaviour `30cabf27` (`#79`) moved the beds into VMs to prevent. This
-head re-nests `check-group`'s member **into** the `vm:` body (commit `ed499734`), which is
-the position these comments always claimed.
+Each of those members carries a comment claiming the opposite — `# NESTED under the vm node (tree
+position)`, `# lands INSIDE the guest` — while the authored position is the alongside one.
+
+**So an author who wants the *into-the-venue* position is left with a spelling the gate refuses**,
+and the spelling that ships is the **alongside** one — walked as its **own root**
+(`sdk/deploykit/deploy_tree.go:43` walks only the root's `InSubstrateMembers()` into the parent
+venue), landing on the **host**, not in the guest: the exact behaviour `30cabf27` (`#79`) moved the
+beds into VMs to prevent.
+
+**The `charly` leg (`feat/nested-members-748`, commit `ed499734`) re-nests three of those beds
+in-body** — `check-builder-member`, `check-group-member`, `check-kind-host-member`, each from
+indent 4 to 8 — which is the position their own comments always claimed.
 
 ## End-state (concrete, single codepath)
 
