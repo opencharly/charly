@@ -47,7 +47,7 @@ func (p engineProvider) Invoke(_ context.Context, op *Operation) (*Result, error
 	if op == nil {
 		return nil, fmt.Errorf("engine:%s: nil operation", p.word)
 	}
-	out, err := container.InvokeEngineOp(p.word, op.Op, json.RawMessage(op.Params))
+	out, err := container.InvokeEngineOp(p.word, op.Op, op.Params)
 	if err != nil {
 		return nil, err
 	}

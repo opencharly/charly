@@ -20,9 +20,11 @@ func (p zzReqProv) Reserved() string                                    { return
 func (p zzReqProv) Class() ProviderClass                                { return p.class }
 func (p zzReqProv) Invoke(context.Context, *Operation) (*Result, error) { return &Result{}, nil }
 
-// reqCap renders a peer identity "<class>:<word>[:<parent>]" for a requirement fixture.
-func reqCap(class ProviderClass, word string) spec.PluginCapability {
-	return spec.PluginCapability(providerKey(class, word, ""))
+// reqCap renders a peer identity "verb:<word>" for a requirement fixture. Every
+// requirement fixture in this suite targets a `verb:` capability, so the class is
+// fixed rather than a parameter (an always-constant param is dead shape).
+func reqCap(word string) spec.PluginCapability {
+	return spec.PluginCapability(providerKey(ClassVerb, word, ""))
 }
 
 // A declared, already-registered peer resolves with no work: the gate passes and the
@@ -33,7 +35,7 @@ func TestRegisterPluginUnitRequires_PeerAlreadyRegistered(t *testing.T) {
 	}
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqconsumer"}},
-		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreqpresent")}},
+		Requires:  []spec.PluginRequirement{{Capability: reqCap("zzreqpresent")}},
 	}
 	if err := registerPluginUnitRequires("zzreqconsumer", unit); err != nil {
 		t.Fatalf("declared+registered peer must resolve, got %v", err)
@@ -45,7 +47,7 @@ func TestRegisterPluginUnitRequires_PeerAlreadyRegistered(t *testing.T) {
 func TestRegisterPluginUnitRequires_MissingPeerFailsLoud(t *testing.T) {
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqmissconsumer"}},
-		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreqabsent-peer")}},
+		Requires:  []spec.PluginRequirement{{Capability: reqCap("zzreqabsent-peer")}},
 	}
 	err := registerPluginUnitRequires("zzreqmissconsumer", unit)
 	if err == nil {
@@ -60,7 +62,7 @@ func TestRegisterPluginUnitRequires_MissingPeerFailsLoud(t *testing.T) {
 func TestRegisterPluginUnitRequires_OptionalMissingSkips(t *testing.T) {
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqoptconsumer"}},
-		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreq-opt-absent"), Optional: true}},
+		Requires:  []spec.PluginRequirement{{Capability: reqCap("zzreq-opt-absent"), Optional: true}},
 	}
 	if err := registerPluginUnitRequires("zzreqoptconsumer", unit); err != nil {
 		t.Fatalf("an absent optional peer must skip, got %v", err)
@@ -82,7 +84,7 @@ func TestRegisterPluginUnitRequires_CycleRejected(t *testing.T) {
 
 	unit := &PluginUnit{
 		Providers: []Provider{zzReqProv{ClassVerb, "zzreqcycle-a"}},
-		Requires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzreqcycle-b")}},
+		Requires:  []spec.PluginRequirement{{Capability: reqCap("zzreqcycle-b")}},
 	}
 	err := registerPluginUnitRequires("zzreqcycle-a", unit)
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
@@ -161,7 +163,7 @@ func TestGateCandyRequires_RegisteredPeerResolves(t *testing.T) {
 		IsPlugin:        true,
 		PluginSource:    "github.com/opencharly/zzgm-consumer",
 		PluginProviders: []string{"verb:zzgm-consumer"},
-		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzgm-present")}},
+		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap("zzgm-present")}},
 	})
 	if err := gateCandyRequires("zzgm-consumer", candy); err != nil {
 		t.Fatalf("a manifest requirement on a registered peer must resolve, got %v", err)
@@ -173,7 +175,7 @@ func TestGateCandyRequires_MissingPeerFailsLoud(t *testing.T) {
 		IsPlugin:        true,
 		PluginSource:    "github.com/opencharly/zzgm-miss",
 		PluginProviders: []string{"verb:zzgm-miss"},
-		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzgm-absent")}},
+		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap("zzgm-absent")}},
 	})
 	err := gateCandyRequires("zzgm-miss", candy)
 	if err == nil || !strings.Contains(err.Error(), "zzgm-absent") {
@@ -204,7 +206,7 @@ func TestLoadProjectPlugins_CompiledInCandyManifestGated(t *testing.T) {
 		IsPlugin:        true,
 		PluginSource:    "github.com/opencharly/zzgmcompiledin",
 		PluginProviders: []string{"verb:zzgmcompiledin"},
-		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap(ClassVerb, "zzgmcompiledin-missing")}},
+		PluginRequires:  []spec.PluginRequirement{{Capability: reqCap("zzgmcompiledin-missing")}},
 	})
 	candies := map[string]spec.CandyReader{"zzgmcompiledin-candy": candy}
 	refs := map[string]struct{}{"zzgmcompiledin": {}}
