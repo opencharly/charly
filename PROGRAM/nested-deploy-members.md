@@ -47,7 +47,10 @@ reverted:
 parse_substrate_parent_test.go:47: node "check-group": want 1 member child, got 0
   (body={"check-group-member":{"local":{"from":"check-group-app"}},"description":"group bed"})
 FAIL	github.com/opencharly/sdk/loaderkit
+
 ```
+
+The same test reads at `:201` in the pinned tag `v0.2026272.1813` — where it is still `if t.DeploySubstrates[disc] {` — and at `:209` on this branch: **the fix adds the eight-line comment above it**, which is why the thread's `5963001532` recorded `:201` while this head records `:209`. One statement, two trees.
 
 ### Defect 2 — the top-level kind gate was handed the authored body (`charly`)
 
@@ -90,7 +93,7 @@ opposite. The line numbers and indents below are the command's own output, unedi
 $ git show origin/main:charly.yml > /tmp/main-charly.yml
 $ R() { awk -v s=$1 -v e=$2 'NR>=s && NR<=e {match($0,/^ */); i=RLENGTH; t=substr($0,i+1);
       if (t !~ /^#/ && t != "") printf "%d| %d| %s\n", NR, i, substr(t,1,44)}' /tmp/main-charly.yml; }
-$ R 1323 1333; R 1372 1385; R 3896 3916; R 1436 1442; R 2067 2081
+$ R 1323 1333; R 1372 1385; R 1436 1442; R 2067 2081; R 3896 3916
 1323| 0| check-builder-vm:
 1324| 4| vm:
 1325| 8| from: eval-vm
@@ -111,22 +114,6 @@ $ R 1323 1333; R 1372 1385; R 3896 3916; R 1436 1442; R 2067 2081
 1380| 8| description: >-
 1381| 12| R10 witness for the POST-MIGRATE member-tree
 1385| 4| check-group-member:
-3896| 0| check-kind-host-vm:
-3897| 4| vm:
-3898| 8| from: eval-vm
-3899| 8| disposable: true
-3900| 8| cpu: 2
-3901| 8| ram: 2G
-3902| 8| lifecycle: dev
-3903| 8| description: >-
-3904| 12| R10 witness for the Phase 5 kind-host profil
-3905| 12| eval-vm guest (off the operator's workstatio
-3906| 12| under this vm node applies the profile (`fro
-3907| 12| via kit.NestedExecutor — the eval-vm canonic
-3908| 12| a vm node deploys into the guest, never the 
-3909| 12| packages (kind + the per-engine kind-engine-
-3910| 12| kubectl/helm) land in the guest, and the mem
-3916| 4| check-kind-host-member:
 1436| 4| check-structkind-vm:
 1437| 8| vm:
 1438| 12| from: eval-vm
@@ -146,6 +133,22 @@ $ R 1323 1333; R 1372 1385; R 3896 3916; R 1436 1442; R 2067 2081
 2079| 18| stdout: {contains: [PONG]}
 2080| 18| command: "redis-cli -h charly-redis ping"
 2081| 8| inner-app-pod:
+3896| 0| check-kind-host-vm:
+3897| 4| vm:
+3898| 8| from: eval-vm
+3899| 8| disposable: true
+3900| 8| cpu: 2
+3901| 8| ram: 2G
+3902| 8| lifecycle: dev
+3903| 8| description: >-
+3904| 12| R10 witness for the Phase 5 kind-host profil
+3905| 12| eval-vm guest (off the operator's workstatio
+3906| 12| under this vm node applies the profile (`fro
+3907| 12| via kit.NestedExecutor — the eval-vm canonic
+3908| 12| a vm node deploys into the guest, never the 
+3909| 12| packages (kind + the per-engine kind-engine-
+3910| 12| kubectl/helm) land in the guest, and the mem
+3916| 4| check-kind-host-member:
 ```
 
 - `check-builder-member`, `check-group-member` and `check-kind-host-member`: member at indent 4, the
@@ -214,7 +217,7 @@ indent 4 to 8 — which is the position their own comments always claimed.
    member (deploys INTO the parent's venue). A resource entity key placed as a
    **sibling** of the kind key is an ALONGSIDE member (its own root, shared
    network). Nothing else expresses placement — no `nested:`, no `host:`
-   venue-kind, no per-substrate switch.
+   venue-kind, no per-substrate switch. `host: local` is not an exception: it selects no venue (item 5).
 
 2. **The position is DERIVED from authored depth — never stored, never re-derived
    from the kind.** `spec.Member.Position` (already the model) is the ONE
@@ -238,7 +241,11 @@ indent 4 to 8 — which is the position their own comments always claimed.
    member with no `host:`** beside a `vm:`/`pod:` parent is a **LOAD ERROR** with a
    remediation hint (`author it inside the parent body to deploy INTO the guest, or
    set host: local to deploy beside it on the host`). The host-deploying shape can
-   never arise silently again. It **lands as its own chain** (landing order step 5),
+   never arise silently again. **`host: local` is a MARKER, not a placement:**
+   the deleted spelling was `host:` used to CHOOSE a venue — a second placement path; the
+   marker chooses nothing. Position is still tree position, and the marker only declares the
+   host landing that the guard requires, instead of leaving it silent.
+   It **lands as its own chain** (landing order step 5),
    because it fires at project resolve and needs the org-wide `host: local` marking
    first.
 
@@ -281,6 +288,5 @@ indent 4 to 8 — which is the position their own comments always claimed.
 - Not a **per-kind CUE edit** — opening each substrate body in turn would re-apply the same
   defect once per plugin instead of once at the one shared seam. The operator's direction is
   binding here: nesting must work EXACTLY the same everywhere, whatever the plugin.
-- Not a `nested:` field, a `host:` venue-kind, or any second placement spelling —
-  those are the parallel paths the member-tree cutover already deleted.
+- Not a `nested:` field, a `host:` venue-kind, or any second placement spelling — those are the parallel paths the member-tree cutover already deleted. `host: local` (end-state 5) is the guard's marker on a deploy-level member, not a venue kind: it carries the one value `local` and selects no venue.
 - Not a core kind-switch — the descent stays a plugin-declared trait.
