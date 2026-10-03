@@ -216,7 +216,9 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 	layers := map[string]spec.CandyReader{"pixi": testCandy("pixi", spec.CandyModel{}, spec.CandyView{})}
 
 	pluginRef := "@github.com/opencharly/charly/candy/plugin-spice:v2026.174.0425"
-	opts := spec.ResolveOpts{ExtraCandyRefs: []string{pluginRef}}
+	// Typed refs carrying a REAL box scope, the way a deploy's add_candy refs are tagged
+	// (spec.ScopedExtraCandyRefs) — never a constant label (#739).
+	opts := spec.ResolveOpts{ExtraCandyRefs: spec.ScopedExtraCandyRefs(spec.BoxScope("check-group"), pluginRef)}
 	downloads, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, opts)
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts() error = %v", err)
@@ -239,7 +241,7 @@ func TestCollectRemoteRefsOptsExtraCandyRefs(t *testing.T) {
 
 	// A LOCAL ExtraCandyRef is a no-op (already covered by ScanCandy): collecting it
 	// adds no remote download.
-	localOnly, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{ExtraCandyRefs: []string{"plugin-spice"}})
+	localOnly, err := requireProjectLoader().CollectRemoteRefsOpts(hostInProcCtx(), cfg, layers, spec.ResolveOpts{ExtraCandyRefs: spec.ScopedExtraCandyRefs(spec.BoxScope("check-group"), "plugin-spice")})
 	if err != nil {
 		t.Fatalf("CollectRemoteRefsOpts(local extra) error = %v", err)
 	}
