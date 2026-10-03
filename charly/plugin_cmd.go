@@ -22,7 +22,7 @@ type PluginInternalCmd struct {
 // host dies without reaping (the orphan backstop).
 type PluginServeCmd struct{}
 
-func (c *PluginServeCmd) Run() error { //nolint:unparam // Kong Run signature requires error; transport.Serve blocks until disconnect
+func (c *PluginServeCmd) Run() error {
 	if err := loadBuiltinPluginUnits(); err != nil {
 		return fmt.Errorf("__plugin serve: builtin schema gate: %w", err)
 	}

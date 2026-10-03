@@ -106,8 +106,6 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 // builtin and an external are validated identically). A missing def, an
 // uncompilable input, or a failed constraint (e.g. the externalprobe marker's
 // `& !=""`) is a hard error, never a silent runtime surprise.
-//
-//nolint:unparam // class is the provider-key dimension (InputDefs are keyed by provKey(class,word)); the verb runtime seam (runPluginVerb) is the only caller today — kind/deploy/step/builder plugin_inputs validate through this SAME function when their seams wire.
 func validateAuthoredPluginInput(class ProviderClass, word string, inputJSON []byte) error {
 	pluginSchemas.mu.Lock()
 	def, ok := pluginSchemas.inputDefs[provKey(class, word)]

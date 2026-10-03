@@ -68,7 +68,7 @@ func TestExecutorReverseServer_DelegatesToExecutor(t *testing.T) {
 	go func() { _ = srv.Serve(lis) }()
 	defer srv.Stop()
 
-	conn, err := grpc.Dial("bufnet", //nolint:staticcheck // grpc.Dial is fine for an in-memory bufconn test
+	conn, err := grpc.Dial("bufnet",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -110,7 +110,7 @@ func TestExecutorReverseServer_PutFile(t *testing.T) {
 	go func() { _ = srv.Serve(lis) }()
 	defer srv.Stop()
 
-	conn, err := grpc.Dial("bufnet", //nolint:staticcheck // grpc.Dial is fine for an in-memory bufconn test
+	conn, err := grpc.Dial("bufnet",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
