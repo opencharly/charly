@@ -2300,7 +2300,7 @@ check-commands-app:
             - '@github.com/opencharly/plugin-clean/candy/plugin-clean:v2026.271.2313'
             - '@github.com/opencharly/plugin-settings/candy/plugin-settings:v2026.272.0410'
             - '@github.com/opencharly/plugin-candy/candy/plugin-candy:v2026.271.2318'
-            - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.275.1127'
+            - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.276.1843'
             - '@github.com/opencharly/plugin-authoring/candy/plugin-authoring:v2026.271.2244'
             - '@github.com/opencharly/plugin-status/candy/plugin-status:v2026.272.0442'
             - '@github.com/opencharly/plugin-substrate/candy/plugin-substrate:v2026.274.0652'
