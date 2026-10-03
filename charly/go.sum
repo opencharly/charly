@@ -141,8 +141,8 @@ github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319 
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319/go.mod h1:sJZfp6ovCsj1LzQAzq/RFw5FmtzBbnWZk8IPvyK/v+c=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026271.2318 h1:7bXPTBvIjO/NSvezL0i4/651VgE10O8QCqJlZVFd6c0=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026271.2318/go.mod h1:pjKhnMDRzFv4CKJ+dkZk7fuRiwI92Lu0qK6qLfUvomg=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026272.2039 h1:xzN6dznb01b/qZFFPD26zMRdKnpfYp0pWVb/iwlJX+0=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026272.2039/go.mod h1:fd34kI1jFHI/UlbSaedkiAFCIti4PGu4aRm7ZxUdy24=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026276.1218 h1:x4+JtiVFqClhhdUUk5V95VkJjKMR84uTWkIKwseCF+Y=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026276.1218/go.mod h1:fd34kI1jFHI/UlbSaedkiAFCIti4PGu4aRm7ZxUdy24=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313 h1:gt2nSmXaEpJFWQMGVENgIu6hsgq9Jtp1b7PlRf3PWY8=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313/go.mod h1:SKeBh4UP51CHV9KMSdWvdAPvN9kxK9NGPiWqM+E49eM=
 github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039 h1:gVsGunNwjAjPTX/rTXFzqFwwaEs5FKKZRhTFeO+RR0I=
@@ -241,8 +241,8 @@ github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433 h
 github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433/go.mod h1:oxgvh5PZ+j5ezOS1qUJumnEBFyOg3a5pUz/r2lMyplo=
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424 h1:eu410toqUdlBo94YiuC5Y7PLaktHDiqUnjMCMOaeHL8=
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424/go.mod h1:X+COgIvHq7NIpaK3rraNOeyDESN3R8ZhGD99sNcFZms=
-github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026272.2040 h1:hS72z7B67DEI4/SerIWZ53Cq0co6of3kVFHZJLnmYKU=
-github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026272.2040/go.mod h1:t655ExueVv7WRINSeBqJxm2dtJ1fXy3clsUvrl1ylbI=
+github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026276.1533 h1:EbQxbRezYxet7O+/1kR/jwdGSCUXgnGJNtFQXnSYdfw=
+github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026276.1533/go.mod h1:t655ExueVv7WRINSeBqJxm2dtJ1fXy3clsUvrl1ylbI=
 github.com/opencharly/sdk v0.2026272.1813 h1:a8CZ7mNArb4ikZbAk3NNlHUHxLXjjwaImv2SDw737qU=
 github.com/opencharly/sdk v0.2026272.1813/go.mod h1:4HvnoqUdUHjRXQ+CvHbMM82pKCQs7eAnT8O8nAp4KRM=
 github.com/opencharly/spec v0.2026272.1512 h1:TDAS1ZXZfcOqf/hS5ZM7qJdYC42wi2bhSeWnOi4d9rc=

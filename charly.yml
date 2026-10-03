@@ -981,7 +981,7 @@ check-kubevirt-vm:
             - '@github.com/opencharly/layer-kubevirt-operator:v2026.269.1736' # KubeVirt + CDI, in-venue
             - '@github.com/opencharly/layer-kubevirt:v2026.269.0037' # virtctl (client candy)
             - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350' # merged: loud kube: resolve + k3s-post fail-loud
-            - '@github.com/opencharly/plugin-vm/candy/plugin-vm:feat/kubevirt-vmbox-stable-tag' # LOCAL R10: stable :latest handle (branch pin — the feat is open as plugin-vm#61; see the named task in the PR body)
+            - '@github.com/opencharly/plugin-vm/candy/plugin-vm:v2026.276.1533' # merged: stable :latest box handle the containerDisk ref resolves
             - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.276.1453' # merged: containerDisk delivery + loud resolve + fixed sdk
         env:
             K3S_SERVER_HOSTNAME: 127.0.0.1
