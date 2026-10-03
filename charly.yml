@@ -812,8 +812,8 @@ check-kubevirt-operator:
             # (the kindcluster bed add_candy's it for the same reason); plugin-kubevirt
             # serves `kubevirt:`. Neither is compiled into charly, so the bed must
             # reference them or the verb resolves "no provider registered".
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
-            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.275.0411'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
+            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.276.1231'
         env:
             K3S_SERVER_HOSTNAME: 127.0.0.1
         install_opts:
@@ -3394,7 +3394,7 @@ check-kindcluster:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
         description: >-
             Sole R10 witness of the externalized deploy:kindcluster substrate: a disposable local
             Kubernetes-in-Docker cluster provisioned by kind on the operator's container engine
@@ -3482,7 +3482,7 @@ check-kindcluster-docker:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
         description: >-
             R10 witness of deploy:kindcluster on the DOCKER engine: a disposable local
             Kubernetes-in-Docker cluster provisioned by kind on docker, probed with the
@@ -3550,7 +3550,7 @@ check-kindcluster-nerdctl:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
         description: >-
             R10 witness of deploy:kindcluster on the ROOTLESS NERDCTL engine: a disposable
             local Kubernetes-in-Docker cluster provisioned by kind on rootless nerdctl
@@ -3625,7 +3625,7 @@ check-kindcluster-workload:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
         image: check-k8s-deploy-app
         description: >-
             R10 for the deploy:kindcluster WORKLOAD leg + engine-aware image loading: a
@@ -3701,7 +3701,7 @@ check-kindcluster-lock:
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.275.0411'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
         description: >-
             R10 regression for charly#680: a disposable kindcluster ROOT (external-in-place)
             with a deploy-level kindcluster MEMBER. Teardown runs the root's `deploy del`,
