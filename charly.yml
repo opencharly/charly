@@ -813,7 +813,7 @@ check-kubevirt-operator:
             # serves `kubevirt:`. Neither is compiled into charly, so the bed must
             # reference them or the verb resolves "no provider registered".
             - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
-            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.276.1231'
+            - '@github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt:v2026.276.1453' # containerDisk delivery + loud resolve + fixed sdk (the pin the whole-project reconcile asserts)
         env:
             K3S_SERVER_HOSTNAME: 127.0.0.1
         install_opts:
