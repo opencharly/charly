@@ -64,9 +64,11 @@ bodyJSON, err := requireProjectLoader().EntityBodyJSON(pn)
 entity, err := requireProjectLoader().CueDocFromJSON("node "+pn.Name, bodyJSON)
 ```
 
-`pn.Body` still carries the member key — it IS the position channel the derivation reads —
-so the closed `#DeployValue` arm (`spec/schema/node.cue:130`) rejects the node. Measured on
-`check-group` with its member re-indented into the `vm:` body:
+`pn.Body` still carries the member key — it IS the position channel the derivation reads — so once
+the member is authored in-body its key sits **inside** the kind value, and the closed schema at the
+base of every per-kind value refuses it (`#DeployValue: #Deploy & {nested?: _|_, peer?: _|_, …}`,
+`spec/schema/node.cue:130`). Measured on `check-group` with its member re-indented into the `vm:`
+body:
 
 ```
 node "check-group": vm: 5 errors in empty disjunction:
@@ -80,46 +82,111 @@ refuses the node.
 
 ### What the corpus measured — the position authors actually got
 
-Measured at **`origin/main`**: for each of the three beds the thread named as carrying in-body
-members, the member sits at the **same indent as its kind key** — beside it, not inside it —
-while its own comment claims the opposite. Nodes sit at indent 0 and their direct keys at indent 4:
+Measured at **`origin/main`** over the five beds this thread cited. In every one the member sits at
+the **same indent as its kind key** — beside it, not inside it — while its own comment claims the
+opposite. The line numbers and indents below are the command's own output, unedited:
 
 ```
 $ git show origin/main:charly.yml > /tmp/main-charly.yml
-$ awk '/^(check-builder-vm|check-group|check-kind-host-vm):$/{n=$0; print NR"| 0| "n; f=1; next}
-       f && /^[a-z]/ {f=0}
-       f {match($0,/^ */); if (RLENGTH==4) print NR"| 4| "substr($0,5,48)}' /tmp/main-charly.yml
-
+$ R() { awk -v s=$1 -v e=$2 'NR>=s && NR<=e {match($0,/^ */); i=RLENGTH; t=substr($0,i+1);
+      if (t !~ /^#/ && t != "") printf "%d| %d| %s\n", NR, i, substr(t,1,44)}' /tmp/main-charly.yml; }
+$ R 1323 1333; R 1372 1385; R 3896 3916; R 1436 1442; R 2067 2081
 1323| 0| check-builder-vm:
 1324| 4| vm:
+1325| 8| from: eval-vm
+1326| 8| disposable: true
+1328| 8| cpu: 2
+1329| 8| ram: 2G
+1330| 8| lifecycle: dev
+1331| 8| description: >-
+1332| 12| Sole proof of the builder DEPLOY leg (runVen
 1333| 4| check-builder-member:
 1372| 0| check-group:
 1373| 4| vm:
-1382| 4| # NESTED under the vm node (tree position) => th
-1383| 4| # the guest via kit.NestedExecutor. No `host:` f
-1384| 4| # parent. Precedent: box/arch check-arch-vm -> a
+1374| 8| from: eval-vm
+1375| 8| disposable: true
+1377| 8| cpu: 2
+1378| 8| ram: 2G
+1379| 8| lifecycle: dev
+1380| 8| description: >-
+1381| 12| R10 witness for the POST-MIGRATE member-tree
 1385| 4| check-group-member:
 3896| 0| check-kind-host-vm:
 3897| 4| vm:
-3911| 4| # NESTED under the vm node (tree position) => th
-3912| 4| # lands INSIDE the guest via kit.NestedExecutor.
-3913| 4| # comes from the parent. The check is authored H
-3914| 4| # a composed candy's plan never reaches a deploy
-3915| 4| # non-image deploy.
+3898| 8| from: eval-vm
+3899| 8| disposable: true
+3900| 8| cpu: 2
+3901| 8| ram: 2G
+3902| 8| lifecycle: dev
+3903| 8| description: >-
+3904| 12| R10 witness for the Phase 5 kind-host profil
+3905| 12| eval-vm guest (off the operator's workstatio
+3906| 12| under this vm node applies the profile (`fro
+3907| 12| via kit.NestedExecutor — the eval-vm canonic
+3908| 12| a vm node deploys into the guest, never the 
+3909| 12| packages (kind + the per-engine kind-engine-
+3910| 12| kubectl/helm) land in the guest, and the mem
 3916| 4| check-kind-host-member:
+1436| 4| check-structkind-vm:
+1437| 8| vm:
+1438| 12| from: eval-vm
+1442| 8| check-structkind-member:
+2067| 4| nested-check-vm:
+2068| 8| vm:
+2069| 12| agent_provisioned: true
+2070| 12| plan:
+2071| 16| - check: the VM has booted and is reachable 
+2072| 18| exit_status: 0
+2073| 18| command: "uptime"
+2074| 16| - check: the guest has hardware-accelerated 
+2075| 18| file:
+2076| 20| file: /dev/kvm
+2077| 20| exists: true
+2078| 16| - check: the VM guest can reach the outermos
+2079| 18| stdout: {contains: [PONG]}
+2080| 18| command: "redis-cli -h charly-redis ping"
+2081| 8| inner-app-pod:
 ```
 
-**That claim is confined to those three beds; it is not a corpus-wide negative.** Two further beds
-were cited on the thread as in-body members, and they behave differently for a measured reason:
+- `check-builder-member`, `check-group-member` and `check-kind-host-member`: member at indent 4, the
+  same as their `vm:` key; the node itself at indent 0.
+- `check-structkind-member` — **`charly.yml:1442`**, its `vm:` key at `:1437` and the node
+  `check-structkind-vm` at `:1436`: member at indent 8, the same as `vm:`. (The thread cites this
+  entry at `:1445`; the measured line of the member key itself is `:1442` — the same entry, and the
+  indent above is what decides the position.)
+- `inner-app-pod` — `:2081`, its `vm:` key at `:2068`, the node `nested-check-vm` at `:2067`:
+  member at indent 8, the same as `vm:`.
 
-- `check-structkind-member` (`charly.yml:1442`, its `vm:` key at `:1437`): the same indent, and it
-  is **not rejected** — its node's disc is `examplestructkind`, which is **absent from
+**That claim is confined to those five beds; it is not a corpus-wide negative.** Two of them are
+not rejected, for a measured reason:
+
+- `check-structkind-member`: its node's disc is `examplestructkind`, which is **absent from
   `spec.KindValueDefs`**, and the gate returns early for any disc not in that table
   (`charly/charly/provider_kind_invoke.go:416`, `if !ok { return nil }`). The table covers the five
   substrate kinds plus `candy` (`:400-403`); it gates `vm`, and does not gate a plugin's structural
   kind.
-- `inner-app-pod` (`:2081`, its `vm:` key at `:2068`): the same indent; its disc `pod` *is* in the
-  table.
+- `inner-app-pod`: the same indent, and its disc `pod` *is* in the table — it is the one bed here
+  whose kind is both core and gated, and it is alongside.
+
+**The gate's shape-dependence is measured, not inferred.** With the corpus beds re-nested in-body
+and the `origin/main` gate restored, the corpus gate test fails on **exactly those three beds and no
+other** — every remaining bed in the corpus passes:
+
+```
+$ go test ./ -run TestCueKinds_Corpus -count=1     # with provider_kind_invoke.go at origin/main
+    cue_kinds_corpus_test.go:194: FAIL ../charly.yml:vm.check-builder-vm: vm: 5 errors in empty disjunction:
+    cue_kinds_corpus_test.go:194: FAIL ../charly.yml:vm.check-group: vm: 5 errors in empty disjunction:
+    cue_kinds_corpus_test.go:194: FAIL ../charly.yml:vm.check-kind-host-vm: vm: 5 errors in empty disjunction:
+FAIL	github.com/opencharly/charly/charly	37.599s
+
+$ go test ./ -run TestCueKinds_Corpus -count=1     # on this head, gate fix in place
+ok  	github.com/opencharly/charly/charly	37.904s
+```
+
+So the closed `#<Kind>Value` arm refuses a key **inside the kind value** and not one beside it: an
+alongside member sits outside the value being validated, which is why every other bed passes while
+the three re-nested ones fail. That is the whole ordering — the parse fix turns the in-body key into
+a member child, and the gate fix then strips it before validation.
 
 **So an author who wants the *into-the-venue* position is left with a spelling the gate refuses**,
 and the spelling that ships is the **alongside** one — walked as its **own root**
