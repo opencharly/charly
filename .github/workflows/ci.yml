@@ -81,14 +81,20 @@ jobs:
       # commits. Pinned by module version rather than an action so the CI and local
       # binaries are the same build, and so a new upstream release cannot turn `main` red on
       # its own schedule.
+      #
+      # Config selection is CWD-based: golangci-lint walks UP from $PWD and never
+      # descends into the target dirs, so `charly`'s curated config is found ONLY
+      # with cwd inside `charly/` — hence the `cd`. Running `run ./charly/...` from
+      # the repo root silently selects the root baseline config and never runs the
+      # curated set at all (charly#767).
       - name: golangci-lint
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
-          "$(go env GOPATH)/bin/golangci-lint" run ./charly/...
-          # The root .golangci.yml states it governs the tools/* modules as well
-          # as charly/, but `run ./charly/...` never reaches them — they are
-          # separate GOWORK=off modules. Same detection hole the `Test tools
-          # modules` step closes for tests; the lint sweep is part of it.
+          ( cd charly && "$(go env GOPATH)/bin/golangci-lint" run ./... )
+          # The tools/* modules are separate GOWORK=off modules, so the charly
+          # invocation above never reaches them — the same detection hole the
+          # `Test tools modules` step closes for tests. Each runs the root baseline
+          # config, selected by its own cwd.
           fail=0
           for d in tools/*/; do
             [ -f "$d/go.mod" ] || continue
