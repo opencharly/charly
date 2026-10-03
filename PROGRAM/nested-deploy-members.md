@@ -157,16 +157,22 @@ $ R 1323 1333; R 1372 1385; R 3896 3916; R 1436 1442; R 2067 2081
 - `inner-app-pod` — `:2081`, its `vm:` key at `:2068`, the node `nested-check-vm` at `:2067`:
   member at indent 8, the same as `vm:`.
 
-**That claim is confined to those five beds; it is not a corpus-wide negative.** Two of them are
-not rejected, for a measured reason:
+**That claim is confined to those five beds; it is not a corpus-wide negative.** What a bed does
+under the gate depends on its authored shape and, separately, on whether its kind is gated at all,
+so both are stated per bed:
 
-- `check-structkind-member`: its node's disc is `examplestructkind`, which is **absent from
-  `spec.KindValueDefs`**, and the gate returns early for any disc not in that table
-  (`charly/charly/provider_kind_invoke.go:416`, `if !ok { return nil }`). The table covers the five
-  substrate kinds plus `candy` (`:400-403`); it gates `vm`, and does not gate a plugin's structural
-  kind.
-- `inner-app-pod`: the same indent, and its disc `pod` *is* in the table — it is the one bed here
-  whose kind is both core and gated, and it is alongside.
+- **As shipped at `origin/main` all five are alongside**, and under the `origin/main` gate each of
+  them passes — `check-structkind-member` and `inner-app-pod` among them (the run below was taken
+  with the three `vm` beds already re-nested in the `charly` leg's tree; those two were not
+  re-nested, so their lines in it are their shipped shape).
+- **`check-structkind-member` is additionally ungated.** Its disc `examplestructkind` is absent from
+  `spec.KindValueDefs`, and the gate returns early for any disc not in that table
+  (`charly/charly/provider_kind_invoke.go:416`, `if !ok { return nil }`; the table covers the five
+  substrate kinds plus `candy`, `:400-403`). It would not be refused even if it were re-nested — a
+  second, independent reason on top of the position.
+- **`inner-app-pod`'s disc `pod` IS in that table**, so its pass is the position's doing and not an
+  ungated kind's. The three `vm` beds are gated in exactly the same way: they fail in the run below
+  solely because they are the three that were re-nested in-body.
 
 **The gate's shape-dependence is measured, not inferred.** With the corpus beds re-nested in-body
 and the `origin/main` gate restored, the corpus gate test fails on **exactly those three beds and no
@@ -179,7 +185,8 @@ $ go test ./ -run TestCueKinds_Corpus -count=1     # with provider_kind_invoke.g
     cue_kinds_corpus_test.go:194: FAIL ../charly.yml:vm.check-kind-host-vm: vm: 5 errors in empty disjunction:
 FAIL	github.com/opencharly/charly/charly	37.599s
 
-$ go test ./ -run TestCueKinds_Corpus -count=1     # on this head, gate fix in place
+$ go test ./ -run TestCueKinds_Corpus -count=1     # in the charly leg's tree (branch feat/nested-members-748, gate fix 41d59819;
+#  sdk parse fix wired by the local replace)
 ok  	github.com/opencharly/charly/charly	37.904s
 ```
 
