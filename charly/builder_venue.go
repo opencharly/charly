@@ -43,7 +43,11 @@ type Generator struct {
 	// independent resolved-project re-fetch would never widen and the remote add_candy candy would be
 	// absent from its envelope. RCA'd K1-alpha regression: an overlay build's OpStep emit failing
 	// "task emit: candy %q not found" — see oci_step_emit.go's dispatchOCIStep.
-	ExtraCandyRefs []string
+	//
+	// The TYPE is spec.ExtraCandyRef, not a bare string: the ref's composition SCOPE travels with it
+	// (spec#188), so the arbiter never has to invent a label — inventing one is exactly what produced
+	// the #739 constant-scope collision. collectOverlayCandies tags each with the overlay's own box.
+	ExtraCandyRefs []spec.ExtraCandyRef
 
 	// DevLocalPkg, when true, makes localpkg candies (the charly toolchain) build from LOCAL
 	// in-development source instead of downloading the published release. Set ONLY for disposable

@@ -140,7 +140,7 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// consumer of ExtraCandyRefs on this path now; the remote-candy STAGING itself already ran as
 	// part of the candy's OWN InvokeProvider("build","generate",...) resolve (runHostFSPrep's
 	// createRemoteCandyCopies, K3 host-prep move) before this seam is ever reached.
-	overlayCandies := collectOverlayCandies(plans)
+	overlayCandies := collectOverlayCandies(plans, base)
 
 	var baseRef string
 	switch {
@@ -258,14 +258,20 @@ func loadOverlayBuildContext(dir string) *buildEngineContext {
 // it cannot import charly core (R3 — cross-module reuse is fine; the two modules cannot import
 // each other). Used by the overlay prep (hostBuildOverlay) to scope the Generator's ExtraCandyRefs
 // + to read each overlay candy's Security() core-side.
-func collectOverlayCandies(plans []*spec.InstallPlan) []string {
+//
+// Each ref is tagged with `box` — the box this overlay builds — via spec.ScopedExtraCandyRefs, the
+// ONE constructor for "where do my extra refs belong". These add_candy refs ARE part of that box's
+// composition (spec/resolve_opts.go's BoxScope doc), so the arbiter may legitimately report a
+// within-box disagreement about them; tagging them with a CONSTANT instead collapsed every deploy
+// in the project into one bogus scope (#739, ~724 false conflicts).
+func collectOverlayCandies(plans []*spec.InstallPlan, box string) []spec.ExtraCandyRef {
 	seen := make(map[string]bool)
-	var out []string
+	var out []spec.ExtraCandyRef
 	for _, p := range plans {
 		for _, n := range p.AddCandies {
 			if !seen[n] {
 				seen[n] = true
-				out = append(out, n)
+				out = append(out, spec.ScopedExtraCandyRefs(spec.BoxScope(box), n)...)
 			}
 		}
 	}

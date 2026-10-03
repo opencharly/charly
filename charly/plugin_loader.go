@@ -681,7 +681,11 @@ func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) 
 	}
 	passes := []spec.ResolveOpts{{}}
 	if ref != "" {
-		passes = append(passes, spec.ResolveOpts{ExtraCandyRefs: []string{ref}})
+		// A capability-connect scan, not a composition: this ref is a PROVIDER ref resolved for a
+		// word, so it belongs to no box and takes the EMPTY scope — "no owning composition", which
+		// the arbiter treats as an independent, SILENT case by construction (scopeConflicts skips
+		// every non-box scope). It must never be a CONSTANT box label: that is the #739 collision.
+		passes = append(passes, spec.ResolveOpts{ExtraCandyRefs: []spec.ExtraCandyRef{{Ref: ref}}})
 	}
 	for _, opts := range passes {
 		candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, opts)
@@ -1064,7 +1068,7 @@ func resolveMergedDeployTree(dir string) (map[string]spec.DeployNode, error) {
 // Best-effort: (nil, nil) on any load failure or unknown name (the caller still
 // collects candy + box references; a genuinely missing reference fails loudly at
 // dispatch, never silently mis-deploys).
-func deployNodePluginContext(dir, name string) (addCandy []string, refWords []string) {
+func deployNodePluginContext(dir, name string) (addCandy []spec.ExtraCandyRef, refWords []string) {
 	tree, err := resolveMergedDeployTree(dir)
 	if err != nil || tree == nil {
 		return nil, nil
@@ -1094,7 +1098,12 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 		if n == nil {
 			return
 		}
-		addCandy = append(addCandy, n.AddCandy...)
+		// The node's authored add_candy: refs ARE part of this deploy's box composition — the deploy
+		// IS the box (update_deploy_dispatch.go sets `deployName := c.Box`) — so they take its BOX
+		// scope, the ONE constructor that states where a caller's extra refs belong. A CONSTANT
+		// label here is the #739 collision (~724 false conflicts); a bare string cannot carry the
+		// scope at all, which is why the field is typed (spec#188).
+		addCandy = append(addCandy, spec.ScopedExtraCandyRefs(spec.BoxScope(name), n.AddCandy...)...)
 		if n.Target != "" {
 			refWords = append(refWords, n.Target)
 			// An EXTERNALIZED deploy substrate (vm/local/android/kubernetes) is served by an
@@ -1109,7 +1118,9 @@ func deployNodePluginContext(dir, name string) (addCandy []string, refWords []st
 			// host-side-plugin pattern as the verb:libvirt case, generalized to every external
 			// substrate — the ONE class-agnostic provider-ref lookup (R3).
 			if ref := canonicalProviderRef(ClassDeployTarget, n.Target, "", ""); ref != "" {
-				addCandy = append(addCandy, ref)
+				// A PROVIDER ref, not a composition member: it belongs to no box, so EMPTY scope
+				// (an independent composition — SILENT, never a conflict). Never a constant label.
+				addCandy = append(addCandy, spec.ExtraCandyRef{Ref: ref})
 			}
 		}
 		for i := range n.Plan {
@@ -1227,13 +1238,13 @@ func resolveDeployNodeByPath(tree map[string]spec.DeployNode, name string) (*spe
 // seams (deploy-plugins-connect — the former deploy-del-resolve seam died with the del
 // resolution moving to candy/plugin-fleet, K-wave 2 cone R2 bank C) and called directly by two
 // more core files (pod_lifecycle_verb.go, update_deploy_dispatch.go).
-func loadDeployPlugins(dir, deployName string, extraAddCandy []string) error {
+func loadDeployPlugins(dir, deployName string, extraAddCandy []spec.ExtraCandyRef) error {
 	cfg, cerr := LoadConfig(dir)
 	if cerr != nil {
 		return fmt.Errorf("load plugin configuration: %w", cerr)
 	}
 	addCandy, refWords := deployNodePluginContext(dir, deployName)
-	extra := append(append([]string(nil), extraAddCandy...), addCandy...)
+	extra := append(append([]spec.ExtraCandyRef(nil), extraAddCandy...), addCandy...)
 	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{ExtraCandyRefs: extra})
 	if scanErr != nil {
 		return fmt.Errorf("scan deploy plugins: %w", scanErr)
