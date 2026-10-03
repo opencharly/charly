@@ -19,13 +19,11 @@ func TestSkillKind_CompiledInStackedNodes(t *testing.T) {
 	dir := t.TempDir()
 	// One file: a candy node + a sibling skill node (the physical layout the migration uses —
 	// per-candy skills live in the owning candy's own charly.yml).
-	rootYAML := `version: ` + LatestSchemaVersion().String() + `
-discover:
+	rootYAML := `discover:
     - path: candy
       recursive: true
 postgresql:
     candy:
-        version: 2026.218.1200
         description: Postgres 16 + contrib.
         plan:
             - check: /usr/bin/postgres exists
@@ -81,8 +79,7 @@ func TestDocsKind_CompiledInStackedNodes(t *testing.T) {
 	dir := t.TempDir()
 	// The docs body mirrors the repo's TOP-LEVEL project charly.yml docs node (the
 	// #DocsConfig contract exercised by the spec round-trip tests).
-	rootYAML := `version: ` + LatestSchemaVersion().String() + `
-discover:
+	rootYAML := `discover:
     - path: candy
       recursive: true
 docs:
@@ -132,8 +129,7 @@ docs:
 func TestDocsKind_RejectsInvalidBody(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	dir := t.TempDir()
-	rootYAML := `version: ` + LatestSchemaVersion().String() + `
-discover:
+	rootYAML := `discover:
     - path: candy
       recursive: true
 docs:
@@ -160,8 +156,7 @@ docs:
 func TestSkillKind_RejectsInvalidBody(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	dir := t.TempDir()
-	rootYAML := `version: ` + LatestSchemaVersion().String() + `
-discover:
+	rootYAML := `discover:
     - path: candy
       recursive: true
 bad-skill:

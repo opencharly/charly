@@ -39,8 +39,7 @@ func TestCrossKindNameReuse_LoaderAcceptsAllKinds(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(filepath.Join(dir, "charly.yml"), `version: "`+latestSchemaVersion.String()+`"
-defaults:
+	must(filepath.Join(dir, "charly.yml"), `defaults:
   registry: ghcr.io/example
 discover:
   - path: box
@@ -58,7 +57,6 @@ discover:
 	// lives INLINE in the `candy:` value.
 	must(filepath.Join(dir, "candy", "redis", "charly.yml"), `redis:
   candy:
-    version: "2026.150.0000"
     description: in-memory store
     package:
       - redis
@@ -88,8 +86,7 @@ discover:
 
 	// --- Within ONE document: duplicate top-level name rejected. ---
 	dir2 := t.TempDir()
-	dupDoc := `version: "` + latestSchemaVersion.String() + `"
-redis:
+	dupDoc := `redis:
   candy:
     base: fedora
 redis:

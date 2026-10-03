@@ -29,10 +29,8 @@
 # deploy-level member's plan is NOT surfaced to a deploy-scope check runner. The
 # root plan reads the GLOBAL guest state (the per-bed ledger file + pacman's DB),
 # which includes the member's records.
-version: 2026.261.1747
 check-pkg-uninstall-root-candy:
     candy:
-        version: 2026.268.1917
         description: |-
             Benign root fixture: installs an ordinary Arch package (ripgrep) so the inner
             bed's ROOT has a deterministic, distinct deploy effect. Its candy name differs
@@ -53,7 +51,6 @@ check-pkg-uninstall-root-candy:
                 in_container: false
 check-pkg-uninstall-fixture:
     candy:
-        version: 2026.268.1917
         description: |-
             Fixture: installs an EXACT-VERSION-PINNED charly from the published charly-arch
             repo via the `distro: arch. package:/repo:` path, so the deploy's teardown
@@ -113,7 +110,7 @@ check-pkg-uninstall-inner:
             # The external deploy:local substrate provider (out-of-tree plugin) must be in the
             # project closure for the guest's charly to apply a kind:local deploy; the guest
             # builds it in-guest from the proxy-resolved sdk (mirrors check-local's add_candy).
-            - '@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local:v2026.241.1003'
+            - '@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local:v2026.275.1254'
         plan:
             - check: the recorded uninstall_cmd is the BARE package name (pkgName stripped the pin) — the production render path
               id: pkg-uninstall-render-bare-name

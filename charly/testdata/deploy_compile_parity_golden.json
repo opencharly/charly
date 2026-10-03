@@ -1,7 +1,6 @@
 {
   "debootstrap-builder": {
     "box": "k4b-parity",
-    "version": "2026.195.0600",
     "distro": "fedora:43",
     "candy": "debootstrap-builder",
     "candies_included": [
@@ -85,7 +84,6 @@
   },
   "dev-tools": {
     "box": "k4b-parity",
-    "version": "2026.165.0843",
     "distro": "fedora:43",
     "candy": "dev-tools",
     "candies_included": [
@@ -271,7 +269,6 @@
   },
   "pre-commit": {
     "box": "k4b-parity",
-    "version": "2026.243.0100",
     "distro": "fedora:43",
     "candy": "pre-commit",
     "candies_included": [

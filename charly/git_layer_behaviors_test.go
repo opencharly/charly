@@ -68,7 +68,6 @@ func writeRetentionProject(t *testing.T, body string) string {
 
 func TestHostBuildRetentionDefaults_ReadsBothFields(t *testing.T) {
 	dir := writeRetentionProject(t, `
-version: "2026.261.1747"
 defaults:
     keep_images: 7
     keep_check_runs: 3

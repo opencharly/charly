@@ -189,6 +189,7 @@ var pluginProviderRefs = map[string]string{
 	"verb:pipeline":             "github.com/opencharly/plugin-pipeline/candy/plugin-pipeline",
 	"verb:port":                 "github.com/opencharly/plugin-port/candy/plugin-port",
 	"verb:process":              "github.com/opencharly/plugin-process/candy/plugin-process",
+	"verb:prune":                "github.com/opencharly/plugin-task/candy/plugin-task",
 	"verb:punktfunk":            "github.com/opencharly/plugin-punktfunk/candy/plugin-punktfunk",
 	"verb:qdrant":               "github.com/opencharly/plugin-qdrant/candy/plugin-qdrant",
 	"verb:quickshell":           "github.com/opencharly/plugin-quickshell/candy/plugin-quickshell",

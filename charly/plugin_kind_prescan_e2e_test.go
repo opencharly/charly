@@ -39,8 +39,7 @@ func TestExternalKind_PrescanConnectDecode(t *testing.T) {
 	if err := testkit.CopyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
-	rootYAML := `version: ` + LatestSchemaVersion().String() + `
-discover:
+	rootYAML := `discover:
     - path: candy
       recursive: true
 my-example-kind:
@@ -93,8 +92,7 @@ func TestExternalKind_OpValidateRejectsInvalidBody(t *testing.T) {
 	if err := testkit.CopyCandyFixReplace(srcCandy, dstCandy, charlyDir); err != nil {
 		t.Fatalf("stage candy: %v", err)
 	}
-	rootYAML := `version: ` + LatestSchemaVersion().String() + `
-discover:
+	rootYAML := `discover:
     - path: candy
       recursive: true
 bad-kind:

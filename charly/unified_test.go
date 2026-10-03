@@ -39,8 +39,7 @@ func TestLoadUnified_BasicRoot(t *testing.T) {
 	root := t.TempDir()
 	// Compact node-form: an image entity is `<name>: {candy: <FULL BODY>}` with
 	// every collection (distro/candy) INLINE in the kind value.
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-defaults:
+	writeFixture(t, root, "charly.yml", `defaults:
   registry: quay.io/example
   build: [rpm]
 fedora:
@@ -56,9 +55,6 @@ fedora:
 	if !present {
 		t.Fatal("present = false, want true")
 	}
-	if uf.Version != LatestSchemaVersion().String() {
-		t.Errorf("Version = %q, want %q", uf.Version, LatestSchemaVersion().String())
-	}
 	if uf.Defaults.Registry != "quay.io/example" {
 		t.Errorf("Defaults.Registry = %q, want quay.io/example", uf.Defaults.Registry)
 	}
@@ -71,35 +67,9 @@ fedora:
 	}
 }
 
-func TestLoadUnified_NewerSchemaRejectedWithUpdateHint(t *testing.T) {
-	root := t.TempDir()
-	// A version far past LatestSchemaVersion(): the binary is behind the
-	// config, so migrating cannot help — the user must update charly.
-	writeFixture(t, root, "charly.yml", `version: 9999.141.1530
-box:
-  fedora:
-    base: quay.io/fedora/fedora:43
-`)
-	_, _, err := LoadUnified(root)
-	if err == nil {
-		t.Fatal("expected hard-fail for a config newer than the binary supports")
-	}
-	msg := err.Error()
-	if !strings.Contains(msg, "newer than this charly supports") {
-		t.Errorf("error %q missing 'newer than this charly supports'", msg)
-	}
-	if !strings.Contains(msg, "Update charly") {
-		t.Errorf("error %q missing 'Update charly' advice", msg)
-	}
-	if strings.Contains(msg, "charly migrate") {
-		t.Errorf("error %q wrongly advises 'charly migrate' for a too-new config", msg)
-	}
-}
-
 func TestLoadUnified_IncludesMerge(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-import:
+	writeFixture(t, root, "charly.yml", `import:
   - build.yml
   - images.yml
 defaults:
@@ -140,8 +110,7 @@ fedora:
 
 func TestLoadUnified_IncludeCycleDetected(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-import: [a.yml]
+	writeFixture(t, root, "charly.yml", `import: [a.yml]
 `)
 	writeFixture(t, root, "a.yml", `import: [b.yml]
 `)
@@ -164,8 +133,7 @@ import: [a.yml]
 // removed — that shape is now a hard-reject (see TestLoadUnified_LegacyKindKeyedRejected).
 func TestLoadUnified_MultiDocumentNodeForm(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-import: [deploy.yml]
+	writeFixture(t, root, "charly.yml", `import: [deploy.yml]
 `)
 	writeFixture(t, root, "deploy.yml", `chrome:
   candy:
@@ -204,8 +172,7 @@ browsers:
 // routes through this one rejection.
 func TestLoadUnified_LegacyKindKeyedRejected(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-import: [deploy.yml]
+	writeFixture(t, root, "charly.yml", `import: [deploy.yml]
 `)
 	writeFixture(t, root, "deploy.yml", `candy:
   name: broken
@@ -232,14 +199,11 @@ func TestLoadUnified_DiscoverCandies(t *testing.T) {
 	// candy keyed by its directory base (chrome / firefox).
 	writeFixture(t, root, "candy/chrome/charly.yml", `chrome:
   candy:
-    version: 2026.001.0001
 `)
 	writeFixture(t, root, "candy/firefox/charly.yml", `firefox:
   candy:
-    version: 2026.001.0001
 `)
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-discover:
+	writeFixture(t, root, "charly.yml", `discover:
   - candy
 `)
 	uf, _, err := LoadUnified(root)
@@ -261,17 +225,14 @@ func TestLoadUnified_DiscoverExplicitWinsOverDiscovered(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "candy/chrome/charly.yml", `chrome:
   candy:
-    version: 2026.001.0001
 `)
 	// Node-form: an explicit inline candy entry (`chrome: {candy: {…}}`) is
 	// defined directly in charly.yml. It must win over the discovered
 	// candy/chrome dir — discovery skips a name already present.
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-discover:
+	writeFixture(t, root, "charly.yml", `discover:
   - candy
 chrome:
   candy:
-    version: 2026.100.0001
 `)
 	uf, _, err := LoadUnified(root)
 	if err != nil {
@@ -286,20 +247,15 @@ chrome:
 	}
 	// The explicit inline entry won: it is defined IN-PLACE (From == ""), not a
 	// lazy `From: candy/chrome` directory reference the discovery walk would have
-	// registered, and its inline body (version 2026.100.0001) survived rather than
-	// the discovered manifest's (2026.001.0001).
+	// registered.
 	if il.From != "" {
 		t.Errorf("discovered dir clobbered the explicit entry: From = %q, want \"\" (inline)", il.From)
-	}
-	if il.Version != "2026.100.0001" {
-		t.Errorf("explicit inline body lost: Version = %q, want 2026.100.0001", il.Version)
 	}
 }
 
 func TestLoadUnified_ScanSpecStringShorthand(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-discover:
+	writeFixture(t, root, "charly.yml", `discover:
   - layers
   - { path: vendor, recursive: false }
 `)
@@ -339,10 +295,8 @@ func TestLoadUnified_DiscoverConfigurableManifest(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "stuff/widget/thing.yml", `widget:
   candy:
-    version: 2026.001.0001
 `)
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-discover:
+	writeFixture(t, root, "charly.yml", `discover:
   - { path: stuff, recursive: true, manifest: thing.yml }
 `)
 	uf, _, err := LoadUnified(root)
@@ -366,8 +320,7 @@ func TestLoadUnified_DiscoverRoutesNonCandyByShape(t *testing.T) {
   candy:
     base: quay.io/fedora/fedora:43
 `)
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-discover:
+	writeFixture(t, root, "charly.yml", `discover:
   - { path: entities, recursive: true, manifest: entity.yml }
 `)
 	uf, _, err := LoadUnified(root)
@@ -389,8 +342,7 @@ discover:
 // (no stale references).
 func TestLoadUnified_DeploymentsSection(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-deployments:
+	writeFixture(t, root, "charly.yml", `deployments:
   openclaw:
     port: ["8080:80"]
     target: container
@@ -409,8 +361,7 @@ deployments:
 
 func TestLoadUnified_ProjectConfig(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "charly.yml", `version: "`+latestSchemaVersion.String()+`"
-defaults: { registry: r.example.com }
+	writeFixture(t, root, "charly.yml", `defaults: { registry: r.example.com }
 foo:
   candy:
     base: alpine

@@ -197,7 +197,7 @@ func main() {
 
 	ctx := kong.Parse(&cli,
 		kong.Name("charly"),
-		kong.Description("OpenCharly — The wonky DevOps tool for you and your agents."),
+		kong.Description("OpenCharly — The agentic DevOps tool for you and your agents."),
 		kong.UsageOnError(),
 	)
 

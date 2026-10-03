@@ -26,7 +26,6 @@ func TestPrescanExternalDeploySubstrate(t *testing.T) {
 	}
 	candyYAML := `prescan-plugin:
     candy:
-        version: 2026.175.0001
         description: a pre-scan test plugin candy declaring an external deploy word.
         plugin:
             providers:
@@ -43,8 +42,7 @@ func TestPrescanExternalDeploySubstrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rootYAML := `version: ` + LatestSchemaVersion().String() + `
-discover:
+	rootYAML := `discover:
     - path: candy
       recursive: true
 check-prescan:

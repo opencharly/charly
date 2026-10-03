@@ -195,6 +195,11 @@ func computeGolden(repoRoot string) (map[string]spec.InstallPlanView, error) {
 		if err != nil {
 			return nil, fmt.Errorf("BuildDeployPlan(%s): %w", name, err)
 		}
+		// The candy/box CalVer schema version was REMOVED from the wire by the
+		// schema-versioning-removal cutover (spec#183 / sdk#313): the new compiler
+		// no longer populates it, so clear it here to keep the golden a faithful
+		// OLD-side ground truth of the CURRENT wire form.
+		plan.Version = ""
 		golden[name] = spec.WireView(plan)
 	}
 	return golden, nil

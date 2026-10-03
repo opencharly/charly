@@ -75,12 +75,10 @@ jobs:
             exit 1
           fi
 
-      # golangci-lint in CI, matching what .claude/hooks/pre-commit-gate.sh already runs
-      # locally. Without it the ONLY enforcement is that local hook, so `main` accumulates
-      # lint debt between commits — and because the hook lints the WHOLE repo rather than the
-      # diff, the next contributor to touch this repo cannot commit until they have cleaned up
-      # someone else's files. Measured in opencharly/spec (2026-08-29): 11 findings sitting on
-      # a pristine `main`. Pinned by module version rather than an action so the CI and local
+      # golangci-lint in CI. The committed local git gate (carried ONLY by the
+      # umbrella `opencharly/opencharly` and installed per clone by `charly task
+      # hooks`) runs it too, so `main` does not accumulate lint debt between
+      # commits. Pinned by module version rather than an action so the CI and local
       # binaries are the same build, and so a new upstream release cannot turn `main` red on
       # its own schedule.
       - name: golangci-lint
@@ -99,12 +97,9 @@ jobs:
           done
           exit $fail
 
-      # The opencode gate plugin is TypeScript, not Go, so the jobs above never
-      # see it: a V1-contract plugin (the exact defect this step was added for)
-      # loads as a WARN-only no-op in opencode >= 2.0 and every job here stays
-      # green while the git gates silently stop running. This loads the plugin
-      # with a stub V2 context and drives a blocked/benign command through it,
-      # failing on the V1 form. Pure Node — no opencode binary is installed on
-      # the runner, so the live-loader layer stays opt-in (LIVE_OPENCODE).
-      - name: opencode gate plugin contract
-        run: node scripts/check-opencode-plugin.mjs
+      # NOTE: the former "opencode gate plugin contract" step (which ran
+      # `node scripts/check-opencode-plugin.mjs` against this repo's own
+      # `.opencode/plugins/`) is DELETED: charly carries NO harness config any
+      # more (umbrella AGENTS.md rule 8 — harness config lives ONLY in
+      # opencharly/opencharly). The gate now runs there, against that repo's
+      # plugin.
