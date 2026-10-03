@@ -30,12 +30,21 @@ func TestUnresolvedDeployTargetError(t *testing.T) {
 		t.Fatalf("a typo target must NOT be reported as a known substrate, got: %s", unknown)
 	}
 
-	// A KNOWN CUE resource kind that no corpus plugin serves (kubevirt today) → the
-	// known-but-unserved text, and NEVER an empty plugin name ("the  plugin candy").
-	if !resourceKindSet["kubevirt"] || externalizedDeploySubstrates["kubevirt"] {
-		t.Fatalf("precondition: kubevirt must be a resource kind absent from the deploy set")
+	// kubevirt joined the corpus (plugin-kubevirt), so it now reports the not-connected
+	// provider text like any other served substrate — no longer the known-but-unserved branch.
+	kubevirt := unresolvedDeployTargetError("my-kv", "kubevirt").Error()
+	if !strings.Contains(kubevirt, "known substrate") || !strings.Contains(kubevirt, "not connected") {
+		t.Fatalf("kubevirt must now report a not-connected provider (it is in the corpus), got: %s", kubevirt)
 	}
-	unserved := unresolvedDeployTargetError("my-kv", "kubevirt").Error()
+
+	// A KNOWN CUE resource kind that no corpus plugin serves → the known-but-unserved text,
+	// and NEVER an empty plugin name ("the  plugin candy"). Every current spec.ResourceKinds
+	// entry has a corpus plugin (kubevirt was the last holdout), so inject a synthetic future
+	// kind to exercise the branch deterministically.
+	const futureKind = "futuresubstrate"
+	resourceKindSet[futureKind] = true
+	t.Cleanup(func() { delete(resourceKindSet, futureKind) })
+	unserved := unresolvedDeployTargetError("my-future", futureKind).Error()
 	if !strings.Contains(unserved, "known substrate") || !strings.Contains(unserved, "no plugin in") {
 		t.Fatalf("a known-but-unserved kind must report the missing corpus plugin, got: %s", unserved)
 	}

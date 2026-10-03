@@ -122,8 +122,25 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 			continue
 		}
 		for word, ref := range refsForRepo {
-			if prev, dup := wordRefs[word]; dup && prev != ref {
-				return nil, nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+			prev, dup := wordRefs[word]
+			if dup && prev != ref {
+				// A word may be declared by BOTH a compiled-in plugin AND an external
+				// one — the by-design coexist the runtime per-word loader allows
+				// (charly#686): e.g. `kind:kubevirt` is the compiled-in
+				// plugin-substrate STRUCTURAL kind, re-declared by the external
+				// plugin-kubevirt alongside its OWN deploy/verb/command words. The
+				// compiled-in provider owns the word; do not error. Two EXTERNAL
+				// providers for one word is still a hard error (one canonical
+				// external provider per word).
+				_, prevC := repoSetCompiled(names, prev)
+				_, thisC := repoSetCompiled(names, ref)
+				if prevC == thisC {
+					return nil, nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+				}
+				if thisC {
+					wordRefs[word] = ref // the compiled-in provider wins the word
+				}
+				continue
 			}
 			wordRefs[word] = ref
 		}
@@ -288,7 +305,10 @@ func readCorpus(root, path string) []string {
 // (github.com/opencharly/<name>) — a compiled repo that cannot be indexed is fatal.
 func repoSetCompiled(names []string, repo string) (string, bool) {
 	for _, n := range names {
-		if repo == "github.com/opencharly/"+n {
+		root := "github.com/opencharly/" + n
+		// root OR a subpath: a candy/provider REF is "<root>/candy/<x>", while a repo
+		// PATH is exactly <root> — one predicate serves both (R3).
+		if repo == root || strings.HasPrefix(repo, root+"/") {
 			return n, true
 		}
 	}
