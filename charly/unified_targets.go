@@ -171,7 +171,42 @@ func (t *pluginDeployTarget) applyParentExecOverride(opts spec.EmitOpts) json.Ra
 		return nil
 	}
 	t.exec = opts.ParentExec
-	d := specexec.DescriptorFromExecutor(opts.ParentExec)
+	return venueJSONFor(opts.ParentExec)
+}
+
+// applyDelParentExec is applyParentExecOverride's DEL twin: a `charly deploy del` of a nested
+// in-substrate member reaches this target through host_build_deploy_node_del_dispatch.go, which
+// re-derives the SAME ancestor executor chain the add half used and hands it here. Without it the
+// del dispatch carried no VenueJSON, so the plugin re-materialized the venue from
+// specexec.RootExecutorForDeployNode(node) — the OPERATOR'S HOST for a member with no `host:` field
+// — and replayed the member's reversible ops (`pacman -R` for a `package:` list) on the workstation
+// while its `add` had landed correctly in the guest (opencharly/charly#765).
+//
+// Same guard as the add half, for the same reason: a lifecycle substrate (vm/pod) composes its OWN
+// nested venue inside PrepareVenue and reports it back on the teardown-executor op, so an override
+// here would fight it. A nil parent is a no-op, leaving the previous behaviour exactly as it was.
+//
+// The ONE structural difference from the add half: this one must WRITE t.venueJSON, not merely
+// return a descriptor. The del path has no EmitOpts-style channel — `Del` builds its request from
+// spec.DeployTargetDelOpts, which carries no venue — so t.venueJSON is the only place dispatch
+// (unified_targets.go) can pick the venue up from before shipping it to the plugin.
+func (t *pluginDeployTarget) applyDelParentExec(parentExec spec.DeployExecutor) {
+	if t.hasLifecycle || parentExec == nil {
+		return
+	}
+	t.exec = parentExec
+	if pj := venueJSONFor(parentExec); len(pj) > 0 {
+		t.venueJSON = pj
+	}
+}
+
+// venueJSONFor marshals the wire-safe venue descriptor for a live executor, or nil when there is
+// none to send. A descriptor with no Kind cannot be re-materialized plugin-side
+// (kit.VenueFromDescriptor has nothing to key on), so it is not a venue at all and the caller must
+// keep the previous fallback rather than ship an empty venue. Shared by both overrides above: one
+// descriptor decision, so the add and del halves can never disagree about what a venue IS.
+func venueJSONFor(exec spec.DeployExecutor) json.RawMessage {
+	d := specexec.DescriptorFromExecutor(exec)
 	if d.Kind == "" {
 		return nil
 	}
