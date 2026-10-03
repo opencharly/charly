@@ -3325,6 +3325,144 @@ check-task:
           task: check-task-smoke
         context:
           - runtime
+      # --- the workflow-wave additions to candy/plugin-task (B5) ---------------------
+      # `--output` is the hand-off a workflow `$id.stdout` ref reads: the FINAL step's
+      # CapturedValue raw on stdout, with the human report diverted to stderr so stdout
+      # carries the value ALONE. Its producer is candy/plugin-command (a PASS result
+      # stashes its stdout in CapturedValue); this is the end of that chain.
+      - check: command=charly task --output prints the FINAL step's captured stdout RAW on stdout, the human report diverted to stderr (the hand-off a workflow `$id.stdout` ref reads)
+        id: task-output-captured
+        exit_status: 0
+        stdout:
+          - contains: TASK-SMOKE-OK
+        stderr:
+          - contains: check-task-smoke
+        context:
+          - runtime
+        command:
+          command: ${CHARLY_BIN} task check-task-smoke --output
+          in_container: false
+      - check: --output and --json are rejected TOGETHER with the NAMED error (never a silent precedence, never a half-formatted stdout)
+        id: task-output-json-exclusive
+        exit_status: 1
+        stderr:
+          - contains: '--output and --json are mutually exclusive'
+        context:
+          - runtime
+        command:
+          command: ${CHARLY_BIN} task check-task-smoke --output --json
+          in_container: false
+      # The param/closure helpers MOVED to sdk/workflowkit in this wave; these three
+      # steps pin that the behaviour the plugin had before the move is the behaviour
+      # it has after. Both halves are asserted: the resolution actually happens, and
+      # a broken one is still a NAMED error rather than a silent empty value.
+      - check: a task's params — the defaulted one AND the supplied one — resolve through the task env (the same self-check FAILS on a wrong value and SKIPS on an unresolved name, so a pass is never vacuous)
+        id: task-params-resolved
+        exit_status: 0
+        context:
+          - runtime
+        command:
+          command: |-
+            d=$(mktemp -d); mkdir -p "$d/candy/x"
+            printf 'discover:\n    - path: candy\n      recursive: true\n' > "$d/charly.yml"
+            cat >> "$d/charly.yml" <<'YAML'
+            task-params-fixture:
+              task:
+                description: params fixture — one defaulted, one required
+                dir: .
+                params:
+                  GREETING:
+                    default: hello
+                  WHO:
+                    required: true
+                plan:
+                  - check: the default applied and the supplied param reached the step
+                    command: 'test "${GREETING}" = hello && test "${WHO}" = world'
+            YAML
+            CHARLY_PROJECT_DIR="$d" ${CHARLY_BIN} task task-params-fixture --param WHO=world
+            rc=$?; rm -rf "$d"; exit $rc
+          in_container: false
+      - check: a MISSING required param is still the NAMED error the moved workflowkit helper produces (never a silent empty value the step runs with)
+        id: task-params-required-named
+        exit_status: 1
+        stderr:
+          - contains: 'required parameter "WHO" not supplied (--param WHO=VALUE)'
+        context:
+          - runtime
+        command:
+          command: |-
+            d=$(mktemp -d); mkdir -p "$d/candy/x"
+            printf 'discover:\n    - path: candy\n      recursive: true\n' > "$d/charly.yml"
+            cat >> "$d/charly.yml" <<'YAML'
+            task-params-fixture:
+              task:
+                description: params fixture — one defaulted, one required
+                dir: .
+                params:
+                  GREETING:
+                    default: hello
+                  WHO:
+                    required: true
+                plan:
+                  - check: unreachable — the param gate must reject first
+                    command: "true"
+            YAML
+            CHARLY_PROJECT_DIR="$d" ${CHARLY_BIN} task task-params-fixture
+            rc=$?; rm -rf "$d"; exit $rc
+          in_container: false
+      - check: a depends_on CYCLE is still the NAMED error naming the WHOLE chain (the moved workflowkit closure helper) — never a hang, never a silent truncation to a shorter order
+        id: task-helpers-cycle-named
+        exit_status: 1
+        stderr:
+          - contains: 'task dependency cycle: cycle-a -> cycle-b -> cycle-a'
+        context:
+          - runtime
+        command:
+          command: |-
+            d=$(mktemp -d); mkdir -p "$d/candy/x"
+            printf 'discover:\n    - path: candy\n      recursive: true\n' > "$d/charly.yml"
+            cat >> "$d/charly.yml" <<'YAML'
+            cycle-a:
+              task:
+                description: cycle fixture a
+                dir: .
+                depends_on: [cycle-b]
+                plan:
+                  - check: c
+                    command: "true"
+            cycle-b:
+              task:
+                description: cycle fixture b
+                dir: .
+                depends_on: [cycle-a]
+                plan:
+                  - check: c
+                    command: "true"
+            YAML
+            CHARLY_PROJECT_DIR="$d" ${CHARLY_BIN} task cycle-a
+            rc=$?; rm -rf "$d"; exit $rc
+          in_container: false
+      - check: piped stdin reaches a task's steps as TASK_STDIN and as the TASK_STDIN_FILE path — both ALWAYS defined in non-TTY mode, both carrying the piped bytes
+        id: task-stdin-visible
+        exit_status: 0
+        context:
+          - runtime
+        command:
+          command: |-
+            d=$(mktemp -d); mkdir -p "$d/candy/x"
+            printf 'discover:\n    - path: candy\n      recursive: true\n' > "$d/charly.yml"
+            cat >> "$d/charly.yml" <<'YAML'
+            task-stdin-fixture:
+              task:
+                description: stdin fixture — BOTH stdin forms must carry the piped bytes
+                dir: .
+                plan:
+                  - check: both stdin forms carry the payload
+                    command: 'test "${TASK_STDIN}" = PIPE-PAYLOAD && test "$(cat "${TASK_STDIN_FILE}")" = PIPE-PAYLOAD'
+            YAML
+            printf '%s' 'PIPE-PAYLOAD' | CHARLY_PROJECT_DIR="$d" ${CHARLY_BIN} task task-stdin-fixture
+            rc=$?; rm -rf "$d"; exit $rc
+          in_container: false
 
 # =============================================================================
 # check-plugin-requires-local — the R10 witness of the DECLARED inter-plugin
