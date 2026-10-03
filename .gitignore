@@ -52,6 +52,14 @@ profile.cov
 # .idea/
 # .vscode/
 
+# Claude Code per-user local state — created by any local Claude Code session
+# regardless of committed config (the umbrella installs `.claude/` per clone),
+# synced via Syncthing, never version-controlled source.
+.claude/settings.local.json
+.claude/memory/
+.claude/plans/
+.claude/scheduled_tasks.lock
+
 # Machine-specific deploy overrides
 deploy.local.yml
 
