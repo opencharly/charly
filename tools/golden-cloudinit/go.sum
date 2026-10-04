@@ -50,10 +50,10 @@ github.com/mitchellh/go-wordwrap v1.0.1 h1:TLuKupo69TCn6TQSyGxwI1EblZZEsQ0vMlAFQ
 github.com/mitchellh/go-wordwrap v1.0.1/go.mod h1:R62XHJLzvMFRBbcrT7m7WgmE1eOyTSsCt+hzestvNj0=
 github.com/oklog/run v1.1.0 h1:GEenZ1cK0+q0+wsJew9qUg/DyD8k3JzYsZAi5gYi2mA=
 github.com/oklog/run v1.1.0/go.mod h1:sVPdnTZT1zYwAJeCMu2Th4T21pA3FPOQRfWjQlk7DVU=
-github.com/opencharly/sdk v0.2026276.48 h1:wNA/+qo4dp7ObsUqRTZRDH4ZrJdQX4+lUA/ZRfvfY34=
-github.com/opencharly/sdk v0.2026276.48/go.mod h1:S3RUNbUDlqkdN/R66+MKIoMnmkB7sYEfFghvANNUh+M=
-github.com/opencharly/spec v0.2026276.1337 h1:cOvTKrI4LyOvd0ATOIl5W5PbWS72GxQloYEgCy/dr5c=
-github.com/opencharly/spec v0.2026276.1337/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/sdk v0.2026276.1822 h1:HLqIt7+qGWkhVyvR8D03R87yDEGXKNaFFfz3ggatPgQ=
+github.com/opencharly/sdk v0.2026276.1822/go.mod h1:Oo+hxnhcA5RgCWvKVffKCucVJirTY0tpMGve/Da6Sm4=
+github.com/opencharly/spec v0.2026276.1636 h1:cGNaTzOAXZ1+ysC+75Wejz3BS1cYCTaL7xJcQHTZ790=
+github.com/opencharly/spec v0.2026276.1636/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=

@@ -149,8 +149,8 @@ github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039 h1:gVsGunNwjAj
 github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039/go.mod h1:T8OUkUuqalqrlrL0HP2cwMAIdE+c7qgQMKnAlEZke7U=
 github.com/opencharly/plugin-command/candy/plugin-command v0.2026272.26 h1:tqN7vx9zsTd6P0g9EernUqMnGwjE/1CSwzwx78bU4zc=
 github.com/opencharly/plugin-command/candy/plugin-command v0.2026272.26/go.mod h1:NhU1sjx93aEuAYxJOxHzwrCIJ+BkYZSzZiDw0pwxiPU=
-github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457 h1:mSaW4gGMq8uQyCkNfhGjS92lV27gb9KZaT7kfGzqBX4=
-github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457/go.mod h1:Qjsz/vym+T7bPc/nGMaDvj1PNPG3we2zjPHWmbU2hBo=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026272.29 h1:MECigU8XmqqmAPje+0z05tllLegOTg9WfZifs0cFuSU=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026272.29/go.mod h1:8WXUrJrUfaSssXpZTJlfP+0nb/1P4gmk9LbU/iw+NRo=
 github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026272.30 h1:DjV+xnlhlmfP9k/4doryMRgAF5sG/jD+Ywt+MtI4m10=
 github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026272.30/go.mod h1:v0cn/k1CRWVxIG4rDc+ba4dSumDyapHQTN2Cdz6CppY=
 github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026272.33 h1:7Bxy8kmiO/H5OZTit3PV9mHwo1n1nbMCKM/LM5obaUg=
@@ -243,10 +243,10 @@ github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424 h1:eu410toqUd
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424/go.mod h1:X+COgIvHq7NIpaK3rraNOeyDESN3R8ZhGD99sNcFZms=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026272.2040 h1:hS72z7B67DEI4/SerIWZ53Cq0co6of3kVFHZJLnmYKU=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026272.2040/go.mod h1:t655ExueVv7WRINSeBqJxm2dtJ1fXy3clsUvrl1ylbI=
-github.com/opencharly/sdk v0.2026276.48 h1:wNA/+qo4dp7ObsUqRTZRDH4ZrJdQX4+lUA/ZRfvfY34=
-github.com/opencharly/sdk v0.2026276.48/go.mod h1:S3RUNbUDlqkdN/R66+MKIoMnmkB7sYEfFghvANNUh+M=
-github.com/opencharly/spec v0.2026276.1337 h1:cOvTKrI4LyOvd0ATOIl5W5PbWS72GxQloYEgCy/dr5c=
-github.com/opencharly/spec v0.2026276.1337/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/sdk v0.2026276.1822 h1:HLqIt7+qGWkhVyvR8D03R87yDEGXKNaFFfz3ggatPgQ=
+github.com/opencharly/sdk v0.2026276.1822/go.mod h1:Oo+hxnhcA5RgCWvKVffKCucVJirTY0tpMGve/Da6Sm4=
+github.com/opencharly/spec v0.2026276.1636 h1:cGNaTzOAXZ1+ysC+75Wejz3BS1cYCTaL7xJcQHTZ790=
+github.com/opencharly/spec v0.2026276.1636/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
