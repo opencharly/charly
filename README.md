@@ -373,6 +373,7 @@ has the full development model.
 | every command and flag | [The charly CLI](https://opencharly.ai/guides/the-cli/) + the [CLI reference](https://opencharly.ai/reference/cli/agent/) |
 | "what implements `cdp:`?" | [Provider index](https://opencharly.ai/reference/providers/) |
 | something is broken | [Troubleshooting](https://opencharly.ai/guides/troubleshooting/) |
+| who charly is | [Our soul](SOUL.md) |
 | why the project looks like this | [The vision](VISION.md) · [What it is reacting to](GRIEVANCES.md) · [Liberation](LIBERATION.md) |
 | to ask questions about the code | [DeepWiki](https://deepwiki.com/opencharly/charly) |
 | dated history | [`CHANGELOG/`](CHANGELOG/README.md), one file per CalVer version |
