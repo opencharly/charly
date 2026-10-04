@@ -99,9 +99,10 @@ github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3
 github.com/nlpodyssey/gopickle v0.3.0/go.mod h1:f070HJ/yR+eLi5WmM1OXJEGaTpuJEUiib19olXgYha0=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
 github.com/openai/openai-go/v3 v3.61.0/go.mod h1:ufI1+K+t0ijRB3gk8eztiw1crcDpsBuxRQL4sbLIrts=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026276.438/go.mod h1:hQil5N+znvxinYpLmZmCVm/GxRgrDuVDs6a1nN/9+hE=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.1841 h1:3Xeei5BpdEXe3RvhpEQ6z4EAPni+ZYSBc6FvKCTPJaA=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.1841/go.mod h1:3WRmvtXLybza1C0c54Zt8gikRPZ5N8MwtumbMhLQPKo=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457 h1:mSaW4gGMq8uQyCkNfhGjS92lV27gb9KZaT7kfGzqBX4=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457/go.mod h1:Qjsz/vym+T7bPc/nGMaDvj1PNPG3we2zjPHWmbU2hBo=
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845 h1:w5NX80kiApaXyT8JmGbrW9i02WZns2uO8CKcFU6+B48=
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845/go.mod h1:cnet2p4CbE6oh9DEoPewlkArwUEGdKZsqAr3aBzCpGY=
 github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026272.244 h1:uChJgZfvPgc/azCTcXUmR3Nj0jCG9RMYH2LDMlQEaEU=
