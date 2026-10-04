@@ -209,6 +209,7 @@ charly:
                         nvidia-utils: nvidia-smi GPU detection + nvidia-ctk CDI generation (GPU targets only)
                         kubectl: Kubernetes deploys + charly eval k8s probes + the `kindcluster` deploy substrate's workload apply (`kubectl apply -k`)
                         kind: local Kubernetes-in-Docker clusters — the `kindcluster` deploy substrate (docker/podman/nerdctl engines)
+                        virtctl-bin: the KubeVirt client — the `kubevirt:` deploy substrate manages the guest-ssh `virtctl port-forward` host-side (AUR; the upstream kubevirt/kubevirt release binary is the fallback)
                         android-tools: "host adb for the remote `target: android` package-download install path"
                         libsecret: secret-tool CLI + pinentry-qt Secret Service passphrase auto-retrieval; the bundled plugin-secrets credential store uses the pure-Go go-keyring D-Bus client
                         dmidecode: SMBIOS inspection inside guests when debugging VM key-injection
@@ -258,6 +259,7 @@ charly:
                         - xorg-x11-drv-nvidia-cuda
                         - kubernetes-client
                         - kind
+                        - virtctl
                         - tesseract
                         - tesseract-langpack-eng
                 deb:
@@ -303,6 +305,7 @@ charly:
                         - nvidia-driver
                         - kubectl
                         - kind
+                        - virtctl
                         - tesseract-ocr
                         - tesseract-ocr-eng
                 apk:
@@ -347,6 +350,7 @@ charly:
                     suggests:
                         - tailscale
                         - kind
+                        - virtctl
                         - tesseract-ocr
                         - tesseract-ocr-data-eng
                 ipk:
