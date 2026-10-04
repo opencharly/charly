@@ -81,12 +81,7 @@ func (a kitVerbAdapter) Reserved() string { return a.kv.Reserved() }
 
 func (a kitVerbAdapter) RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) spec.CheckResult {
 	res := a.kv.RunVerb(ctx, hostCheckContext{h: h}, op)
-	return spec.CheckResult{
-		Op:      op,
-		Verb:    a.kv.Reserved(),
-		Status:  res.Status,
-		Message: res.Message,
-	}
+	return checkResultFromVerb(op, a.kv.Reserved(), res)
 }
 
 // kitVerbActAdapter is the kitVerbAdapter variant for a host-coupled verb candy whose

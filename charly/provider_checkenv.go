@@ -144,7 +144,7 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.C
 	if ip, ok := prov.(*inprocProvider); ok {
 		if kv, ok := ip.srv.(spec.CheckVerbProvider); ok {
 			r := kv.RunVerb(ctx, hostCheckContext{h: h}, c)
-			res = spec.CheckResult{Op: c, Verb: "plugin", Status: r.Status, Message: r.Message}
+			res = checkResultFromVerb(c, "plugin", r)
 			return res
 		}
 	}
