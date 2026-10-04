@@ -38,6 +38,17 @@ profile.cov
 # the candy imports in charly/plugins_generated.go WITHOUT first running `scripts/bootstrap-charly.sh`.
 # go.work.sum is its checksum lock (committed for reproducible/offline builds). The
 # reproducibility gate is TestPluginsGenReproducible.
+#
+# The DEV workspace is the opposite: `scripts/bootstrap-charly.sh --dev-plugin` makes
+# pluginsgen emit go.work.dev, which resolves a compiled-in plugin from a LOCAL checkout
+# instead of its pinned module-proxy tag (opencharly/charly#775), and the build selects it
+# with GOWORK. It holds an absolute path into one developer's tree — machine- and
+# checkout-specific by construction — so it and its own checksum lock (a workspace's sum
+# file is its path + ".sum") are never version-controlled. Bootstrap deletes both again on
+# the first run without an override, so a stale dev workspace cannot resolve a local tree
+# for a later plain build.
+/go.work.dev
+/go.work.dev.sum
 
 # env files and GPG-encrypted secrets
 .env
