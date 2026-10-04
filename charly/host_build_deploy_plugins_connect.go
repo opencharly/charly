@@ -24,7 +24,11 @@ func hostBuildDeployPluginsConnect(_ context.Context, req spec.DeployPluginsConn
 	if err != nil {
 		return spec.DeployPluginsConnectReply{}, err
 	}
-	if err := loadDeployPlugins(dir, req.Path, req.AddCandy); err != nil {
+	// req.AddCandy is the AUTHORED `add_candy:` list (raw refs, the wire's own YAML shape). Convert
+	// it to typed refs ONCE, here at the boundary, tagging each with the deploy's BOX scope — the
+	// deploy IS the box (update_deploy_dispatch.go: `deployName := c.Box`), and spec.ScopedExtraCandyRefs
+	// is the ONE constructor for "where do these refs belong". Never a constant label: that is #739.
+	if err := loadDeployPlugins(dir, req.Path, spec.ScopedExtraCandyRefs(spec.BoxScope(req.Path), req.AddCandy...)); err != nil {
 		return spec.DeployPluginsConnectReply{}, err
 	}
 	return spec.DeployPluginsConnectReply{Dir: dir}, nil
