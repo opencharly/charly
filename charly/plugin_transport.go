@@ -38,7 +38,6 @@ type PluginTransport interface {
 // special-case builtin vs external).
 type InProcTransport struct{ Unit *PluginUnit }
 
-//nolint:unparam // the (error) result is required by the PluginTransport interface (LocalTransport's Connect genuinely errors); an in-proc handoff cannot fail, hence always nil.
 func (t *InProcTransport) Connect(context.Context) (*PluginUnit, io.Closer, error) {
 	return t.Unit, io.NopCloser(nil), nil
 }

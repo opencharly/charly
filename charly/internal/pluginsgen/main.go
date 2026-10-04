@@ -145,6 +145,47 @@ func writeDevWork(root, rel string, body []byte) error {
 // generate produces the byte content of plugins_generated.go + go.work from a
 // charly.yml's compiled_plugins: list, WITHOUT writing — so the reproducibility gate
 // (TestPluginsGenReproducible) can diff against the committed files.
+// collectWordRefs builds the provider-ref INDEX ("<class>:<word>" -> canonical candy ref)
+// by reading every plugin repo's OWN `plugin:` block — a pure PROJECTION of the plugin
+// repos (boundary-law clause D); core keeps no hand-written word->ref map. A -dev-plugin
+// override re-points a compiled-in plugin's WHOLE read at the local checkout (the same tree
+// the build resolves); an unavailable/out-of-tree corpus repo simply contributes no words,
+// while a compiled-in one that cannot be indexed is a genuine build error.
+func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[string]string, error) {
+	wordRefs := map[string]string{}
+	for _, repo := range repoList {
+		name, compiled := repoSetCompiled(names, repo)
+		repoRoot := ""
+		if compiled {
+			repoRoot = devRoots[name]
+		}
+		if repoRoot == "" {
+			fetched, ferr := refs.DownloadRepo(repo, "HEAD")
+			if ferr != nil {
+				if compiled {
+					return nil, fmt.Errorf("index plugin %s: %w", repo, ferr)
+				}
+				continue
+			}
+			repoRoot = fetched
+		}
+		refsForRepo, err := indexRepoPluginRefs(repoRoot)
+		if err != nil {
+			if compiled {
+				return nil, fmt.Errorf("index plugin %s: %w", repo, err)
+			}
+			continue
+		}
+		for word, ref := range refsForRepo {
+			if prev, dup := wordRefs[word]; dup && prev != ref {
+				return nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+			}
+			wordRefs[word] = ref
+		}
+	}
+	return wordRefs, nil
+}
+
 func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, genDevWork, genRefs []byte, err error) {
 	names, err := readCompiledPlugins(filepath.Join(root, cfg))
 	if err != nil {
@@ -178,47 +219,12 @@ func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, g
 	}
 	sort.Strings(repoList)
 
-	// wordRefs is the generated provider-ref INDEX: "<class>:<word>" -> canonical candy
-	// ref, derived from every plugin repo's own manifest. It is a pure PROJECTION of the
-	// plugin repos, not an authored copy (boundary-law clause D): the core keeps NO
-	// per-kind word->ref map of its own.
-	wordRefs := map[string]string{}
-	for _, repo := range repoList {
-		// A -dev-plugin override re-points the WHOLE repo read at the local checkout: the
-		// word->ref index and the plugin-block/shape reads further down must come from the
-		// same tree the build resolves, or the generated Go could describe one source while
-		// the binary links another.
-		name, compiled := repoSetCompiled(names, repo)
-		repoRoot := ""
-		if compiled {
-			repoRoot = devRoots[name]
-		}
-		if repoRoot == "" {
-			fetched, ferr := refs.DownloadRepo(repo, "HEAD")
-			if ferr != nil {
-				// A repo that cannot be fetched/parsed is a genuine error only for a
-				// compiled-in plugin (needed to build); an out-of-tree corpus repo that is
-				// unavailable simply contributes no words.
-				if compiled {
-					return nil, nil, nil, nil, fmt.Errorf("index plugin %s: %w", repo, ferr)
-				}
-				continue
-			}
-			repoRoot = fetched
-		}
-		refsForRepo, err := indexRepoPluginRefs(repoRoot)
-		if err != nil {
-			if compiled {
-				return nil, nil, nil, nil, fmt.Errorf("index plugin %s: %w", repo, err)
-			}
-			continue
-		}
-		for word, ref := range refsForRepo {
-			if prev, dup := wordRefs[word]; dup && prev != ref {
-				return nil, nil, nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
-			}
-			wordRefs[word] = ref
-		}
+	// wordRefs is the generated provider-ref INDEX ("<class>:<word>" -> canonical candy
+	// ref), a pure PROJECTION of the plugin repos (boundary-law clause D): the core keeps
+	// NO per-kind word->ref map of its own.
+	wordRefs, err := collectWordRefs(names, repoList, devRoots)
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
 
 	type entry struct {

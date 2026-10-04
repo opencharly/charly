@@ -31,6 +31,7 @@ linters:
     - errorlint     # error-wrapping / comparison correctness
     - nakedret      # naked returns in long functions
     - prealloc      # slice preallocation opportunities
+    - nolintlint    # a `//nolint` that no longer suppresses anything is invisible without this (R4/R5)
   settings:
     errcheck:
       # Unactionable stdlib calls whose error has no meaningful handling in a CLI:
