@@ -49,7 +49,11 @@ func hostBuildConnectPlugins(_ context.Context, req spec.ResolvedProjectRequest,
 	if err != nil {
 		return nil, err
 	}
-	buildRefs := collectReferencedPluginWords(layers, cfg.Box, req.ExtraCandyRefs)
+	// The collector needs only the ref WORD (it builds a plugin-word set for perf-scoping), so the
+	// typed list is PROJECTED — spec.ExtraCandyRefStrings is the sanctioned projection, and names
+	// this very collector as its consumer. The scope is not lost: the caller that knows the box
+	// re-attaches it where the scan/arbiter reads it.
+	buildRefs := collectReferencedPluginWords(layers, cfg.Box, spec.ExtraCandyRefStrings(req.ExtraCandyRefs))
 	if perr := loadProjectPlugins(context.Background(), layers, buildRefs); perr != nil {
 		// A plugin candy that fails to compile must stop the build with the actionable
 		// error (the plugin name + the go build error are in perr via loadPluginUnit's

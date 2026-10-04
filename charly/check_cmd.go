@@ -53,7 +53,9 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 	// (loadProjectPlugins build-connects it only if the plan references libvirt), and in a bed
 	// CHARLY_REPO_OVERRIDE resolves the ref to the local superproject under development.
 	if ref := canonicalProviderRef(ClassVerb, "libvirt", "", ""); ref != "" {
-		addCandy = append(addCandy, ref)
+		// A PROVIDER ref resolved for a word — it belongs to no box, so EMPTY scope (an independent
+		// composition the arbiter treats as SILENT). Never a constant label (#739).
+		addCandy = append(addCandy, spec.ExtraCandyRef{Ref: ref})
 	}
 	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{ExtraCandyRefs: addCandy})
 	if scanErr != nil {
