@@ -3294,6 +3294,38 @@ check-task-smoke:
         stdout:
           - contains: TASK-SMOKE-OK
         context: [runtime]
+
+# The params + stdin fixtures, beside check-task-smoke for the SAME reason that one is
+# here rather than in a temp dir: they must be real project entities.
+#
+# A bed step that WRITES a fixture inside its own `command:` text cannot work. The check
+# walk runs kit.ExpandOpVars over the op's own string fields, and TestVarRefPattern
+# (`${NAME}` / `${NAME:arg}`) claims every ${UPPERCASE} token it finds — including one
+# inside a heredoc. An unresolved name is a legitimate SKIP, so the step never runs and
+# never asserts: a bed that reports SKIP where it meant to prove something. Declaring
+# the fixture here keeps every ${...} reference inside an entity, where the TASK's own
+# env expansion owns it and no check op's text ever contains it.
+task-params-fixture:
+  task:
+    description: params fixture — one DEFAULTED param and one REQUIRED param, both resolving through the task env (the check-task bed's task-params-* steps)
+    dir: .
+    params:
+      GREETING:
+        default: hello
+      WHO:
+        required: true
+    plan:
+      - check: the defaulted param and the supplied param both reached the step
+        command: 'test "${GREETING}" = hello && test "${WHO}" = world'
+        context: [runtime]
+task-stdin-fixture:
+  task:
+    description: stdin fixture — BOTH piped-stdin forms (TASK_STDIN and TASK_STDIN_FILE) must carry the payload (the check-task bed's task-stdin-visible step)
+    dir: .
+    plan:
+      - check: both stdin forms carry the payload
+        command: 'test "${TASK_STDIN}" = PIPE-PAYLOAD && test "$(cat "${TASK_STDIN_FILE}")" = PIPE-PAYLOAD'
+        context: [runtime]
 check-task-app:
   local:
     description: |-
@@ -3362,25 +3394,7 @@ check-task:
         context:
           - runtime
         command:
-          command: |-
-            d=$(mktemp -d); mkdir -p "$d/candy/x"
-            printf 'discover:\n    - path: candy\n      recursive: true\n' > "$d/charly.yml"
-            cat >> "$d/charly.yml" <<'YAML'
-            task-params-fixture:
-              task:
-                description: params fixture — one defaulted, one required
-                dir: .
-                params:
-                  GREETING:
-                    default: hello
-                  WHO:
-                    required: true
-                plan:
-                  - check: the default applied and the supplied param reached the step
-                    command: 'test "${GREETING}" = hello && test "${WHO}" = world'
-            YAML
-            CHARLY_PROJECT_DIR="$d" ${CHARLY_BIN} task task-params-fixture --param WHO=world
-            rc=$?; rm -rf "$d"; exit $rc
+          command: ${CHARLY_BIN} task task-params-fixture --param WHO=world
           in_container: false
       - check: a MISSING required param is still the NAMED error the moved workflowkit helper produces (never a silent empty value the step runs with)
         id: task-params-required-named
@@ -3390,25 +3404,7 @@ check-task:
         context:
           - runtime
         command:
-          command: |-
-            d=$(mktemp -d); mkdir -p "$d/candy/x"
-            printf 'discover:\n    - path: candy\n      recursive: true\n' > "$d/charly.yml"
-            cat >> "$d/charly.yml" <<'YAML'
-            task-params-fixture:
-              task:
-                description: params fixture — one defaulted, one required
-                dir: .
-                params:
-                  GREETING:
-                    default: hello
-                  WHO:
-                    required: true
-                plan:
-                  - check: unreachable — the param gate must reject first
-                    command: "true"
-            YAML
-            CHARLY_PROJECT_DIR="$d" ${CHARLY_BIN} task task-params-fixture
-            rc=$?; rm -rf "$d"; exit $rc
+          command: ${CHARLY_BIN} task task-params-fixture
           in_container: false
       - check: a depends_on CYCLE is still the NAMED error naming the WHOLE chain (the moved workflowkit closure helper) — never a hang, never a silent truncation to a shorter order
         id: task-helpers-cycle-named
@@ -3448,20 +3444,7 @@ check-task:
         context:
           - runtime
         command:
-          command: |-
-            d=$(mktemp -d); mkdir -p "$d/candy/x"
-            printf 'discover:\n    - path: candy\n      recursive: true\n' > "$d/charly.yml"
-            cat >> "$d/charly.yml" <<'YAML'
-            task-stdin-fixture:
-              task:
-                description: stdin fixture — BOTH stdin forms must carry the piped bytes
-                dir: .
-                plan:
-                  - check: both stdin forms carry the payload
-                    command: 'test "${TASK_STDIN}" = PIPE-PAYLOAD && test "$(cat "${TASK_STDIN_FILE}")" = PIPE-PAYLOAD'
-            YAML
-            printf '%s' 'PIPE-PAYLOAD' | CHARLY_PROJECT_DIR="$d" ${CHARLY_BIN} task task-stdin-fixture
-            rc=$?; rm -rf "$d"; exit $rc
+          command: printf '%s' 'PIPE-PAYLOAD' | ${CHARLY_BIN} task task-stdin-fixture
           in_container: false
 
 # =============================================================================
