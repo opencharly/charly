@@ -153,7 +153,7 @@ func (h *hostVerbResolver) RunVerb(ctx context.Context, op *spec.Op) (spec.Check
 	if ip, ok := prov.(*inprocProvider); ok {
 		if kv, ok := ip.srv.(spec.CheckVerbProvider); ok {
 			res := kv.RunVerb(ctx, hostCheckContext{h: h}, op)
-			return spec.CheckResult{Op: op, Verb: kv.Reserved(), Status: res.Status, Message: res.Message}, true
+			return checkResultFromVerb(op, kv.Reserved(), res), true
 		}
 	}
 	// An OUT-OF-PROCESS verb provider (a grpcProvider, not a CheckVerbProvider): dispatch the

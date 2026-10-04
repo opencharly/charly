@@ -233,7 +233,7 @@ func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.Invo
 				// attached — placement-invisible, F8.
 				if kv, isKV := ip.srv.(spec.CheckVerbProvider); isKV {
 					res := kv.RunVerb(ctx, hostCheckContext{h: hvr}, &op2)
-					cr = spec.CheckResult{Op: &op2, Verb: kv.Reserved(), Status: res.Status, Message: res.Message}
+					cr = checkResultFromVerb(&op2, kv.Reserved(), res)
 					handled = true
 				}
 			}

@@ -50,8 +50,12 @@ github.com/docker/distribution v2.8.3+incompatible h1:AtKxIZ36LoNK51+Z6RpzLpddBi
 github.com/docker/distribution v2.8.3+incompatible/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
 github.com/docker/docker-credential-helpers v0.9.3 h1:gAm/VtF9wgqJMoxzT3Gj5p4AqIjCBS4wrsOh9yRqcz8=
 github.com/docker/docker-credential-helpers v0.9.3/go.mod h1:x+4Gbw9aGmChi3qTLZj8Dfn0TD20M/fuWy0E5+WDeCo=
+github.com/emicklei/dot v1.11.0 h1:zsrhCuFHAJge/aZIC4N4LdHy5tqYu4tWEaUzIwdYj4Y=
+github.com/emicklei/dot v1.11.0/go.mod h1:DeV7GvQtIw4h2u73RKBkkFdvVAz0D9fzeJrgPW6gy/s=
 github.com/emicklei/proto v1.14.3 h1:zEhlzNkpP8kN6utonKMzlPfIvy82t5Kb9mufaJxSe1Q=
 github.com/emicklei/proto v1.14.3/go.mod h1:rn1FgRS/FANiZdD2djyH7TMA9jdRDcYQ9IEN9yvjX0A=
+github.com/expr-lang/expr v1.17.8 h1:W1loDTT+0PQf5YteHSTpju2qfUfNoBt4yw9+wOEU9VM=
+github.com/expr-lang/expr v1.17.8/go.mod h1:8/vRC7+7HBzESEqt5kKpYXxrxkr31SaO8r40VO/1IT4=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/fatih/color v1.15.0 h1:kOqh6YHBtK8aywxGerMG2Eq3H6Qgoqeo13Bk2Mv/nBs=
 github.com/fatih/color v1.15.0/go.mod h1:0h5ZqXfHYED7Bhv2ZJamyIOUej9KtShiJESRwBDUSsw=
@@ -149,6 +153,10 @@ github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039 h1:gVsGunNwjAj
 github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039/go.mod h1:T8OUkUuqalqrlrL0HP2cwMAIdE+c7qgQMKnAlEZke7U=
 github.com/opencharly/plugin-command/candy/plugin-command v0.2026272.26 h1:tqN7vx9zsTd6P0g9EernUqMnGwjE/1CSwzwx78bU4zc=
 github.com/opencharly/plugin-command/candy/plugin-command v0.2026272.26/go.mod h1:NhU1sjx93aEuAYxJOxHzwrCIJ+BkYZSzZiDw0pwxiPU=
+github.com/opencharly/plugin-command/candy/plugin-command v0.2026277.738 h1:ZyIU/OMVb88qo1n4/zveQI5LxVFm3AxphdeMl0wiVX0=
+github.com/opencharly/plugin-command/candy/plugin-command v0.2026277.738/go.mod h1:NhU1sjx93aEuAYxJOxHzwrCIJ+BkYZSzZiDw0pwxiPU=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026272.29 h1:MECigU8XmqqmAPje+0z05tllLegOTg9WfZifs0cFuSU=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026272.29/go.mod h1:8WXUrJrUfaSssXpZTJlfP+0nb/1P4gmk9LbU/iw+NRo=
 github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457 h1:mSaW4gGMq8uQyCkNfhGjS92lV27gb9KZaT7kfGzqBX4=
 github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457/go.mod h1:Qjsz/vym+T7bPc/nGMaDvj1PNPG3we2zjPHWmbU2hBo=
 github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026272.30 h1:DjV+xnlhlmfP9k/4doryMRgAF5sG/jD+Ywt+MtI4m10=
@@ -231,8 +239,8 @@ github.com/opencharly/plugin-status/candy/plugin-status v0.2026272.442 h1:wJohcU
 github.com/opencharly/plugin-status/candy/plugin-status v0.2026272.442/go.mod h1:4aEG/4DA+PLpTArGfZjBD9WT6Vd80lh8/BoTG9up+Hk=
 github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026274.652 h1:2s40q3pqbLQeS+zsBX+fCNOAW/GGyWkFn5vhu4Zj9io=
 github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026274.652/go.mod h1:JJay4CByWmaImazbPVBqOhqnWxAaBA1Y8lvbwIo0qfY=
-github.com/opencharly/plugin-task/candy/plugin-task v0.2026276.1007 h1:UD/+rOtsVJNNSrQ9lk6T0smu/LRtH0ThrYBhVWIcITo=
-github.com/opencharly/plugin-task/candy/plugin-task v0.2026276.1007/go.mod h1:QktfTESS3KTxlzESYJ2ImS1njOZPWOqKuJ+doAIfSvo=
+github.com/opencharly/plugin-task/candy/plugin-task v0.2026277.711 h1:a8V5JUAH0DCC85O/WgmD2CbXZUlmAQ5OWj8SQQR0F/c=
+github.com/opencharly/plugin-task/candy/plugin-task v0.2026277.711/go.mod h1:PZ2K4/S3bIRJWjgiLEmyxWWQnPnKGYIMUrl4vpUXftc=
 github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422 h1:Gp6VfQpixzrAZKeL8i7rs7YCLtSqJJSZzoIHo7eDivU=
 github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422/go.mod h1:+D1uLIWXqrWv+UCVf8MvtXw3c/QlPXzmyheVJ04elHg=
 github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026272.423 h1:jjDEUkXV6YXcaxfLWLTWWWZlUrEpmHzRAZNxUJhjqmk=
@@ -262,6 +270,8 @@ github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 h1:2PC6Ql
 github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94/go.mod h1:JSbkp0BviKovYYt9XunS95M3mLPibE9bGg+Y95DsEEY=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
 github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
+github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=
+github.com/robfig/cron/v3 v3.0.1/go.mod h1:eQICP3HwyT7UooqI/z+Ov+PtYAWygg1TEWWzGIFLtro=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
@@ -271,6 +281,12 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.2/go.mod h1:R6va5+xMeoiuVRoj+gSkQ7d3FALtqAAGI1FQKckRals=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+github.com/tidwall/gjson v1.19.0 h1:xwxm7n691Uf3u5OFjzngavjGTh55KX5q/9w9xHW88JU=
+github.com/tidwall/gjson v1.19.0/go.mod h1:V37/opeE/JbLUOfH0QTXiNez2l0RUjYUhpT4szFQAfc=
+github.com/tidwall/match v1.1.1 h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=
+github.com/tidwall/match v1.1.1/go.mod h1:eRSPERbgtNPcGhD8UCthc6PmLEQXEWd3PRB5JTxsfmM=
+github.com/tidwall/pretty v1.2.1 h1:qjsOFOWWQl+N3RsoF5/ssm1pHmJJwhjlSbZ51I6wMl4=
+github.com/tidwall/pretty v1.2.1/go.mod h1:ITEVvHYasfjBbM0u2Pg8T2nJnzm8xPwvNhhsoaGGjNU=
 github.com/vbatts/tar-split v0.12.2 h1:w/Y6tjxpeiFMR47yzZPlPj/FcPLpXbTUi/9H7d3CPa4=
 github.com/vbatts/tar-split v0.12.2/go.mod h1:eF6B6i6ftWQcDqEn3/iGFRFRo8cBIMSJVOpnNdfTMFA=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
