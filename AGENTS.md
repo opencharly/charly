@@ -1,7 +1,7 @@
 # OpenCharly — Agent rulebook
 
 This is the complete, harness-neutral OpenCharly rulebook for agents that read
-`AGENTS.md`. It implements `VISION.md` and is sufficient on its own.
+`AGENTS.md`. It implements the umbrella's `VISION.md` and is sufficient on its own.
 Repository skills own detailed procedures; this file owns mandatory policy.
 History belongs only in `CHANGELOG/`.
 
@@ -494,7 +494,7 @@ second copy of them.
 
 ## Where things are documented
 
-- `VISION.md`: thesis and direction.
+- the umbrella's `VISION.md` (`opencharly/opencharly`): thesis and direction.
 - `PROGRAM/`: binding program north-star documents (one file per program, named in every spawn brief).
 - `AGENTS.md`: complete current harness-neutral mandates and dispatcher.
 - the opencharly/marketplace repo's `<family>/skills/<skill>/SKILL.md`: detailed
