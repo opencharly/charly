@@ -56,7 +56,7 @@ discover:
 	// build+connect it and fail.
 	_, err := hostBuildConnectPlugins(context.Background(), spec.ResolvedProjectRequest{
 		Dir:            dir,
-		ExtraCandyRefs: []string{"testverb"},
+		ExtraCandyRefs: []spec.ExtraCandyRef{{Ref: "testverb"}},
 	}, buildEngineContext{})
 	if err == nil {
 		t.Fatal("hostBuildConnectPlugins must return a FATAL error for a plugin candy that fails to compile (it must NOT continue to a later 'no provider registered')")

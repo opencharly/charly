@@ -13,7 +13,7 @@ require (
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244
 	github.com/opencharly/plugin-box/candy/plugin-box v0.2026272.2039
-	github.com/opencharly/plugin-build/candy/plugin-build v0.2026272.2040
+	github.com/opencharly/plugin-build/candy/plugin-build v0.2026276.438
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026271.2248
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319
@@ -21,7 +21,7 @@ require (
 	github.com/opencharly/plugin-check/candy/plugin-check v0.2026272.2039
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039
-	github.com/opencharly/plugin-command/candy/plugin-command v0.2026272.26
+	github.com/opencharly/plugin-command/candy/plugin-command v0.2026277.738
 	github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026272.29
 	github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026272.30
 	github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026272.33
@@ -35,12 +35,12 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026272.139
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026272.145
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026272.2039
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026276.1113
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026272.143
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235
 	github.com/opencharly/plugin-init/candy/plugin-init v0.2026272.301
-	github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026272.244
+	github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026276.1353
 	github.com/opencharly/plugin-interface/candy/plugin-interface v0.2026272.230
 	github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026272.235
 	github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param v0.2026272.237
@@ -91,6 +91,8 @@ require (
 	github.com/docker/cli v29.0.3+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
+	github.com/emicklei/dot v1.11.0 // indirect
+	github.com/expr-lang/expr v1.17.8 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/google/go-containerregistry v0.20.7 // indirect
 	github.com/google/renameio/v2 v2.0.2 // indirect
@@ -102,11 +104,15 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026272.1813 // indirect
+	github.com/opencharly/sdk v0.2026277.352 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/tidwall/gjson v1.19.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
@@ -129,8 +135,8 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/plugin-task/candy/plugin-task v0.2026276.1007
-	github.com/opencharly/spec v0.2026272.1512
+	github.com/opencharly/plugin-task/candy/plugin-task v0.2026277.711
+	github.com/opencharly/spec v0.2026276.1636
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect

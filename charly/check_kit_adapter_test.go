@@ -1,11 +1,67 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/opencharly/spec/checkstep"
 	"github.com/opencharly/spec/spec"
 )
+
+// fakeCaptureVerb is a host-coupled check verb whose PASS verdict CAPTURES a value — the
+// exact shape candy/plugin-command's PASS arm produces (a step's stdout) and that the
+// `check-task` bed's task-output-captured step reads back through `charly task --output`.
+type fakeCaptureVerb struct{ captured string }
+
+var _ spec.CheckVerbProvider = fakeCaptureVerb{}
+
+func (f fakeCaptureVerb) Reserved() string { return "captureprobe" }
+
+func (f fakeCaptureVerb) RunVerb(_ context.Context, _ spec.CheckContext, _ *spec.Op) spec.CheckVerbResult {
+	return spec.CheckVerbResult{Status: spec.StatusPass, Message: "exit=0", CapturedValue: f.captured}
+}
+
+// TestKitVerbAdapterCarriesCapturedValue proves the adapter does not drop the verdict's
+// CapturedValue while building charly's result. Every dispatch path converts a verb's
+// spec.CheckVerbResult into spec.CheckResult, and before that conversion was funnelled
+// through checkResultFromVerb each path hand-built the literal with Op/Verb/Status/Message
+// only — so a producer's capture, the entire reason the field exists and the only thing
+// `charly task --output` prints, reached the ledger as "". This test fails (captured_value
+// "") against the old literal.
+func TestKitVerbAdapterCarriesCapturedValue(t *testing.T) {
+	a := kitVerbAdapter{kv: fakeCaptureVerb{captured: "TASK-SMOKE-OK\n"}}
+	op := &spec.Op{Plugin: "command"}
+
+	got := a.RunVerb(context.Background(), nil, op)
+
+	if got.CapturedValue != "TASK-SMOKE-OK\n" {
+		t.Fatalf("captured_value = %q, want the verdict's capture carried through", got.CapturedValue)
+	}
+	if got.Op != op {
+		t.Fatalf("Op = %v, want the verb's own op pointer preserved", got.Op)
+	}
+	if got.Verb != "captureprobe" || got.Status != spec.StatusPass || got.Message != "exit=0" {
+		t.Fatalf("got (verb=%q status=%v message=%q), want the verdict's own word/status/message",
+			got.Verb, got.Status, got.Message)
+	}
+}
+
+// TestCheckResultFromVerbKeepsACapturelessVerdictEmpty pins the other half of the contract:
+// the conversion states NO capture policy of its own. A verdict that captured nothing (the
+// FAIL/SKIP arms in candy/plugin-command leave it empty on purpose — a failed step's output
+// was never vouched for) yields exactly the pre-extension result: no placeholder, no
+// inherited value from a previous step.
+func TestCheckResultFromVerbKeepsACapturelessVerdictEmpty(t *testing.T) {
+	op := &spec.Op{Plugin: "command"}
+	got := checkResultFromVerb(op, "command", spec.CheckVerbResult{Status: spec.StatusFail, Message: "exit=1"})
+
+	if got.CapturedValue != "" {
+		t.Fatalf("captured_value = %q, want empty for a captureless verdict", got.CapturedValue)
+	}
+	if got.Op != op || got.Verb != "command" || got.Status != spec.StatusFail || got.Message != "exit=1" {
+		t.Fatalf("conversion dropped or altered a field: %#v", got)
+	}
+}
 
 // fakeStepProvider records what the kit adapter delegates to it. The C7 cutover moved the
 // typed-step kind mapping + materialization OUT of core into the candy's

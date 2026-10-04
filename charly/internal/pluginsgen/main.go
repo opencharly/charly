@@ -23,6 +23,13 @@
 // plugin-block check and the kit/pb shape detection read the FETCHED repo's
 // candy/<name>/charly.yml + Go source (the in-repo candy/ dirs are deleted).
 //
+// DEV-TREE OVERRIDE (opencharly/charly#775): `-dev-plugin <candy-name>=<repo-checkout>`
+// (repeatable) builds a COMPILED-IN plugin from a LOCAL checkout instead of its pinned
+// module-proxy tag, and emits the workspace that resolves it (go.work.dev, selected by an
+// explicit GOWORK — never auto-detected) so a bed run on that binary exercises UNMERGED plugin
+// source. Without an override nothing changes: the three committed artifacts stay byte-identical
+// and no dev workspace exists.
+//
 // Reproducible: same `compiled_plugins:` list -> byte-identical outputs (guarded by
 // TestPluginsGenReproducible). Run from `scripts/bootstrap-charly.sh`; edit charly.yml's
 // compiled_plugins and re-run, never the generated files.
@@ -38,7 +45,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/opencharly/spec/refs"
 	"gopkg.in/yaml.v3"
@@ -50,17 +59,50 @@ func main() {
 	outGo := flag.String("out", "charly/plugins_generated.go", "generated registration file (relative to -root)")
 	outWork := flag.String("gowork", "go.work", "generated go.work (relative to -root)")
 	outRefs := flag.String("outrefs", "charly/plugins_refs_generated.go", "generated word->candy-ref index (relative to -root)")
+	outDevWork := flag.String("gowork-dev", "go.work.dev", "dev workspace emitted when -dev-plugin is given (relative to -root); removed when it is not, so a stale one can never resolve a local tree for a later build")
 	corpus := flag.String("corpus", "", "optional newline list of plugin repo paths (relative to -root) whose manifests are indexed; the org-wide plugin-* set. Empty => only the compiled_plugins corpus is indexed.")
+	var devs devPluginFlag
+	flag.Var(&devs, "dev-plugin", "build a compiled-in plugin from a LOCAL checkout instead of its pinned tag: <candy-name>=<repo-checkout> (repeatable). Dev builds only — see the package doc.")
 	flag.Parse()
 
-	if err := run(*root, *cfg, *outGo, *outWork, *outRefs, *corpus); err != nil {
+	if err := run(*root, *cfg, *outGo, *outWork, *outDevWork, *outRefs, *corpus, devs); err != nil {
 		fmt.Fprintf(os.Stderr, "pluginsgen: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(root, cfg, outGo, outWork, outRefs, corpus string) error {
-	genGo, genWork, genRefs, err := generate(root, cfg, corpus)
+// devPlugin is one -dev-plugin override: the candy name of a compiled-in plugin, and the local
+// checkout of that plugin's repo (the candy module is <dir>/candy/<name>).
+type devPlugin struct {
+	name string
+	dir  string
+}
+
+// devPluginFlag collects the repeatable -dev-plugin flags.
+type devPluginFlag []devPlugin
+
+func (f *devPluginFlag) String() string {
+	specs := make([]string, 0, len(*f))
+	for _, d := range *f {
+		specs = append(specs, d.name+"="+d.dir)
+	}
+	return strings.Join(specs, ",")
+}
+
+// Set parses ONE <candy-name>=<repo-checkout>. The split is on the FIRST '=' so a checkout path
+// may contain one; emptiness and the name's membership in compiled_plugins: are checked by
+// resolveDevPlugins, which can name the file that list comes from.
+func (f *devPluginFlag) Set(v string) error {
+	name, dir, ok := strings.Cut(v, "=")
+	if !ok {
+		return fmt.Errorf("want <candy-name>=<repo-checkout>, got %q", v)
+	}
+	*f = append(*f, devPlugin{name: strings.TrimSpace(name), dir: strings.TrimSpace(dir)})
+	return nil
+}
+
+func run(root, cfg, outGo, outWork, outDevWork, outRefs, corpus string, devs []devPlugin) error {
+	genGo, genWork, genDevWork, genRefs, err := generate(root, cfg, corpus, devs)
 	if err != nil {
 		return err
 	}
@@ -73,16 +115,47 @@ func run(root, cfg, outGo, outWork, outRefs, corpus string) error {
 	if err := os.WriteFile(filepath.Join(root, outRefs), genRefs, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", outRefs, err)
 	}
+	return writeDevWork(root, outDevWork, genDevWork)
+}
+
+// writeDevWork materializes the dev workspace — or, when no override is active (genDevWork nil),
+// REMOVES it together with the checksum lock a previous dev build wrote beside it.
+//
+// The removal is the point: go.work.dev is selected by an explicit GOWORK= and never
+// auto-detected, so a stale one left behind would keep resolving a local checkout for anyone who
+// later built with that GOWORK — a build silently compiling unmerged plugin source while calling
+// itself a plain build. The generator owns the file, so the generator deletes it the moment the
+// override that justified it is gone.
+func writeDevWork(root, rel string, body []byte) error {
+	path := filepath.Join(root, rel)
+	if body != nil {
+		if err := os.WriteFile(path, body, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", rel, err)
+		}
+		return nil
+	}
+	for _, p := range []string{path, path + ".sum"} {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove stale %s: %w", p, err)
+		}
+	}
 	return nil
 }
 
 // generate produces the byte content of plugins_generated.go + go.work from a
 // charly.yml's compiled_plugins: list, WITHOUT writing — so the reproducibility gate
 // (TestPluginsGenReproducible) can diff against the committed files.
-func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err error) {
+func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, genDevWork, genRefs []byte, err error) {
 	names, err := readCompiledPlugins(filepath.Join(root, cfg))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
+	}
+	// devRoots: candy name -> local plugin repo checkout, for the compiled-in plugins a
+	// -dev-plugin override re-points. Empty (nil) on a plain build, which then takes every
+	// path below exactly as it did before.
+	devRoots, err := resolveDevPlugins(names, cfg, devs)
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
 
 	// pluginRepos is the set of plugin repos whose manifests are indexed: the
@@ -111,19 +184,38 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 	// per-kind word->ref map of its own.
 	wordRefs := map[string]string{}
 	for _, repo := range repoList {
-		refsForRepo, err := indexRepoPluginRefs(repo)
+		// A -dev-plugin override re-points the WHOLE repo read at the local checkout: the
+		// word->ref index and the plugin-block/shape reads further down must come from the
+		// same tree the build resolves, or the generated Go could describe one source while
+		// the binary links another.
+		name, compiled := repoSetCompiled(names, repo)
+		repoRoot := ""
+		if compiled {
+			repoRoot = devRoots[name]
+		}
+		if repoRoot == "" {
+			fetched, ferr := refs.DownloadRepo(repo, "HEAD")
+			if ferr != nil {
+				// A repo that cannot be fetched/parsed is a genuine error only for a
+				// compiled-in plugin (needed to build); an out-of-tree corpus repo that is
+				// unavailable simply contributes no words.
+				if compiled {
+					return nil, nil, nil, nil, fmt.Errorf("index plugin %s: %w", repo, ferr)
+				}
+				continue
+			}
+			repoRoot = fetched
+		}
+		refsForRepo, err := indexRepoPluginRefs(repoRoot)
 		if err != nil {
-			// A repo that cannot be fetched/parsed is a genuine error only for a
-			// compiled-in plugin (needed to build); an out-of-tree corpus repo that is
-			// unavailable simply contributes no words.
-			if _, compiled := repoSetCompiled(names, repo); compiled {
-				return nil, nil, nil, fmt.Errorf("index plugin %s: %w", repo, err)
+			if compiled {
+				return nil, nil, nil, nil, fmt.Errorf("index plugin %s: %w", repo, err)
 			}
 			continue
 		}
 		for word, ref := range refsForRepo {
 			if prev, dup := wordRefs[word]; dup && prev != ref {
-				return nil, nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+				return nil, nil, nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
 			}
 			wordRefs[word] = ref
 		}
@@ -139,40 +231,51 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 	for _, name := range names {
 		// The standalone module path is the convention: github.com/opencharly/<name>/candy/<name>.
 		// The version comes from the charly module's go.mod require (the pinned Go tag — the
-		// sdk/spec contract-module shape). The repo is fetched at that version via the SAME
-		// standalone fetch the runtime uses (spec/refs.DownloadRepo), and the plugin-block check
-		// + kit/pb shape detection read the FETCHED repo's candy/<name>/ tree.
+		// sdk/spec contract-module shape) and is required even under a -dev-plugin override: the
+		// pin is the release contract, and the override is a dev deviation from it, never a
+		// replacement for it (an unpinned compiled plugin is already invalid without one).
 		mod := "github.com/opencharly/" + name + "/candy/" + name
 		version, err := moduleVersion(filepath.Join(root, "charly", "go.mod"), mod)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("compiled plugin %q: %w", name, err)
+			return nil, nil, nil, nil, fmt.Errorf("compiled plugin %q: %w", name, err)
 		}
-		// The Go tag is subdir-prefixed: candy/<name>/<version> (the module lives at candy/<name>
-		// inside the repo — the convention the plugin-generate-packages precedent set).
-		repoPath := "github.com/opencharly/" + name
-		fetched, err := refs.DownloadRepo(repoPath, "candy/"+name+"/"+version)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("compiled plugin %q: fetch %s@%s: %w", name, repoPath, version, err)
+		// candyDir is where the plugin's OWN tree is read from: the local checkout a dev
+		// override names, else the repo fetched at the pinned tag via the SAME standalone fetch
+		// the runtime uses (spec/refs.DownloadRepo). Only the SOURCE of the read differs — the
+		// plugin-block check and the kit/pb shape detection below are identical either way.
+		candyDir := ""
+		if local, ok := devRoots[name]; ok {
+			candyDir = filepath.Join(local, "candy", name)
+		} else {
+			// The Go tag is subdir-prefixed: candy/<name>/<version> (the module lives at
+			// candy/<name> inside the repo — the convention the plugin-generate-packages
+			// precedent set).
+			repoPath := "github.com/opencharly/" + name
+			fetched, err := refs.DownloadRepo(repoPath, "candy/"+name+"/"+version)
+			if err != nil {
+				return nil, nil, nil, nil, fmt.Errorf("compiled plugin %q: fetch %s@%s: %w", name, repoPath, version, err)
+			}
+			candyDir = filepath.Join(fetched, "candy", name)
 		}
-		candyDir := filepath.Join(fetched, "candy", name)
 		if err := requirePluginBlock(filepath.Join(candyDir, "charly.yml")); err != nil {
-			return nil, nil, nil, fmt.Errorf("compiled plugin %q: %w", name, err)
+			return nil, nil, nil, nil, fmt.Errorf("compiled plugin %q: %w", name, err)
 		}
 		shape, err := detectShape(candyDir)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("compiled plugin %q: %w", name, err)
+			return nil, nil, nil, nil, fmt.Errorf("compiled plugin %q: %w", name, err)
 		}
 		entries = append(entries, entry{name: name, module: mod, alias: goAlias(name), shape: shape})
 	}
 
 	// --- plugins_generated.go ---
 	var g bytes.Buffer
-	g.WriteString("// Code generated by pluginsgen (charly box generate-plugins). DO NOT EDIT.\n//\n")
+	g.WriteString("// Code generated by charly/internal/pluginsgen (run by scripts/bootstrap-charly.sh). DO NOT EDIT.\n//\n")
 	g.WriteString("// One registerCompiledPlugin() call per plugin candy named in charly.yml\n")
 	g.WriteString("// `compiled_plugins:`. Regenerated by `scripts/bootstrap-charly.sh` before `go build`.\n")
 	g.WriteString("// Each compiled-in plugin module is a `require` pin in charly/go.mod resolved\n")
 	g.WriteString("// from the module proxy (no `use` directive in go.work — see the generator's\n")
-	g.WriteString("// go.work writer). Edit charly.yml's\n")
+	g.WriteString("// go.work writer); a dev build (-dev-plugin) resolves a plugin through go.work.dev\n")
+	g.WriteString("// instead. Edit charly.yml's\n")
 	g.WriteString("// compiled_plugins and re-run the generator, never this file.\n")
 	g.WriteString("package main\n\n")
 	if len(entries) > 0 {
@@ -198,7 +301,7 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 	}
 	formatted, err := format.Source(g.Bytes())
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("format generated go: %w\n%s", err, g.String())
+		return nil, nil, nil, nil, fmt.Errorf("format generated go: %w\n%s", err, g.String())
 	}
 
 	// --- plugins_refs_generated.go — the word->candy-ref INDEX. A pure projection of the
@@ -207,7 +310,7 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 	// map. Regenerated with the rest of the wiring; a new plugin needs its repo in the
 	// corpus, no charly code change.
 	var r bytes.Buffer
-	r.WriteString("// Code generated by pluginsgen (charly box generate-plugins). DO NOT EDIT.\n//\n")
+	r.WriteString("// Code generated by charly/internal/pluginsgen (run by scripts/bootstrap-charly.sh). DO NOT EDIT.\n//\n")
 	r.WriteString("// pluginProviderRefs maps \"<class>:<word>\" -> the canonical candy ref of the plugin\n")
 	r.WriteString("// that serves it, DERIVED from every plugin repo's own `plugin:` block (its\n")
 	r.WriteString("// `providers:` + `source:`). This is the ONE word->provider fact: it lives in the\n")
@@ -225,17 +328,17 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 	r.WriteString("}\n")
 	formattedRefs, err := format.Source(r.Bytes())
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("format generated refs: %w\n%s", err, r.String())
+		return nil, nil, nil, nil, fmt.Errorf("format generated refs: %w\n%s", err, r.String())
 	}
 
 	// --- go.work ---
 	goVer, err := readGoDirective(filepath.Join(root, "charly", "go.mod"))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	var w bytes.Buffer
 	fmt.Fprintf(&w, "go %s\n\n", goVer)
-	w.WriteString("// Generated by pluginsgen (charly box generate-plugins). DO NOT EDIT.\n")
+	w.WriteString("// Generated by charly/internal/pluginsgen (run by scripts/bootstrap-charly.sh). DO NOT EDIT.\n")
 	w.WriteString("// The charly module plus the compiled-in plugin candies, resolved as PROXY\n")
 	w.WriteString("// modules (the candy de-submodule cutover, Phase 4): every compiled-in plugin\n")
 	w.WriteString("// module (github.com/opencharly/<name>/candy/<name>) is a `require` pin in\n")
@@ -243,7 +346,129 @@ func generate(root, cfg, corpusFile string) (genGo, genWork, genRefs []byte, err
 	w.WriteString("// sdk/spec contract modules. There are no workspace members beyond charly; the\n")
 	w.WriteString("// `use ./candy/...` in-repo shape was deleted with the in-repo candy dirs.\n")
 	w.WriteString("use ./charly\n")
-	return formatted, w.Bytes(), formattedRefs, nil
+
+	// --- go.work.dev — the DEV WORKSPACE, emitted ONLY when an override is active ---
+	return formatted, w.Bytes(), devWorkspace(goVer, devRoots), formattedRefs, nil
+}
+
+// resolveDevPlugins validates the -dev-plugin overrides against THIS build's compiled_plugins:
+// list and returns candy name -> absolute plugin repo checkout, or nil when there are none.
+//
+// Both checks exist so a mistake fails HERE, naming the flag, instead of surfacing as a
+// confusing error out of the `go build`:
+//   - the named plugin must BE compiled in, since `compiled_plugins:` is the only set an override
+//     can reach — only those modules are linked into the binary at all;
+//   - the checkout must BE that plugin's module: the generated registration imports
+//     github.com/opencharly/<name>/candy/<name> by the standalone convention, so a checkout whose
+//     candy/<name>/go.mod declares any other module path cannot satisfy that import.
+func resolveDevPlugins(names []string, cfg string, devs []devPlugin) (map[string]string, error) {
+	if len(devs) == 0 {
+		return nil, nil
+	}
+	compiled := make(map[string]bool, len(names))
+	for _, n := range names {
+		compiled[n] = true
+	}
+	out := make(map[string]string, len(devs))
+	for _, d := range devs {
+		if d.name == "" || d.dir == "" {
+			return nil, fmt.Errorf("-dev-plugin %q: want <candy-name>=<repo-checkout>", d.name+"="+d.dir)
+		}
+		if _, dup := out[d.name]; dup {
+			return nil, fmt.Errorf("-dev-plugin %s: given twice", d.name)
+		}
+		if !compiled[d.name] {
+			return nil, fmt.Errorf("-dev-plugin %s: not in the compiled_plugins: list of %s — only a plugin this build COMPILES IN can be re-pointed at a local checkout", d.name, cfg)
+		}
+		abs, err := filepath.Abs(d.dir)
+		if err != nil {
+			return nil, fmt.Errorf("-dev-plugin %s: %s: %w", d.name, d.dir, err)
+		}
+		want := "github.com/opencharly/" + d.name + "/candy/" + d.name
+		gomod := filepath.Join(abs, "candy", d.name, "go.mod")
+		got, err := readModulePath(gomod)
+		if err != nil {
+			return nil, fmt.Errorf("-dev-plugin %s: %s: %w (the override must point at that plugin's repo checkout, whose candy/%s declares module %s)", d.name, gomod, err, d.name, want)
+		}
+		if got != want {
+			return nil, fmt.Errorf("-dev-plugin %s: %s declares module %q, want %q — the generated registration imports the plugin by that path", d.name, gomod, got, want)
+		}
+		out[d.name] = abs
+	}
+	return out, nil
+}
+
+// devWorkspace renders the DEV WORKSPACE (go.work.dev) that a -dev-plugin build resolves with, or
+// nil when no override is active.
+//
+// Why a SECOND workspace file and not a `use` line in go.work (opencharly/charly#775): go.work is
+// a TRACKED artifact that every `scripts/bootstrap-charly.sh` regenerates, so a hand-added `use`
+// is wiped by the next bootstrap — before the build that wanted it — and a local path could end
+// up committed. A differently-named workspace is invisible to `go build`'s auto-detection (which
+// looks for exactly `go.work`) and is selected only by an explicit GOWORK=; and Go keys a
+// workspace's checksum lock off the WORKSPACE FILE PATH (the workspace sum file is
+// <go.work path> + ".sum"), so a dev build's lock lands in go.work.dev.sum and the committed
+// go.work / go.work.sum stay byte-identical.
+func devWorkspace(goVer string, devRoots map[string]string) []byte {
+	if len(devRoots) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(devRoots))
+	for n := range devRoots {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var w bytes.Buffer
+	fmt.Fprintf(&w, "go %s\n\n", goVer)
+	w.WriteString("// Generated by charly/internal/pluginsgen (run by scripts/bootstrap-charly.sh). DO NOT EDIT.\n")
+	w.WriteString("//\n")
+	w.WriteString("// THE DEV WORKSPACE — it exists ONLY because the build was given a -dev-plugin override.\n")
+	w.WriteString("// NOT A RELEASE BUILD: each module below resolves from a LOCAL checkout instead of its\n")
+	w.WriteString("// pinned module-proxy tag, so a bed run on this binary exercises UNMERGED plugin source.\n")
+	w.WriteString("//\n")
+	w.WriteString("// The committed workspace is untouched and so is its checksum lock: `go build` auto-detects\n")
+	w.WriteString("// only a file named exactly go.work, so this one is used only under an explicit GOWORK=,\n")
+	w.WriteString("// and a workspace's sum file is its own path + \".sum\" (go.work.dev.sum). A plain build\n")
+	w.WriteString("// never reads this file, and scripts/bootstrap-charly.sh DELETES it (with its lock) the\n")
+	w.WriteString("// first time it runs without an override.\n")
+	w.WriteString("//\n")
+	w.WriteString("// Overridden:\n")
+	for _, n := range names {
+		fmt.Fprintf(&w, "//   %s -> %s\n", n, filepath.Join(devRoots[n], "candy", n))
+	}
+	w.WriteString("use ./charly\n")
+	for _, n := range names {
+		fmt.Fprintf(&w, "use %s\n", workUsePath(filepath.Join(devRoots[n], "candy", n)))
+	}
+	return w.Bytes()
+}
+
+// workUsePath renders a workspace `use` path as a single token. A path that needs quoting MUST be
+// quoted or the workspace file is simply a syntax error, and a dev override is an ARBITRARY local
+// path — a checkout under a directory whose name contains a space is an ordinary path, not an
+// exotic one. The rule is Go's own (cmd/vendor/golang.org/x/mod/modfile MustQuote, applied by
+// AutoQuote — what `go work use` writes); it is spelled out here because pluginsgen deliberately
+// imports nothing beyond the stdlib + yaml + spec/refs, and pulling golang.org/x/mod into charly's
+// module graph for one predicate would cost more than it explains.
+func workUsePath(p string) string {
+	for _, r := range p {
+		switch r {
+		case ' ', '"', '\'', '`':
+			return strconv.Quote(p)
+		case '(', ')', '[', ']', '{', '}', ',':
+			if len(p) > 1 {
+				return strconv.Quote(p)
+			}
+		default:
+			if !unicode.IsPrint(r) {
+				return strconv.Quote(p)
+			}
+		}
+	}
+	if p == "" || strings.Contains(p, "//") || strings.Contains(p, "/*") {
+		return strconv.Quote(p)
+	}
+	return p
 }
 
 // readCompiledPlugins reads ONLY the compiled_plugins: list from a charly.yml,
@@ -295,18 +520,15 @@ func repoSetCompiled(names []string, repo string) (string, bool) {
 	return "", false
 }
 
-// indexRepoPluginRefs fetches a plugin repo (at its default branch) and returns the
-// word->candy-ref map from its OWN candy/*/charly.yml `plugin:` blocks (providers: +
-// source:). It reads the repo without a pinned version — the corpus is a set of repos,
-// and the ref recorded is the plugin's own declared `source:` (path-only, tagless), which
-// the runtime resolver re-fetches at the charly-go.mod-pinned tag.
-func indexRepoPluginRefs(repo string) (map[string]string, error) {
-	fetched, err := refs.DownloadRepo(repo, "HEAD")
-	if err != nil {
-		return nil, err
-	}
+// indexRepoPluginRefs returns the word->candy-ref map from a plugin repo CHECKOUT's OWN
+// candy/*/charly.yml `plugin:` blocks (providers: + source:). The checkout is the repo fetched at
+// its default branch — read without a pinned version, since the corpus is a set of repos and the
+// ref recorded is the plugin's own declared `source:` (path-only, tagless), which the runtime
+// resolver re-fetches at the charly-go.mod-pinned tag — or, under a -dev-plugin override, the
+// LOCAL checkout, so both callers read a tree the same way.
+func indexRepoPluginRefs(root string) (map[string]string, error) {
 	out := map[string]string{}
-	candyRoot := filepath.Join(fetched, "candy")
+	candyRoot := filepath.Join(root, "candy")
 	entries, err := os.ReadDir(candyRoot)
 	if err != nil {
 		return nil, err
