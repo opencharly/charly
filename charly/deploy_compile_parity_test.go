@@ -28,7 +28,7 @@ import (
 // manifest FIRST (it shadows the repo-root charly.yml), so ResolveBox("fedora-coder") then fails
 // and this test would vacuously SKIP — the root-cause of the prior vacuous-skip runs. `candy/`
 // disambiguates: only the repo root has it.
-func compilerTestProjectDir(t *testing.T) (string, func()) { //nolint:unparam // test helper returns (dir, cleanup); dir kept for symmetry
+func compilerTestProjectDir(t *testing.T) (string, func()) {
 	t.Helper()
 	prev, err := os.Getwd()
 	if err != nil {

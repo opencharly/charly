@@ -151,6 +151,32 @@ func TestPackagingDeclaresTheKindClusterTool(t *testing.T) {
 	}
 }
 
+// TestPackagingDeclaresTheVirtctlClient — virtctl (the KubeVirt client) is a host
+// runtime dependency of the `kubevirt:` deploy substrate's HOST-side guest-ssh
+// `virtctl port-forward` (the managed alias `prepare-venue` publishes; RCA
+// plugin-kubevirt#11). Arch ships it AUR-only (`virtctl-bin` → optdepend, like
+// cloudflared-bin), so rpm/deb/apk SUGGEST it — the same convention as `kind`
+// (no native package in the Fedora/Debian repos; Alpine ships `virtctl`).
+func TestPackagingDeclaresTheVirtctlClient(t *testing.T) {
+	pkg := loadPackaging(t)
+
+	if _, ok := pkg.Formats["archlinux"].OptDepends["virtctl-bin"]; !ok {
+		t.Errorf("archlinux.optdepends must include %q (AUR-only virtctl client)", "virtctl-bin")
+	}
+	for _, distro := range []string{"rpm", "deb", "apk"} {
+		f, ok := pkg.Formats[distro]
+		if !ok {
+			t.Fatalf("format %q missing", distro)
+		}
+		if !slices.Contains(f.Suggests, "virtctl") {
+			t.Errorf("%s.suggests must include %q (the KubeVirt client)", distro, "virtctl")
+		}
+		if slices.Contains(f.Depends, "virtctl") {
+			t.Errorf("%s.depends must NOT include %q — it is not a hard native dep", distro, "virtctl")
+		}
+	}
+}
+
 func checkPlainNames(t *testing.T, what string, names ...string) {
 	t.Helper()
 	for _, n := range names {
