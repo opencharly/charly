@@ -44,7 +44,11 @@ jobs:
     if: >
       github.event_name == 'push' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    # The org's self-hosted fleet (label `opencharly`) runs this instead of a GitHub-hosted
+    # runner, whose queue can stall a tag indefinitely: a hosted run sat `queued` for >15 min
+    # and never started, and that queue reds the required `validate / validate` check (charly#806).
+    # The hosted runner remains the fallback, so an unset variable can never strand a merge.
+    runs-on: ${{ vars.CI_RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - name: Wait for triggering PR to merge (bounded readiness probe)
         uses: actions/github-script@v7

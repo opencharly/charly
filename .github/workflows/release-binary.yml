@@ -67,7 +67,11 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # The org's self-hosted fleet (label `opencharly`) runs this instead of a GitHub-hosted
+    # runner, whose queue can stall a release build indefinitely: a hosted run sat `queued`
+    # for >15 min and never started, and that queue reds the required `validate / validate`
+    # check (charly#806). The hosted runner remains the fallback.
+    runs-on: ${{ vars.CI_RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v5
         with:

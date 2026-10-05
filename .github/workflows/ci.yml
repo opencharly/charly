@@ -23,7 +23,13 @@ permissions:
 
 jobs:
   go:
-    runs-on: ubuntu-latest
+    # The org's self-hosted fleet (label `opencharly`, host `no`) runs this instead of a
+    # GitHub-hosted runner, whose queue can stall a run indefinitely: a hosted run sat
+    # `queued` for >15 min and never started, and because the org-required `validate /
+    # validate` gate waits for the head's check-runs to settle and then fails after 600 s,
+    # that queue reds the required check on an otherwise-PASSing PR (charly#806). The
+    # hosted runner remains the fallback, so an unset variable degrades to today's behaviour.
+    runs-on: ${{ vars.CI_RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v5
         with:
