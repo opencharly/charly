@@ -93,7 +93,40 @@ func canonicalProviderRef(class ProviderClass, word, parent, callerRef string) s
 	return "@" + ref
 }
 
+// InvokeProvider serves a PEER PLUGIN's request that the HOST perform a (class, word, op) provider
+// call on its behalf — the reverse half of the peer↔peer seam, reached whenever a plugin's own
+// exec.InvokeProvider callback comes back here.
+//
+// The work served is HOST work, and it is invisible to the caller's progress clock by construction.
+// It runs either in THIS process (a compiled-in provider, providerPid → 0) or in a peer plugin
+// process whose only route to this clock is its own reverse legs — and the overlay resolve
+// (`build:generate` op=resolve) makes NONE: its whole host-FS prep (cleanStaleBuildDirs,
+// createRemoteCandyCopies, the container image-store listing — host_prep.go, zero ex. calls) is
+// local FS work. Meanwhile the CALLER is parked in this callback, so it burns no CPU either. So the
+// clock that watches the caller (s.activity) must be heartbeated for exactly as long as the host is
+// serving its request, which is what HostBuild above already does for the builds it runs on a
+// plugin's behalf, and what startPluginActivityHeartbeat's doc states as the invariant ("host_build_cli
+// and the host reverse legs wrap their blocking work with this"). InvokeProvider was the ONE host
+// reverse leg that did not — measured on its own: a legitimately long prepare-venue was false-killed
+// as idle at the no-progress window with `host reverse legs=2 (last 1m47.5s ago), CPU advances=1`,
+// peer frozen at 33 ticks (#699, reproduced deterministically off a live bed with no bed needed).
+//
+// This does NOT widen the guard. The served call keeps its OWN idle bound (invokeProvider, below),
+// so a wedged out-of-process peer still fails fast on that clock; its error propagates here and
+// stops the heartbeat.
 func (s *executorReverseServer) InvokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
+	var reply *pb.InvokeReply
+	err := withActivityHeartbeatErr(s.activity, func() error {
+		var serr error
+		reply, serr = s.invokeProvider(ctx, req)
+		return serr
+	})
+	return reply, err
+}
+
+// invokeProvider is InvokeProvider's body — the dispatch itself, split out only so the heartbeat
+// above can wrap it (see InvokeProvider for why it must).
+func (s *executorReverseServer) invokeProvider(ctx context.Context, req *pb.InvokeProviderRequest) (*pb.InvokeReply, error) {
 	class := ProviderClass(req.GetClass())
 	word := req.GetReserved()
 	parent := req.GetCommandParent()
