@@ -845,7 +845,7 @@ check-kubevirt-vm-vmi:
             charly_install:
                 strategy: auto
         description: >-
-            A charly-built VM box (the /disk/disk.img containerDisk layout) booted
+            A charly-built VM box (the /disk.qcow2 in-image disk) booted
             as a KubeVirt containerDisk on the check-kubevirt-vm k3s node.
 # The bed's OWN per-deploy-domain kind:kubernetes profile (task #18). The bed's
 # root is the shared k3s-vm entity, so its context is domain-scoped.
@@ -878,7 +878,7 @@ check-kubevirt-vm:
             skip_incompatible: true
             verify: true
         description: >-
-            R10 for the full guest-VM leg: a charly-built VM box (charly vm build --container-disk → /disk/disk.img) retagged to a stable ref (charly vm retag) and booted as a KubeVirt containerDisk on a disposable libvirt Arch k3s VM (the shared k3s-vm entity + k3s-server + layer-kubevirt-operator (KubeVirt + CDI) + layer-kubevirt (virtctl), cpu.mode host-passthrough for nested KVM). The sibling check-kubevirt-vm-guest member (a kubevirt: deploy) delivers the box into the node's containerd (plugin-kubevirt's self-contained PrepareVenue delivery) and applies the VM CR, waiting VMI Ready + AgentConnected. The host-side plan asserts the KubeVirt platform Deployed, the VMI Ready, and the guest agent connected; the guest member's own plan runs in the booted VMI over the managed port-forward. A fresh `charly update` destroy+rebuild+recheck is the R10 gate.
+            R10 for the full guest-VM leg: a charly-built VM box (charly vm build --container-disk → /disk.qcow2) retagged to a stable ref (charly vm retag) and booted as a KubeVirt containerDisk on a disposable libvirt Arch k3s VM (the shared k3s-vm entity + k3s-server + layer-kubevirt-operator (KubeVirt + CDI) + layer-kubevirt (virtctl), cpu.mode host-passthrough for nested KVM). The sibling check-kubevirt-vm-guest member (a kubevirt: deploy) delivers the box into the node's containerd (plugin-kubevirt's self-contained PrepareVenue delivery) and applies the VM CR, waiting VMI Ready + AgentConnected. The host-side plan asserts the KubeVirt platform Deployed, the VMI Ready, and the guest agent connected; the guest member's own plan runs in the booted VMI over the managed port-forward. A fresh `charly update` destroy+rebuild+recheck is the R10 gate.
         plan:
             - check: the k3s control plane reports a Ready node before the KubeVirt probes
               id: kvv-wait-nodes
@@ -951,19 +951,11 @@ check-kubevirt-vm:
     # `[deploy]` run step never fires; the runner's member-build arm is the runnable
     # hook. Declaring the containerDisk box's source entity as a VM MEMBER makes the
     # runner run `charly vm build check-kubevirt-vm-box` BEFORE members-up — which
-    # emits the box at /disk/disk.img (the ONE layout) — so the guest member's
+    # emits the box at /disk.qcow2 (the in-image path the VMI names) — so the guest member's
     # PrepareVenue has the image to deliver into the node's containerd.
     check-kubevirt-vm-boxrun:
         vm:
             from: check-kubevirt-vm-box
-# check-k8s-deploy-app — the check-k8s-deploy bed's target:kubernetes WORKLOAD fixture.
-# A minimal Fedora base box composed from LOCAL pure-rpm candies (supervisord +
-# os-layer; no builder, no @github candy refs), so it builds from the root project —
-# where the distro namespace boxes (fedora.web, …) do NOT, because their candies are
-# @github refs the root resolver does not materialize. It is a disposable-bed FIXTURE
-# (the minimal charly image the deploy:kubernetes substrate deploys), analogous to the
-# kind:local check-*-app templates — not a production box, so it does not breach the
-# "main owns no boxes" inversion (which concerns the shipped image catalog).
 
 check-kubevirt-operator:
     vm:
