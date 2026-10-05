@@ -54,11 +54,15 @@ check-pkg-uninstall-fixture:
         description: |-
             Fixture: installs an EXACT-VERSION-PINNED charly from the published charly-arch
             repo via the `distro: arch. package:/repo:` path, so the deploy's teardown
-            renders the pac `uninstall_template` ({{pkgName .}}) and executes it.
+            renders the pac `uninstall_template` ({{pkgName .}}) and executes it. It also
+            declares `curl`, which the guest base ALREADY provides, so the same teardown
+            proves the declared-minus-installed subtraction (charly#771): `curl` must never
+            appear in a recorded removal op, while the genuinely-installed `charly` must.
         distro:
             arch:
                 package:
                     - charly=2026.268.1917
+                    - curl
                 repo:
                     - name: charly
                       server: "https://opencharly.github.io/charly-arch/amd64/"
@@ -150,6 +154,16 @@ check-pkg-uninstall-inner:
                              | sed -e 's/^[[:space:]]*uninstall_cmd:[[:space:]]*//'; } || true )
                     echo "uninstall_cmd=[$cmd]"
                     test -n "$cmd" || { echo "the bare charly uninstall_cmd was not recorded — the production render path did not run" >&2; exit 1; }
+                    # Non-vacuous witness: if `curl` were NOT present on the venue, the
+                    # subtraction would be a no-op and the next assertion would pass for the
+                    # wrong reason. Assert the pre-condition explicitly.
+                    pacman -Q curl >/dev/null 2>&1 || { echo "curl is not present on the venue — the declared-minus-installed witness is vacuous" >&2; exit 1; }
+                    # The one assertion this leg exists for: a package the venue ALREADY had
+                    # must never appear in a recorded removal op.
+                    if grep -q 'uninstall_cmd:.*curl' "$LED"; then
+                      echo "curl was already present on the venue but still appears in a removal op — the teardown delta was NOT applied" >&2
+                      exit 1
+                    fi
                     # Persist the rendered command durably IN THE GUEST (the per-bed ledger is
                     # removed at bed teardown) so the outer bed's evidence-harvest step can
                     # retain it after this nested run returns.

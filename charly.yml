@@ -1330,22 +1330,22 @@ check-builder-vm:
         lifecycle: dev
         description: >-
             Sole proof of the builder DEPLOY leg (runVenueBuilderStep → runVenueHomeArtifactBuilder) applying a built-in npm detection-builder candy to a venue, run INSIDE the disposable eval VM (off the operator's workstation). Nests check-builder-local-app (composing check-builder-npm, a package.json declaring the tiny zero-dep is-number) under the vm node via kit.NestedExecutor: at deploy charly compiles the npm global prefix in the fedora.fedora-builder image HOST-SIDE (the host-engine builder leg over RunHostStep) and ships ~/.npm-global onto the GUEST venue; the nested member's marker check asserts ~/.npm-global/lib/node_modules/is-number in the GUEST home, never the operator's. The builder image is pinned via the member's install_opts.builder_image (a kind:local template has no base-distro builder wiring). The C1.3 pod-overlay BUILD-emit is proven separately by the real-chain unit tests + the live check-addcandy-pod pod-overlay dispatch.
-    check-builder-member:
-        local:
-            # NESTED under the vm node (tree position) → deploys INTO the eval VM guest via
-            # kit.NestedExecutor. No `host:` field: the venue comes from the parent. The builder
-            # DEPLOY leg compiles host-side and ships ~/.npm-global onto the GUEST venue.
-            from: check-builder-local-app
-            install_opts:
-                builder_image: fedora.fedora-builder
-                allow_root_tasks: true
-            plan:
-                - check: the npm builder deployed the is-number artifact into ~/.npm-global INSIDE the eval VM guest (proves the builder DEPLOY leg runVenueBuilderStep → runVenueHomeArtifactBuilder applied a detection-builder candy end-to-end to a nested guest venue)
-                  id: builder-artifact-present-in-guest
-                  context:
-                    - runtime
-                  command:
-                    command: 'test -f "$HOME/.npm-global/lib/node_modules/is-number/package.json"'
+        check-builder-member:
+            local:
+                # NESTED under the vm node (tree position) → deploys INTO the eval VM guest via
+                # kit.NestedExecutor. No `host:` field: the venue comes from the parent. The builder
+                # DEPLOY leg compiles host-side and ships ~/.npm-global onto the GUEST venue.
+                from: check-builder-local-app
+                install_opts:
+                    builder_image: fedora.fedora-builder
+                    allow_root_tasks: true
+                plan:
+                    - check: the npm builder deployed the is-number artifact into ~/.npm-global INSIDE the eval VM guest (proves the builder DEPLOY leg runVenueBuilderStep → runVenueHomeArtifactBuilder applied a detection-builder candy end-to-end to a nested guest venue)
+                      id: builder-artifact-present-in-guest
+                      context:
+                        - runtime
+                      command:
+                        command: 'test -f "$HOME/.npm-global/lib/node_modules/is-number/package.json"'
 # =============================================================================
 # check-group — R10 witness for the POST-MIGRATE member-tree bed shape with an
 # IN-SUBSTRATE nested member (the group-kind removal's unroll-group-deploy target
@@ -1379,28 +1379,28 @@ check-group:
         lifecycle: dev
         description: >-
             R10 witness for the POST-MIGRATE member-tree bed shape with an IN-SUBSTRATE nested member (the group-kind removal's unroll-group-deploy target spelling, Cutover C task 1): the former targetless `group:` node was unrolled by `charly migrate` — the first member (check-group-vm) became this vm: primary carrying the group scalars, and the bed's structure is otherwise unchanged. The nested check-group-member (a kind:local deploy of check-group-app) stays INSIDE the vm node — tree position, no `host:` field — so it lands INSIDE the disposable eval VM via kit.NestedExecutor and the marker is written on the GUEST filesystem, never the operator's workstation. The marker check is authored on the MEMBER'S OWN node plan: a composed candy's `plan:` is NEVER surfaced to a deploy-scope check runner for a non-image deploy, so a check authored only in check-group-layer silently never ran (this bed printed "No plan steps to run." and asserted NOTHING before that fix). NOTE: a nested child runs on NestedExecutor over the guest venue, NOT ShellExecutor; the host-side ShellExecutor + HostDeployTarget arm is witnessed by check-local running INSIDE the guest-as-host VM (the check-local-vm bed) — the guest's charly applies check-local to the GUEST'S OWN host:local via the guest ShellExecutor + HostDeployTarget, still ShellExecutor, just off the operator's workstation (see /charly-core:deploy "Deploy-into nesting").
-    # NESTED under the vm node (tree position) => the local: deploy lands INSIDE
-    # the guest via kit.NestedExecutor. No `host:` field: the venue comes from the
-    # parent. Precedent: box/arch check-arch-vm -> arch-host.
-    check-group-member:
-        local:
-            from: check-group-app
-            # The marker check is authored HERE, on the deploy node's OWN plan. A composed
-            # candy's `plan:` is NEVER surfaced to a deploy-scope check runner for a non-image
-            # deploy (the --verify plan-assembly sources only the template's plan, the node's
-            # plan, and the folded entry). The check that lived only in check-group-layer therefore
-            # never executed and this bed passed asserting nothing. hoistVenueSubtree lifts the
-            # step to the group root with venue `check-group-vm.check-group-member` — the guest.
-            plan:
-                - check: command=test -f /etc/check-group-marker && echo GROUP-MEMBER-DEPLOY-OK
-                  id: cg-member-marker-in-guest
-                  description: the group's authored member deployed INTO the eval VM and its layer wrote /etc/check-group-marker on the GUEST filesystem
-                  stdout:
-                    - contains: GROUP-MEMBER-DEPLOY-OK
-                  context:
-                    - runtime
-                  command:
-                    command: "test -f /etc/check-group-marker && echo GROUP-MEMBER-DEPLOY-OK"
+        # NESTED under the vm node (tree position) => the local: deploy lands INSIDE
+        # the guest via kit.NestedExecutor. No `host:` field: the venue comes from the
+        # parent. Precedent: box/arch check-arch-vm -> arch-host.
+        check-group-member:
+            local:
+                from: check-group-app
+                # The marker check is authored HERE, on the deploy node's OWN plan. A composed
+                # candy's `plan:` is NEVER surfaced to a deploy-scope check runner for a non-image
+                # deploy (the --verify plan-assembly sources only the template's plan, the node's
+                # plan, and the folded entry). The check that lived only in check-group-layer therefore
+                # never executed and this bed passed asserting nothing. hoistVenueSubtree lifts the
+                # step to the group root with venue `check-group-vm.check-group-member` — the guest.
+                plan:
+                    - check: command=test -f /etc/check-group-marker && echo GROUP-MEMBER-DEPLOY-OK
+                      id: cg-member-marker-in-guest
+                      description: the group's authored member deployed INTO the eval VM and its layer wrote /etc/check-group-marker on the GUEST filesystem
+                      stdout:
+                        - contains: GROUP-MEMBER-DEPLOY-OK
+                      context:
+                        - runtime
+                      command:
+                        command: "test -f /etc/check-group-marker && echo GROUP-MEMBER-DEPLOY-OK"
 # =============================================================================
 # check-structkind — R10 witness for F5 authored-member INPUT-threading, run INSIDE
 # the disposable eval VM (moved off the operator host per the eval-bed hygiene directive).
@@ -4029,33 +4029,33 @@ check-kind-host-vm:
             a vm node deploys into the guest, never the host — so the profile's
             packages (kind + the per-engine kind-engine-prepare preconditions +
             kubectl/helm) land in the guest, and the member's own plan asserts it.
-    # NESTED under the vm node (tree position) => the local: deploy of the PROFILE
-    # lands INSIDE the guest via kit.NestedExecutor. No `host:` field: the venue
-    # comes from the parent. The check is authored HERE (mirror check-group-member):
-    # a composed candy's plan never reaches a deploy-scope check runner for a
-    # non-image deploy.
-    check-kind-host-member:
-        local:
-            from: kind-host
-            plan:
-                - check: the kind-host profile delivered the layer-kind toolchain INTO the eval VM guest (kind + kubectl + helm on PATH; the kind-engine-prepare preconditions + the node-image pin file present)
-                  id: kind-host-tooling-in-guest
-                  description: >-
-                    The Phase 5 profile actually applied to a host: the composed
-                    layer-kind toolchain landed in the GUEST, not on the operator's
-                    workstation.
-                  stdout:
-                    - contains: KIND-HOST-PROFILE-OK
-                  context:
-                    - runtime
-                  command:
-                    command: |
-                        set -eu
-                        for t in kind kubectl helm; do
-                          command -v "$t" >/dev/null 2>&1 || { echo "kind-host profile missing $t" >&2; exit 1; }
-                        done
-                        kind version
-                        kubectl version --client >/dev/null
-                        test -x /usr/local/bin/kind-engine-prepare
-                        test -f /etc/charly/kind-node-image
-                        echo KIND-HOST-PROFILE-OK
+        # NESTED under the vm node (tree position) => the local: deploy of the PROFILE
+        # lands INSIDE the guest via kit.NestedExecutor. No `host:` field: the venue
+        # comes from the parent. The check is authored HERE (mirror check-group-member):
+        # a composed candy's plan never reaches a deploy-scope check runner for a
+        # non-image deploy.
+        check-kind-host-member:
+            local:
+                from: kind-host
+                plan:
+                    - check: the kind-host profile delivered the layer-kind toolchain INTO the eval VM guest (kind + kubectl + helm on PATH; the kind-engine-prepare preconditions + the node-image pin file present)
+                      id: kind-host-tooling-in-guest
+                      description: >-
+                        The Phase 5 profile actually applied to a host: the composed
+                        layer-kind toolchain landed in the GUEST, not on the operator's
+                        workstation.
+                      stdout:
+                        - contains: KIND-HOST-PROFILE-OK
+                      context:
+                        - runtime
+                      command:
+                        command: |
+                            set -eu
+                            for t in kind kubectl helm; do
+                              command -v "$t" >/dev/null 2>&1 || { echo "kind-host profile missing $t" >&2; exit 1; }
+                            done
+                            kind version
+                            kubectl version --client >/dev/null
+                            test -x /usr/local/bin/kind-engine-prepare
+                            test -f /etc/charly/kind-node-image
+                            echo KIND-HOST-PROFILE-OK

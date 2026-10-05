@@ -98,6 +98,91 @@ func TestPluginDeployTarget_ApplyParentExecOverride(t *testing.T) {
 	})
 }
 
+// TestPluginDeployTarget_ApplyDelParentExec is applyParentExecOverride's DEL twin regression test
+// (opencharly/charly#765). `charly deploy del <root>.<member>` for an IN-SUBSTRATE nested member is
+// forked as a FRESH process by the check bed's cleanup step (candy/plugin-check/bed_run.go), so the
+// in-process venue carry between add and del never applied: the del dispatch carried no venue_json,
+// candy/plugin-fleet's resolveRootExecutor fell through to RootExecutorForDeployNode(node) — the
+// OPERATOR'S HOST for a member with no `host:` field — and the member's reversible ops (a
+// `package:` list's `pacman -R`) replayed against the workstation while its `add` had landed
+// correctly in the guest. This asserts BOTH halves directly (t.exec mutated AND the wire-safe
+// descriptor written), so a refactor restoring only one fails here instead of only in a live bed.
+func TestPluginDeployTarget_ApplyDelParentExec(t *testing.T) {
+	guestSSH := &exec.SSHExecutor{User: "arch", Host: "charly-check-kind-host-vm", Port: 2222, ConnectTimeout: 10}
+
+	t.Run("non-lifecycle nested member's teardown swaps to the ancestor venue", func(t *testing.T) {
+		tgt := &pluginDeployTarget{hasLifecycle: false, exec: exec.ShellExecutor{}}
+		tgt.applyDelParentExec(guestSSH)
+
+		if tgt.exec != spec.DeployExecutor(guestSSH) {
+			t.Fatalf("t.exec = %#v (%T), want the re-derived ancestor executor %#v — a nested member's "+
+				"teardown (and every reverse leg this dispatch drives, the `pacman -R` of a `package:` "+
+				"list included) must run against the member's PARENT venue, never the host ShellExecutor "+
+				"ResolveTarget fell back to", tgt.exec, tgt.exec, guestSSH)
+		}
+		if len(tgt.venueJSON) == 0 {
+			t.Fatalf("applyDelParentExec wrote no venue_json — pluginDeployTarget.dispatch threads " +
+				"t.venueJSON as the del request's VenueJSON, and candy/plugin-fleet's resolveRootExecutor " +
+				"has nothing to re-materialize from without it: it silently falls back to " +
+				"specexec.RootExecutorForDeployNode(req.Node) = THE OPERATOR'S HOST, exactly the " +
+				"destructive regression this fix closes (charly#765)")
+		}
+		var got spec.VenueDescriptor
+		if err := json.Unmarshal(tgt.venueJSON, &got); err != nil {
+			t.Fatalf("venue_json does not decode as spec.VenueDescriptor: %v (raw=%s)", err, tgt.venueJSON)
+		}
+		want := spec.VenueDescriptor{Kind: "ssh", User: "arch", Host: "charly-check-kind-host-vm", Port: 2222, ConnectTimeout: 10}
+		if got.Kind != want.Kind || got.User != want.User || got.Host != want.Host ||
+			got.Port != want.Port || got.ConnectTimeout != want.ConnectTimeout || len(got.Args) != 0 {
+			t.Fatalf("venue_json descriptor = %+v, want %+v (must describe the GUEST venue, not a "+
+				"shell/empty descriptor that re-materializes to the host)", got, want)
+		}
+		// Round-trip through the real inverse the plugin uses, so this proves the guest is ACTUALLY
+		// re-materialized plugin-side rather than merely that the intermediate JSON looks right.
+		reExec, err := exec.VenueFromDescriptor(got)
+		if err != nil {
+			t.Fatalf("exec.VenueFromDescriptor(%+v): %v", got, err)
+		}
+		reSSH, ok := reExec.(*exec.SSHExecutor)
+		if !ok {
+			t.Fatalf("re-materialized executor = %T, want *exec.SSHExecutor (the guest)", reExec)
+		}
+		if reSSH.Host != guestSSH.Host || reSSH.Port != guestSSH.Port || reSSH.User != guestSSH.User {
+			t.Fatalf("re-materialized executor = %+v, want a guest connection matching %+v", reSSH, guestSSH)
+		}
+	})
+
+	t.Run("lifecycle substrate (vm/pod) is untouched — its teardown-executor op owns the venue", func(t *testing.T) {
+		hostExec := exec.ShellExecutor{}
+		tgt := &pluginDeployTarget{hasLifecycle: true, exec: hostExec}
+		tgt.applyDelParentExec(guestSSH)
+
+		if len(tgt.venueJSON) != 0 {
+			t.Fatalf("venue_json = %s, want empty — a lifecycle substrate resolves its teardown venue "+
+				"through its own teardown-executor op (candy/plugin-fleet/deploy_target.go), which must "+
+				"not be pre-empted by an ancestor's venue", tgt.venueJSON)
+		}
+		if tgt.exec != spec.DeployExecutor(hostExec) {
+			t.Fatalf("t.exec = %#v, want unchanged %#v", tgt.exec, hostExec)
+		}
+	})
+
+	t.Run("top-level deploy is untouched — no ancestor chain shipped", func(t *testing.T) {
+		hostExec := exec.ShellExecutor{}
+		tgt := &pluginDeployTarget{hasLifecycle: false, exec: hostExec}
+		tgt.applyDelParentExec(nil) // spec.ReconstructParentExec returns a nil parentExec for empty lists
+
+		if len(tgt.venueJSON) != 0 {
+			t.Fatalf("venue_json = %s, want empty for a top-level target with no ancestor chain — it "+
+				"must derive its OWN root executor from its own node, never a phantom ancestor venue",
+				tgt.venueJSON)
+		}
+		if tgt.exec != spec.DeployExecutor(hostExec) {
+			t.Fatalf("t.exec = %#v, want unchanged %#v", tgt.exec, hostExec)
+		}
+	})
+}
+
 // TestPluginDeployTarget_BracketedLifecycle is the regression test for the deploy-cone cutover 1
 // item-1 fix: Start/Stop's "does this substrate need the Q1 resource-arbiter bracket" signal comes
 // from the DECLARED #DeployTraits.bracketed_lifecycle resolved BY the substrate WORD from the

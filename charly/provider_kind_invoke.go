@@ -421,7 +421,15 @@ func validateKindValueCUE(pn spec.ParsedNode) error {
 	if def.Err() != nil {
 		return fmt.Errorf("kind value def %s not found: %w", defPath, def.Err())
 	}
-	entity, err := requireProjectLoader().CueDocFromJSON("node "+pn.Name, pn.Body)
+	// Gate the node's OWN kind value only: a parser-classified member child carried in the
+	// authored body (its tree-position channel) is not a kind-value field. Strip it exactly as
+	// the member-path emitters (discValue / EntityBodyJSON) already do, so this closed
+	// #<Kind>Value arm sees the same body the member path does.
+	bodyJSON, err := requireProjectLoader().EntityBodyJSON(pn)
+	if err != nil {
+		return err
+	}
+	entity, err := requireProjectLoader().CueDocFromJSON("node "+pn.Name, bodyJSON)
 	if err != nil {
 		return err
 	}

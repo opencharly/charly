@@ -617,6 +617,8 @@ arch:
                             # succeed when the keyring was already current.
                             (pacman-key --populate 2>/dev/null || true) && \
                             OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
+                present_template: |
+                    for p in{{range .Packages}} {{pkgName .}}{{end}}; do if pacman -Q "$p" >/dev/null 2>&1; then echo "$p"; fi; done
                 uninstall_template: |
                     pacman -Rs --noconfirm{{range .Packages}} {{pkgName .}}{{end}}
                 local_pkg:
@@ -1371,6 +1373,8 @@ debian:
                             {{- range .Options}} {{.}}{{end}}
                             {{- range .Packages}} \
                                   {{.}}{{end}}
+                present_template: |
+                    for p in{{range .Packages}} {{pkgName .}}{{end}}; do if dpkg -s "$p" 2>/dev/null | grep -q '^Status: install ok installed'; then echo "$p"; fi; done
                 uninstall_template: |
                     DEBIAN_FRONTEND=noninteractive apt-get purge -y{{range .Packages}} {{pkgName .}}{{end}}
         debootstrap:
@@ -1678,6 +1682,8 @@ fedora:
                             {{- range .Copr}} && \
                                 dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:{{replace . "/" ":"}}.enabled=0"
                             {{- end}}
+                present_template: |
+                    for p in{{range .Packages}} {{pkgName .}}{{end}}; do if rpm -q "$p" >/dev/null 2>&1; then echo "$p"; fi; done
                 uninstall_template: |
                     dnf remove -y{{range .Packages}} {{pkgName .}}{{end}}
 ubuntu:

@@ -153,8 +153,8 @@ github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039 h1:gVsGunNwjAj
 github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039/go.mod h1:T8OUkUuqalqrlrL0HP2cwMAIdE+c7qgQMKnAlEZke7U=
 github.com/opencharly/plugin-command/candy/plugin-command v0.2026277.738 h1:ZyIU/OMVb88qo1n4/zveQI5LxVFm3AxphdeMl0wiVX0=
 github.com/opencharly/plugin-command/candy/plugin-command v0.2026277.738/go.mod h1:NhU1sjx93aEuAYxJOxHzwrCIJ+BkYZSzZiDw0pwxiPU=
-github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026272.29 h1:MECigU8XmqqmAPje+0z05tllLegOTg9WfZifs0cFuSU=
-github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026272.29/go.mod h1:8WXUrJrUfaSssXpZTJlfP+0nb/1P4gmk9LbU/iw+NRo=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457 h1:mSaW4gGMq8uQyCkNfhGjS92lV27gb9KZaT7kfGzqBX4=
+github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457/go.mod h1:Qjsz/vym+T7bPc/nGMaDvj1PNPG3we2zjPHWmbU2hBo=
 github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026272.30 h1:DjV+xnlhlmfP9k/4doryMRgAF5sG/jD+Ywt+MtI4m10=
 github.com/opencharly/plugin-dns/candy/plugin-dns v0.2026272.30/go.mod h1:v0cn/k1CRWVxIG4rDc+ba4dSumDyapHQTN2Cdz6CppY=
 github.com/opencharly/plugin-doctor/candy/plugin-doctor v0.2026272.33 h1:7Bxy8kmiO/H5OZTit3PV9mHwo1n1nbMCKM/LM5obaUg=
