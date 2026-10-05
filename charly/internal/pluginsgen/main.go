@@ -147,10 +147,16 @@ func writeDevWork(root, rel string, body []byte) error {
 // (TestPluginsGenReproducible) can diff against the committed files.
 // collectWordRefs builds the provider-ref INDEX ("<class>:<word>" -> canonical candy ref)
 // by reading every plugin repo's OWN `plugin:` block — a pure PROJECTION of the plugin
-// repos (boundary-law clause D); core keeps no hand-written word->ref map. A -dev-plugin
-// override re-points a compiled-in plugin's WHOLE read at the local checkout (the same tree
-// the build resolves); an unavailable/out-of-tree corpus repo simply contributes no words,
-// while a compiled-in one that cannot be indexed is a genuine build error.
+// repos (boundary-law clause D); core keeps no hand-written word->ref map. An
+// unavailable/out-of-tree corpus repo simply contributes no words, while a compiled-in one
+// that cannot be indexed is a genuine build error.
+//
+// A word may be declared by BOTH a compiled-in plugin AND an external one — the by-design
+// coexist the runtime per-word loader allows (charly#686): e.g. `kind:kubevirt` is the
+// compiled-in plugin-substrate STRUCTURAL kind, re-declared by the external plugin-kubevirt
+// alongside its OWN deploy/verb/command words. The compiled-in provider WINS the word; only
+// TWO EXTERNAL providers for one word is a hard error (one canonical external provider per
+// word).
 func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[string]string, error) {
 	wordRefs := map[string]string{}
 	for _, repo := range repoList {
@@ -177,8 +183,19 @@ func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[
 			continue
 		}
 		for word, ref := range refsForRepo {
-			if prev, dup := wordRefs[word]; dup && prev != ref {
-				return nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+			prev, dup := wordRefs[word]
+			if dup && prev != ref {
+				_, prevCompiled := repoSetCompiled(names, prev)
+				_, thisCompiled := repoSetCompiled(names, ref)
+				if prevCompiled == thisCompiled {
+					return nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+				}
+				if thisCompiled {
+					// The compiled-in provider owns the word; the external re-declaration
+					// coexists (charly#686) and must not error.
+					wordRefs[word] = ref
+				}
+				continue
 			}
 			wordRefs[word] = ref
 		}
@@ -525,11 +542,15 @@ func readCorpus(root, path string) []string {
 	return out
 }
 
-// repoSetCompiled reports whether a repo path is one of the compiled-in plugin repos
-// (github.com/opencharly/<name>) — a compiled repo that cannot be indexed is fatal.
+// repoSetCompiled reports whether a repo path (or a candy/provider REF under it) is one of
+// the compiled-in plugin repos (github.com/opencharly/<name>) — a compiled repo that cannot
+// be indexed is fatal.
 func repoSetCompiled(names []string, repo string) (string, bool) {
 	for _, n := range names {
-		if repo == "github.com/opencharly/"+n {
+		root := "github.com/opencharly/" + n
+		// root OR a subpath: a candy/provider REF is "<root>/candy/<x>", while a repo
+		// PATH is exactly <root> — one predicate serves both (R3).
+		if repo == root || strings.HasPrefix(repo, root+"/") {
 			return n, true
 		}
 	}
