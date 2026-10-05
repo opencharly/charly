@@ -94,24 +94,26 @@ CALVER="$(bash scripts/calver.sh)"
 (cd charly && GOWORK="$GOWORK_PATH" go build -buildvcs=false \
   -ldflags "-X main.BuildCalVer=${CALVER}" -o ../bin/.charly.next .)
 
-# Workspace-mode Go may extend a workspace's checksum lock when a compiled plugin adds a
-# module-graph requirement, and pluginsgen rewrites go.work itself. Either would leave a
-# nominally successful build holding an unexplained dirty tree, so surface it immediately.
-# A --dev-plugin build writes NEITHER: its lock is go.work.dev.sum, next to its workspace.
-# The guard runs only inside a Git worktree (a git-less source export has no lineage).
-if git rev-parse --git-dir >/dev/null 2>&1; then
-  dirty=()
-  for f in go.work go.work.sum; do
-    git diff --quiet -- "$f" || dirty+=("$f")
-  done
-  if [ ${#dirty[@]} -gt 0 ]; then
-    echo "bootstrap-charly: generation/build changed tracked ${dirty[*]}" >&2
-    echo "Review and commit the workspace wiring, then re-run bootstrap-charly.sh." >&2
-    git diff -- "${dirty[@]}" >&2
-    rm -f bin/.charly.next
-    exit 1
-  fi
-fi
+# pluginsgen and workspace-mode Go both REWRITE TRACKED files, so a nominally successful
+# build must not leave an unexplained dirty tree. plugins_generated.go + go.work follow from
+# charly.yml and the go.mod pins, go.work.sum is their checksum lock, and
+# plugins_refs_generated.go follows from each corpus plugin's default branch. The check
+# classifies what changed and acts on the CLASS: a file derived from tracked inputs is this
+# checkout's own inconsistency, so it FAILS here for review and commit; the upstream-derived
+# index is NAMED and restored, because nothing in this checkout can fix it and in a detached
+# umbrella submodule the commit remedy is forbidden (opencharly/charly#792).
+# The class list lives in the check, not here — it is the ONE definition (run it with
+# --list). Exit 2 means there is no git lineage to compare against (a source export): the
+# check has already said so, and it is not a build failure.
+guard=0
+bash scripts/check-generated-clean.sh || guard=$?
+case "$guard" in
+  0) ;;
+  1) rm -f bin/.charly.next; exit 1 ;;
+  2) echo "bootstrap-charly: no git lineage here — the generated-file guard was skipped" >&2 ;;
+  *) echo "bootstrap-charly: the generated-file guard failed unexpectedly (exit $guard)" >&2
+     rm -f bin/.charly.next; exit 1 ;;
+esac
 
 mv bin/.charly.next bin/charly
 if [ ${#dev_specs[@]} -gt 0 ]; then
