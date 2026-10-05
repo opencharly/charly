@@ -199,25 +199,11 @@ func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, g
 		return nil, nil, nil, nil, err
 	}
 
-	// pluginRepos is the set of plugin repos whose manifests are indexed: the
-	// compiled_plugins: corpus PLUS any org-wide corpus (the umbrella's plugin-* set),
-	// so an out-of-tree plugin (a substrate served out-of-process, never compiled in)
-	// is still discoverable by word. Every repo is read for its OWN `plugin:` blocks —
-	// the word->ref FACT lives only in each plugin's manifest, never in charly.
-	repoSet := map[string]bool{}
-	for _, n := range names {
-		repoSet["github.com/opencharly/"+n] = true
-	}
-	for _, r := range readCorpus(root, corpusFile) {
-		if r != "" {
-			repoSet[strings.TrimSpace(r)] = true
-		}
-	}
-	repoList := make([]string, 0, len(repoSet))
-	for r := range repoSet {
-		repoList = append(repoList, r)
-	}
-	sort.Strings(repoList)
+	// pluginRepos: the repos whose manifests are indexed — the compiled_plugins: corpus
+	// PLUS any org-wide corpus (the umbrella's plugin-* set). Every repo is read for its OWN
+	// `plugin:` blocks — the word->ref FACT lives only in each plugin's manifest, never in
+	// charly.
+	repoList := corpusRepoList(root, corpusFile, names)
 
 	// wordRefs is the generated provider-ref INDEX ("<class>:<word>" -> canonical candy
 	// ref), a pure PROJECTION of the plugin repos (boundary-law clause D): the core keeps
@@ -491,6 +477,30 @@ func readCompiledPlugins(path string) ([]string, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return doc.CompiledPlugins, nil
+}
+
+// corpusRepoList returns the plugin repos whose manifests the word->ref index covers: the
+// compiled_plugins: list PLUS the org-wide corpus file, so an out-of-tree plugin (a substrate
+// served out-of-process, never compiled in) is still discoverable by word. Sorted, so the
+// generated index is stable. This is the ONE place that set is built — the generator and the
+// index soundness gate (internal/pluginsgen/main_test.go, TestPluginsRefsIndexSound) must not
+// disagree about what "the corpus" means.
+func corpusRepoList(root, corpusFile string, names []string) []string {
+	repoSet := map[string]bool{}
+	for _, n := range names {
+		repoSet["github.com/opencharly/"+n] = true
+	}
+	for _, r := range readCorpus(root, corpusFile) {
+		if r != "" {
+			repoSet[strings.TrimSpace(r)] = true
+		}
+	}
+	repoList := make([]string, 0, len(repoSet))
+	for r := range repoSet {
+		repoList = append(repoList, r)
+	}
+	sort.Strings(repoList)
+	return repoList
 }
 
 // readCorpus returns the plugin repo paths named in the optional corpus file (the
