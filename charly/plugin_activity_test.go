@@ -113,6 +113,53 @@ func TestIdleBoundedContext_TripsOnlyWhenIdle(t *testing.T) {
 	stop2()
 }
 
+// TestPluginInvokeErr_CarriesTheStallReport is the regression guard for the FIRST R10 run of
+// this change: the watchdog cancelled with fmt.Errorf("%w: %s", errPluginCallIdle,
+// stallReport), but pluginInvokeErr re-wrapped the BARE sentinel, so the bed got a conclusion
+// with no evidence — the exact defect #699 is about, reproduced by the fix for it, and
+// invisible to errors.Is. The report has to survive to the caller.
+func TestPluginInvokeErr_CarriesTheStallReport(t *testing.T) {
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 100 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
+
+	// A real idle kill, deterministic: pid 0 turns the CPU source off, so only the absent
+	// host legs are watched and the 100ms window always trips.
+	a := newPluginActivity(0)
+	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+	defer stop()
+	select {
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the idle guard did not trip on a genuinely idle clock")
+	}
+
+	// The watchdog wrapped this report around the sentinel; the caller must receive that
+	// very string, not one it rebuilt. Comparing the cause's report to the caller's error
+	// directly is exact and deterministic — recomputing the report here would not be, since
+	// it carries the AGE of the last host leg, which moves.
+	cause := context.Cause(ctx).Error()
+	report, ok := strings.CutPrefix(cause, errPluginCallIdle.Error()+": ")
+	if !ok || report == "" {
+		t.Fatalf("the cause must wrap the sentinel and the watchdog's report.\ncause: %v", cause)
+	}
+	if !strings.Contains(report, "peer tree at kill:") || !strings.Contains(report, "host reverse legs=") {
+		t.Fatalf("the cause's report must carry the measurement, not just a phrase.\ncause: %v", cause)
+	}
+
+	err := pluginInvokeErr(ctx, "InvokeProvider deploy:dummy op=rebuild",
+		errors.New("rpc error: code = Unknown desc = peer cancelled"))
+	if !errors.Is(err, errPluginCallIdle) {
+		t.Fatalf("a caller must still recognise the idle kill: got %v", err)
+	}
+	if !strings.HasSuffix(err.Error(), report) {
+		t.Fatalf("THE BUG: the report must reach the caller, not just the sentinel.\ngot: %v\nreport: %s", err, report)
+	}
+	if !strings.Contains(err.Error(), "InvokeProvider deploy:dummy op=rebuild") {
+		t.Fatalf("the call site must still be named: got %v", err)
+	}
+}
+
 // TestIdleBoundedContext_PluginLocalCPUIsProgress pins the SECOND progress source: a
 // peer plugin doing its work ENTIRELY LOCALLY (its own child processes — virsh/ssh
 // retries) touches NO host reverse leg, yet must count as progress. Without the

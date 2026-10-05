@@ -50,11 +50,12 @@ import (
 // errPluginCallIdle is the sentinel the idle watchdog cancels with, so a caller can
 // distinguish a real hang from an ordinary timeout/transport error. Its text states only
 // what the watchdog MEASURED — the three things it can see are host reverse legs, the
-// peer tree's CPU, and the passage of time — and every kill appends an evidence report
-// (pluginActivity.stallReport), so a tripped bed names the silent source instead of
-// asserting a cause the watchdog cannot prove. The former text ("hung plugin — the peer
-// runs no host work") was exactly that unsupported claim, and it sent a week of
-// investigation after the wrong mechanism (#699).
+// peer tree's CPU, and the passage of time — and every kill wraps an evidence report
+// (pluginActivity.stallReport) around it, which reaches the caller only because
+// pluginInvokeErr propagates the cause instead of the bare sentinel. So a tripped bed names
+// the silent source instead of asserting a cause the watchdog cannot prove. The former text
+// ("hung plugin — the peer runs no host work") was exactly that unsupported claim, and it
+// sent a week of investigation after the wrong mechanism (#699).
 var errPluginCallIdle = errors.New("plugin call made no host-visible progress within the no-progress window (no host reverse leg and no CPU advance from the peer process or any of its live descendants)")
 
 // Two INDEPENDENT test seams (never one var driving both bounds, which would let a
@@ -148,21 +149,64 @@ func (a *pluginActivity) cpu() uint64 {
 }
 
 // stallReport is the kill report: the evidence the watchdog actually holds at the moment
-// it cancels, appended to errPluginCallIdle. It exists because the sentinel's text alone
-// is a CLAIM about the peer that a no-progress watchdog cannot support — the only three
-// things it can observe are host reverse legs, the peer tree's CPU, and elapsed time, and
-// a starved host or a descendant that double-forked (reparented to init, so no longer
-// attributed to the peer) makes "the peer runs no host work" false while the plugin is
-// working. This is measurement, not diagnosis: it prints the source counts and the tree
-// it can see, and says what it cannot distinguish. #699 needed exactly this and had
-// nothing but the old assertion.
+// it cancels, carried on the cause errPluginCallIdle is wrapped in (and therefore reaching
+// a caller only through pluginInvokeErr, which propagates the CAUSE and not the bare
+// sentinel). It exists because the sentinel's text alone is a CLAIM about the peer that a
+// no-progress watchdog cannot support — the only three things it can observe are host
+// reverse legs, the peer tree's CPU, and elapsed time, and a starved host or a descendant
+// that double-forked (reparented to init, so no longer attributed to the peer) makes "the
+// peer runs no host work" false while the plugin is working. This is measurement, not
+// diagnosis: it prints the source counts and the tree it can see, and names each member it
+// saw, so the reader can tell the guard's OWN covered case (a sleeping parent waiting on a
+// running child, both in the tree) from a reparented worker (absent) or an uninterruptible
+// I/O state the guard cannot help. #699 needed exactly this and had nothing but the old
+// assertion.
 func (a *pluginActivity) stallReport(noProgress time.Duration) string {
-	ticks, live := procTree(a.pid)
-	return fmt.Sprintf("peer pid=%d; over the call: host reverse legs=%d (last %s), CPU advances=%d (last %s); peer tree at kill: %d live process(es) summing %d ticks (root-only reader %d); window=%s. A starved host, a double-forked descendant and a genuinely wedged peer all read this way — if the tree shows live processes, re-run on an idle host before reading it as a hang",
+	procs := procTreeProcs(a.pid)
+	ticks, live := treeTicks(procs)
+	// Three different reasons for "no tree", three different sentences: a clock with no
+	// peer pid watches none (an in-proc/builtin target), a non-Linux /proc cannot be walked,
+	// and a walkable tree can simply be empty because the peer is gone. Collapsing them
+	// would be the same class of unsupported claim the report exists to replace.
+	members := treeMembers(procs)
+	if a.pid <= 0 {
+		members = " (no peer pid — this clock watches no process tree)"
+	}
+	return fmt.Sprintf("peer pid=%d; over the call: host reverse legs=%d (last %s), CPU advances=%d (last %s); peer tree at kill: %d live process(es) summing %d ticks (root-only reader %d)%s; window=%s. A starved host, a double-forked descendant and a genuinely wedged peer all read this way — if the tree shows live processes, re-run on an idle host before reading it as a hang",
 		a.pid,
 		a.legs.Load(), agoAt(a.lastLeg.Load()),
 		a.cpus.Load(), agoAt(a.lastCPU.Load()),
-		live, ticks, procCPUTicks(a.pid), noProgress)
+		live, ticks, procCPUTicks(a.pid), members, noProgress)
+}
+
+// treeMemberMax caps how many tree members a kill report names, so a large tree cannot
+// flood the error the CLI prints.
+const treeMemberMax = 6
+
+// treeMembers renders the WALKED tree for the kill report: pid(state,comm) per process,
+// capped at treeMemberMax. It takes the walk procTreeProcs already made, so the report
+// describes the very tree the guard measured and can never drift from it. nil (tree not
+// walkable at all) and empty (walkable, but the peer is gone) are different facts and are
+// rendered differently — the first says so, the second says nothing.
+func treeMembers(procs []procInfo) string {
+	if procs == nil {
+		return " (tree unreadable)"
+	}
+	var b strings.Builder
+	for i, p := range procs {
+		if i == treeMemberMax {
+			fmt.Fprintf(&b, ", +%d more", len(procs)-treeMemberMax)
+			break
+		}
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%d(%s,%s)", p.pid, p.state, p.comm)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return ": " + b.String()
 }
 
 // agoAt renders a unix-nanos stamp as an age, or "never" when nothing was recorded.
@@ -347,39 +391,55 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 	return cctx, func() { close(stop); cancel(nil) }
 }
 
-// procStatTicks parses /proc/<pid>/stat ONCE: the parent pid, the process's CPU ticks
-// (utime + stime + cutime + cstime, fields 14-17) and whether it is a zombie. ok=false on
-// any error (process gone, non-Linux, malformed) — callers only ever compare for ADVANCE,
-// so a transient failure can never look like progress.
-func procStatTicks(pid int) (ppid int, ticks uint64, zombie bool, ok bool) {
+// procInfo is one /proc/<pid>/stat sample: the process's parent, its CPU ticks
+// (utime + stime + cutime + cstime, fields 14-17), its state letter and its comm name. It
+// is both what the reader returns and what the kill report renders, so the two cannot
+// describe different things.
+type procInfo struct {
+	pid    int
+	ppid   int
+	ticks  uint64
+	state  string // /proc state letter: R running, S sleeping, D uninterruptible I/O, Z zombie, …
+	comm   string // the executable name, from the parenthesised comm field
+	zombie bool
+}
+
+// readProcStat parses /proc/<pid>/stat ONCE. ok=false on any error (process gone,
+// non-Linux, malformed) — callers only ever compare ticks for ADVANCE, so a transient
+// failure can never look like progress.
+func readProcStat(pid int) (procInfo, bool) {
 	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
-		return 0, 0, false, false
+		return procInfo{}, false
 	}
-	// The comm field is parenthesized and may contain spaces: parse from the LAST ')'.
-	i := strings.LastIndexByte(string(b), ')')
-	if i < 0 || i+2 >= len(b) {
-		return 0, 0, false, false
+	s := string(b)
+	// The comm field is parenthesized and may itself contain spaces AND parens, so the
+	// fields that can be trusted are the ones after the LAST ')'; the name is what sits
+	// between the FIRST '(' and that last ')'.
+	open, end := strings.IndexByte(s, '('), strings.LastIndexByte(s, ')')
+	if open < 0 || end < open || end+2 >= len(s) {
+		return procInfo{}, false
 	}
-	fields := strings.Fields(string(b[i+2:]))
+	st := procInfo{pid: pid, comm: s[open+1 : end]}
+	fields := strings.Fields(s[end+2:])
 	// After comm, field 1 is state; utime is field 14 overall => index 11 here
 	// (fields[0]=state=field3). utime,stime,cutime,cstime = indices 11,12,13,14.
 	if len(fields) < 15 {
-		return 0, 0, false, false
+		return procInfo{}, false
 	}
 	pp, err := strconv.Atoi(fields[1])
 	if err != nil {
-		return 0, 0, false, false
+		return procInfo{}, false
 	}
-	var sum uint64
+	st.ppid, st.state, st.zombie = pp, fields[0], fields[0] == "Z"
 	for _, idx := range []int{11, 12, 13, 14} {
 		v, err := strconv.ParseUint(fields[idx], 10, 64)
 		if err != nil {
-			return 0, 0, false, false
+			return procInfo{}, false
 		}
-		sum += v
+		st.ticks += v
 	}
-	return pp, sum, fields[0] == "Z", true
+	return st, true
 }
 
 // procCPUTicks reads ONE process's monotonic CPU ticks from /proc/<pid>/stat: utime +
@@ -388,11 +448,10 @@ func procStatTicks(pid int) (ppid int, ticks uint64, zombie bool, ok bool) {
 // (process gone, non-Linux, malformed) — the caller only compares it for ADVANCE, so a
 // transient 0 can never look like progress.
 func procCPUTicks(pid int) uint64 {
-	_, ticks, _, ok := procStatTicks(pid)
-	if !ok {
-		return 0
+	if st, ok := readProcStat(pid); ok {
+		return st.ticks
 	}
-	return ticks
+	return 0
 }
 
 // procTree returns the summed CPU ticks of the LIVE process tree rooted at pid, and how
@@ -404,44 +463,57 @@ func procCPUTicks(pid int) uint64 {
 // This is the reader the idle guard uses, because the root-only form is a false positive
 // by construction: cutime/cstime move only on a REAP, so a peer blocked in wait() on a
 // long-lived CPU-active child reports a frozen count for the child's whole life (#699).
-//
-// A ZOMBIE is summed but not counted as live, and that asymmetry is deliberate: skipping
-// it outright would make the sum DROP the instant a child exits and rise again when the
-// parent reaps it — a dip is not a false kill, but it would hide a real advance and so
-// could manufacture one. Summing it until the reap keeps the sum non-decreasing. A
-// descendant that double-forks is reparented to init and is NOT attributable to the peer;
-// it is missed, which is why the kill report prints the tree it could see.
 func procTree(pid int) (ticks uint64, live int) {
-	if pid <= 0 {
-		return 0, 0
-	}
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		// Unreadable /proc (non-Linux): degrade to the root-only reader rather than 0.
+	procs := procTreeProcs(pid)
+	if procs == nil {
+		// /proc itself is unreadable (non-Linux): degrade to the root-only reader rather
+		// than reporting a confident 0. A root that is merely gone or a zombie is NOT
+		// this case — procTreeProcs returns an empty tree for it, and an empty tree
+		// correctly sums to (0, 0).
 		if t := procCPUTicks(pid); t > 0 {
 			return t, 1
 		}
 		return 0, 0
 	}
-	type node struct {
-		ppid   int
-		ticks  uint64
-		zombie bool
+	return treeTicks(procs)
+}
+
+// procTreeProcs walks /proc ONCE and returns the peer's tree — the root first, then its
+// descendants breadth-first — in the SAME order and by the SAME rules the CPU sum uses. It
+// is the ONE walker: procTree sums what it returns, and the kill report renders it, so the
+// report can never describe a different tree than the one the guard measured.
+//
+// A ZOMBIE is included (its ticks still count toward the sum) and flagged, because skipping
+// it outright would make the sum DROP the instant a child exits and rise again when the
+// parent reaps it — a dip is not a false kill, but it would hide a real advance and so could
+// manufacture one. Summing until the reap keeps the sum non-decreasing. A descendant that
+// double-forks is reparented to init and is NOT attributable to the peer; it is absent from
+// the walk, which is one of the things the kill report exists to reveal.
+//
+// nil means the tree could not be walked at all: pid <= 0, or /proc is unreadable
+// (non-Linux). An EMPTY, non-nil slice means /proc was read fine but the root is gone or
+// already a zombie — a walkable tree with nothing left in it. The distinction matters to
+// the caller's fallback and to the report's wording, so it is deliberate.
+func procTreeProcs(pid int) []procInfo {
+	if pid <= 0 {
+		return nil
 	}
-	nodes := make(map[int]node, len(entries))
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	nodes := make(map[int]procInfo, len(entries))
 	for _, e := range entries {
 		n, err := strconv.Atoi(e.Name())
 		if err != nil || n <= 0 {
 			continue
 		}
-		pp, t, zombie, ok := procStatTicks(n)
-		if !ok {
-			continue
+		if st, ok := readProcStat(n); ok {
+			nodes[n] = st
 		}
-		nodes[n] = node{ppid: pp, ticks: t, zombie: zombie}
 	}
 	if root, ok := nodes[pid]; !ok || root.zombie {
-		return 0, 0
+		return []procInfo{}
 	}
 	children := make(map[int][]int, len(nodes))
 	for n, nd := range nodes {
@@ -450,16 +522,25 @@ func procTree(pid int) (ticks uint64, live int) {
 		}
 	}
 	// The ppid links form a forest, so this walk terminates on every input.
+	out := make([]procInfo, 0, len(nodes))
 	queue := []int{pid}
 	for len(queue) > 0 {
 		n := queue[len(queue)-1]
 		queue = queue[:len(queue)-1]
-		nd := nodes[n]
-		ticks += nd.ticks
-		if !nd.zombie {
+		out = append(out, nodes[n])
+		queue = append(queue, children[n]...)
+	}
+	return out
+}
+
+// treeTicks sums a walked tree: every process's ticks, and how many are not yet reaped.
+// The ONE definition of the sum, so procTree and the kill report cannot drift apart.
+func treeTicks(procs []procInfo) (ticks uint64, live int) {
+	for _, p := range procs {
+		ticks += p.ticks
+		if !p.zombie {
 			live++
 		}
-		queue = append(queue, children[n]...)
 	}
 	return ticks, live
 }
@@ -511,11 +592,21 @@ func startPluginActivityHeartbeat(a *pluginActivity) func() {
 	return func() { close(stop) }
 }
 
-// pluginInvokeErr maps the idle watchdog's cancellation onto the sentinel so a hung
-// plugin reports WHY, not a bare "context canceled".
+// pluginInvokeErr maps the idle watchdog's cancellation onto the REASON it cancelled, so a
+// hung plugin reports WHY, not a bare "context canceled": the sentinel, and the evidence
+// report the watchdog wrapped in it (pluginActivity.stallReport).
+//
+// Propagating the CAUSE — not re-wrapping the bare sentinel — is load-bearing. The watchdog
+// cancels with fmt.Errorf("%w: %s", errPluginCallIdle, stallReport), so the report travels on
+// the cause; wrapping errPluginCallIdle again here would type-check identically, satisfy
+// errors.Is identically, and silently THROW THE MEASUREMENT AWAY, leaving a tripped bed with
+// a conclusion and no evidence — which is precisely what #699 was, and what the first R10
+// run of this very change reproduced (a kill message with the new sentinel text and no
+// report). errors.Is(err, errPluginCallIdle) still holds for callers, because the cause
+// wraps the sentinel.
 func pluginInvokeErr(ctx context.Context, what string, err error) error {
-	if errors.Is(context.Cause(ctx), errPluginCallIdle) {
-		return fmt.Errorf("%s: %w", what, errPluginCallIdle)
+	if cause := context.Cause(ctx); errors.Is(cause, errPluginCallIdle) {
+		return fmt.Errorf("%s: %w", what, cause)
 	}
 	return err
 }
