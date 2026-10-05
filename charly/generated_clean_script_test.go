@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -100,8 +101,8 @@ func runGeneratedCleanScript(t *testing.T, dir string, args ...string) generated
 	err := cmd.Run()
 	code := 0
 	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
-		if !ok {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
 			t.Fatalf("running check-generated-clean.sh: %v", err)
 		}
 		code = exitErr.ExitCode()
@@ -223,8 +224,8 @@ func TestGeneratedCleanScriptReportsNoLineageOutsideGit(t *testing.T) {
 	// .git by walking up, making this case vacuous.
 	cmd.Env = append(os.Environ(), "GIT_CEILING_DIRECTORIES="+dir)
 	out, err := cmd.CombinedOutput()
-	exitErr, ok := err.(*exec.ExitError)
-	if !ok {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
 		t.Fatalf("outside a git worktree: err = %v (want a non-zero exit)\n%s", err, out)
 	}
 	if exitErr.ExitCode() != 2 {
