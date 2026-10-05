@@ -1068,18 +1068,29 @@ check-sidecar-pod:
             - check: command=charly status --json
               id: sidecar-pod-running
               # Every executing `${CHARLY_BIN}` step in this bed pays charly's own project
-              # evaluation before it does its own work: measured 65s on an idle host
-              # (`charly box validate` — 609 candies, 125 boxes, 42 deploys, exit 0). The cost
-              # is PRE-EXISTING and structural, not a regression: the umbrella's pinned
-              # pre-#762 checkout measures 68s at the same scale (609/125/45). With no
-              # declared `timeout:` a step inherits the ~120s per-attempt never-hang fallback,
-              # so a step whose real cost sits at that ceiling is killed non-deterministically
-              # — measured: `shell-oneshot-roundtrip` PASSED in this bed's check-live phase and
-              # was killed at 2m0.023s in its check-live-rebuild phase, same tree, same binary.
-              # 300s is this bed's own budget (cf. sidecar-pod-roundtrip-final below); the
-              # underlying project-evaluation COST is a separate concern, filed as
-              # opencharly/sdk#319 and opencharly/charly#650 — this budget buys the bed
-              # correctness, it does not excuse the cost.
+              # evaluation before it does its own work. Measured directly on THIS host, the
+              # step `shell-oneshot-roundtrip` costs 94.9s on a QUIET host.
+              #
+              # This bed's `plan:` is 13 steps — 7 `check:` and 6 `run:`. A check-live pass
+              # dispatches the 7 `check:` steps and SKIPS the 6 `run:` steps ("skipped —
+              # verify-only mode (mutating step)"), and all 7 `check:` steps invoke
+              # `${CHARLY_BIN}`. Six of the seven declared no `timeout:`, so each inherited the
+              # runner's per-attempt never-hang floor: measured, `shell-oneshot-roundtrip`
+              # PASSED in this bed's check-live phase and was killed in its check-live-rebuild
+              # phase after 2m0.023s — same tree, same binary. 94.9s under that floor is a
+              # 1.27x margin, so ordinary timing variation is enough; no roster-wide saturation
+              # is required to explain the kill.
+              #
+              # 300s is this bed's own budget (cf. sidecar-pod-roundtrip-final below): it makes
+              # the never-hang bound resolve to the authored value + 30s (330s, ~3x the measured
+              # cost) instead of the floor, and it advances opencharly/charly#650's recorded
+              # direction #1 — "give load-sensitive bed steps an explicit `timeout:`" — for six
+              # further members of that batch. The project-evaluation COST itself stays filed as
+              # opencharly/sdk#319 and opencharly/charly#650: it is load-sensitive (1112.7s at
+              # sustained pure-CPU load ~125), a regime this bed's own passing run
+              # (2026.278.1628) excludes by its own recorded phase durations — its two check
+              # phases took 543s and 589s for all 24 dispatched steps, so no step there could
+              # have cost 1112.7s. The budget is the bed's floor, never the cost's excuse.
               timeout: 300s
               stdout:
                 - contains: '"kind": "pod"'
