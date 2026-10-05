@@ -230,7 +230,10 @@ func agoAt(nanos int64) string {
 // progress event "always resets" the deadline and that there is therefore no race; that
 // is true of the EVENT path and false of the EXPIRY path, which is why this exists.)
 //
-// A nil wake channel never fires in a select, so the CPU-only callers pass nil.
+// Passing wake == nil is legal — a nil channel never fires in a select, so the drain is
+// skipped and only the CPU source is measured — but the watcher never does: BOTH of its
+// calls pass the LIVE channel, so a touch that raced either tick is drained and counted
+// rather than left pending.
 func (a *pluginActivity) observe(wake <-chan struct{}, lastCPU uint64) (uint64, bool) {
 	select {
 	case <-wake:
@@ -340,15 +343,13 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 		cpu := time.NewTicker(poll)
 		defer cpu.Stop()
 		lastCPU := a.cpu()
-		reset := func() {
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(noProgress)
-		}
+		// reset re-arms the deadline for the full window. It runs on ALL THREE progress
+		// paths — including the EXPIRY path itself, where progress was just confirmed —
+		// so it must never block. resetDeadline exists to make that provable: the drain
+		// is a select-with-default rather than a bare receive, because on the expiry
+		// path the value has already been consumed and a bare `<-timer.C` would block
+		// forever and wedge the watcher.
+		reset := func() { resetDeadline(timer, noProgress) }
 		for {
 			select {
 			case <-stop:
@@ -362,10 +363,11 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 				reset()
 			case <-cpu.C:
 				// CPU advancing is progress: refresh the clock + high-water and reset
-				// the deadline, so a plugin busy on its own children never trips.
-				// observe drains a pending leg token too, so a touch that this tick
-				// raced is counted rather than left for the expiry to trip over.
-				if cur, ok := a.observe(nil, lastCPU); ok {
+				// the deadline, so a plugin busy on its own children never trips. The
+				// LIVE wake channel is passed, never nil: a nil channel never fires in
+				// a select, so passing it would make observe's drain a no-op and leave
+				// a host-leg touch this tick raced pending for the expiry to trip over.
+				if cur, ok := a.observe(wake, lastCPU); ok {
 					lastCPU = cur
 					reset()
 				}
@@ -389,6 +391,27 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 		}
 	}()
 	return cctx, func() { close(stop); cancel(nil) }
+}
+
+// resetDeadline re-arms timer for the full window d, discarding a stale expiry if one is
+// already pending, so the call can NEVER block.
+//
+// That non-blocking property is load-bearing on the EXPIRY path: the watcher calls reset
+// from `case <-timer.C` when it confirms progress at expiry, and there the value has
+// already been consumed, so Stop reports false and a bare `<-timer.C` drain would block
+// forever and wedge the watchdog (a wedged watcher never kills and never returns — the
+// worst possible failure for a guard). The drain is therefore a select-with-default, which
+// returns immediately whether or not a value is pending. Both states are pinned by
+// TestResetDeadline_*; it is a package-level func rather than a closure so a test can put
+// the timer in exactly the state each path produces.
+func resetDeadline(timer *time.Timer, d time.Duration) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(d)
 }
 
 // procInfo is one /proc/<pid>/stat sample: the process's parent, its CPU ticks
@@ -478,9 +501,12 @@ func procTree(pid int) (ticks uint64, live int) {
 	return treeTicks(procs)
 }
 
-// procTreeProcs walks /proc ONCE and returns the peer's tree — the root first, then its
-// descendants breadth-first — in the SAME order and by the SAME rules the CPU sum uses. It
-// is the ONE walker: procTree sums what it returns, and the kill report renders it, so the
+// procTreeProcs walks /proc ONCE and returns the peer's tree — the root first, then each
+// node's descendants DEPTH-FIRST pre-order (a LIFO stack, so the child pushed last is
+// visited next) — in the SAME order and by the SAME rules the CPU sum uses. The order is
+// presentation only (treeTicks sums, treeMembers renders); what the walk guarantees is
+// that every process PRECEDES its own descendants, so the report reads as a tree. It is
+// the ONE walker: procTree sums what it returns, and the kill report renders it, so the
 // report can never describe a different tree than the one the guard measured.
 //
 // A ZOMBIE is included (its ticks still count toward the sum) and flagged, because skipping
@@ -521,14 +547,18 @@ func procTreeProcs(pid int) []procInfo {
 			children[nd.ppid] = append(children[nd.ppid], n)
 		}
 	}
-	// The ppid links form a forest, so this walk terminates on every input.
+	// The ppid links form a forest, so this walk terminates on every input. It is a
+	// LIFO STACK (pop and push at the same end), i.e. depth-first pre-order: each node
+	// is emitted before the children it then pushes, so a parent always precedes its
+	// own descendants in the report. A FIFO queue would make it breadth-first instead;
+	// nothing depends on which, so the order is documented rather than implied.
 	out := make([]procInfo, 0, len(nodes))
-	queue := []int{pid}
-	for len(queue) > 0 {
-		n := queue[len(queue)-1]
-		queue = queue[:len(queue)-1]
+	stack := []int{pid}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
 		out = append(out, nodes[n])
-		queue = append(queue, children[n]...)
+		stack = append(stack, children[n]...)
 	}
 	return out
 }
@@ -545,10 +575,12 @@ func treeTicks(procs []procInfo) (ticks uint64, live int) {
 	return ticks, live
 }
 
-// withActivityHeartbeat runs fn while heartbeating the clock every 5s, so a host reverse
-// leg that itself runs longer than the no-progress window (a RunSystem/RunHostStep doing
-// a multi-minute build, say) is seen as progressing for its whole duration. The plugin is
-// blocked in the RPC and its own CPU is frozen then, so the LEG'S duration is the signal.
+// withActivityHeartbeat runs fn while heartbeating the clock at the WINDOW-DERIVED beat
+// startPluginActivityHeartbeat computes (window/4, capped at 5s — never a fixed 5s), so a
+// host reverse leg that itself runs longer than the no-progress window (a
+// RunSystem/RunHostStep doing a multi-minute build, say) is seen as progressing for its
+// whole duration. The plugin is blocked in the RPC and its own CPU is frozen then, so the
+// LEG'S duration is the signal.
 func withActivityHeartbeat[T any](a *pluginActivity, fn func() (T, error)) (T, error) {
 	stop := startPluginActivityHeartbeat(a)
 	defer stop()

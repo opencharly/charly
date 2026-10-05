@@ -489,6 +489,101 @@ func TestObserve_LiveChildCPUIsProgress(t *testing.T) {
 	}
 }
 
+// TestResetDeadline_NonBlockingOnTheExpiryPath puts the timer in EXACTLY the state the
+// watcher's expiry arm is in when it confirms progress at expiry: the deadline fired AND
+// its value has already been received. resetDeadline must return from there without
+// blocking. A bare `<-timer.C` drain — the shape the review warned about — blocks FOREVER
+// in this state, so the goroutine below would never finish and the test fails on its
+// deadline. That is the failure mode worth pinning: a wedged watcher never kills and never
+// returns, which is the worst possible outcome for a guard.
+func TestResetDeadline_NonBlockingOnTheExpiryPath(t *testing.T) {
+	const d = 30 * time.Millisecond
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	<-timer.C // the expiry arm has taken the value; Stop() now reports false
+
+	done := make(chan struct{})
+	go func() {
+		resetDeadline(timer, d)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("resetDeadline blocked after the expiry value was consumed — a wedged watcher")
+	}
+	// It must also have RE-ARMED the deadline, not merely returned.
+	select {
+	case <-timer.C:
+	case <-time.After(5 * time.Second):
+		t.Fatal("resetDeadline returned but did not re-arm the timer")
+	}
+}
+
+// TestResetDeadline_NonBlockingWithStalePendingExpiry is the OTHER state the reset can see:
+// the timer expired but its value is still sitting in the channel UNREAD. The drain must
+// consume it — without the drain, Reset leaves the stale value in place and the re-armed
+// timer fires IMMEDIATELY, which would trip a spurious expiry on a call that just proved
+// progress. The check right after the reset is non-blocking and load-independent: if the
+// stale value were still there it would be available at once.
+func TestResetDeadline_NonBlockingWithStalePendingExpiry(t *testing.T) {
+	const d = 100 * time.Millisecond
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	time.Sleep(3 * d) // expired; the value is pending and unread
+
+	resetDeadline(timer, d)
+	select {
+	case <-timer.C:
+		t.Fatal("the stale expiry was not drained — the re-armed timer fired immediately")
+	default:
+		// good: nothing pending, so the fresh window d is genuinely fresh
+	}
+	select {
+	case <-timer.C: // the properly re-armed deadline, once, at ~d
+	case <-time.After(5 * time.Second):
+		t.Fatal("resetDeadline did not re-arm the timer")
+	}
+}
+
+// TestProcTreeProcs_PreOrder pins the walk's ORDER contract. The doc claimed
+// "breadth-first", but the implementation is a LIFO stack — depth-first pre-order. The
+// property that matters is the one a tree-shaped report needs: every process PRECEDES its
+// own descendants, so the root is first and no node is visited before its parent. It is
+// asserted over the peer's REAL tree rather than a hand-built one, so it holds for whatever
+// shape the kernel actually presents.
+func TestProcTreeProcs_PreOrder(t *testing.T) {
+	cmd := exec.Command("sh", "-c",
+		"sh -c 'i=0; while [ $i -lt 100000000 ]; do i=$((i+1)); done' & wait")
+	startInOwnGroup(t, cmd) // cleanup kills the WHOLE group, never orphaning the burner
+	root := cmd.Process.Pid
+
+	var procs []procInfo
+	for i := 0; i < 100; i++ { // the child may not be visible on the very first read
+		procs = procTreeProcs(root)
+		if len(procs) > 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(procs) < 2 {
+		t.Fatalf("the peer tree has %d process(es), need root + child — the reproduction's premise is broken", len(procs))
+	}
+	if procs[0].pid != root {
+		t.Fatalf("the root must be visited first, got pid %d", procs[0].pid)
+	}
+	seen := map[int]bool{}
+	for _, p := range procs {
+		if p.pid != root && !seen[p.ppid] {
+			t.Fatalf("pid %d (%s) is visited before its parent %d — the walk is not pre-order", p.pid, p.comm, p.ppid)
+		}
+		seen[p.pid] = true
+	}
+	if !procAlive(root) {
+		t.Fatal("the peer died during the walk — the assertion above would be vacuous")
+	}
+}
+
 // procAlive reports whether pid exists and is not a zombie. Through procCPUTicks alone a
 // frozen tick count and a dead process are indistinguishable — both read 0 — so the test
 // checks liveness separately and never lets a missing peer masquerade as the gap.
