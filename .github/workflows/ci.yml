@@ -106,6 +106,6 @@ jobs:
       # NOTE: the former "opencode gate plugin contract" step (which ran
       # `node scripts/check-opencode-plugin.mjs` against this repo's own
       # `.opencode/plugins/`) is DELETED: charly carries NO harness config any
-      # more (umbrella AGENTS.md rule 8 — harness config lives ONLY in
+      # more (umbrella AGENTS.md Part II rule 5 — harness config lives ONLY in
       # opencharly/opencharly). The gate now runs there, against that repo's
       # plugin.
