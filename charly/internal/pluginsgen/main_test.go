@@ -1,37 +1,73 @@
 package main
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
-// TestPluginsGenReproducible is the drift gate for the committed generated plugin files: it
-// regenerates plugins_generated.go + go.work + plugins_refs_generated.go from charly.yml's
-// `compiled_plugins:` plus the org-wide corpus (charly/plugin_corpus.txt) and asserts the
-// committed files match byte-for-byte. It fails if someone hand-edits a generated file, or
-// changes compiled_plugins / the corpus without re-running `scripts/bootstrap-charly.sh`
-// (which runs pluginsgen). Mirrors spec.TestGenReproducible for the CUE-gen path.
-func TestPluginsGenReproducible(t *testing.T) {
-	root := filepath.Join("..", "..", "..") // charly/internal/pluginsgen -> repo root
-	genGo, genWork, genDevWork, genRefs, err := generate(root, filepath.Join("charly", "charly.yml"), filepath.Join("charly", "plugin_corpus.txt"), nil)
-	if err != nil {
-		t.Fatalf("generate: %v", err)
+// generatedWiring caches ONE pluginsgen run for the two gates below. It is cached, not
+// shared state for its own sake: building the refs index fetches every corpus plugin at its
+// default branch (112 repos, ~100 s), and running that once per gate would double a live
+// cost that carries no extra signal.
+var (
+	generatedOnce    sync.Once
+	generatedGo      []byte
+	generatedWork    []byte
+	generatedDevWork []byte
+	generatedErr     error
+)
+
+// generatedPluginWiring returns the generated wiring for the repository's own tree. The
+// error is stored by the once and reported by the caller, never by the once body: a t.Fatal
+// inside sync.Once would blame whichever gate happened to run first and skip the other.
+func generatedPluginWiring(t *testing.T) (genGo, genWork []byte) {
+	t.Helper()
+	generatedOnce.Do(func() {
+		root := filepath.Join("..", "..", "..") // charly/internal/pluginsgen -> repo root
+		generatedGo, generatedWork, generatedDevWork, _, generatedErr =
+			generate(root, filepath.Join("charly", "charly.yml"), filepath.Join("charly", "plugin_corpus.txt"), nil)
+	})
+	if generatedErr != nil {
+		t.Fatalf("generate: %v", generatedErr)
 	}
 	// A plain generation must emit NO dev workspace: the tree gains nothing, and a later build
 	// cannot pick one up by accident (writeDevWork deletes any stale one on this path).
-	if genDevWork != nil {
-		t.Errorf("a plain generation produced a dev workspace (%d bytes) — it must exist only for a -dev-plugin build", len(genDevWork))
+	if generatedDevWork != nil {
+		t.Errorf("a plain generation produced a dev workspace (%d bytes) — it must exist only for a -dev-plugin build", len(generatedDevWork))
 	}
+	return generatedGo, generatedWork
+}
+
+// TestPluginsGenReproducible is the drift gate for the committed generated plugin files that
+// CAN be reproduced from TRACKED inputs: plugins_generated.go (from charly.yml's
+// `compiled_plugins:` + the go.mod pins, read at their immutable tags) and go.work (from the
+// go.mod go directive). It asserts those two match byte-for-byte, so it fails if someone
+// hand-edits one, or changes compiled_plugins without re-running
+// `scripts/bootstrap-charly.sh` (which runs pluginsgen). Mirrors spec.TestGenReproducible for
+// the CUE-gen path.
+//
+// charly/plugins_refs_generated.go is deliberately NOT byte-compared here — it is a
+// projection of the corpus's DEFAULT BRANCHES, so byte-equality with a live re-fetch is a
+// contract that cannot hold and reddened `main` on upstream plugin commits alone
+// (opencharly/charly#792). TestPluginsRefsIndexSound gates it on a well-defined invariant
+// instead.
+func TestPluginsGenReproducible(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	genGo, genWork := generatedPluginWiring(t)
 	for _, tc := range []struct {
 		rel string
 		got []byte
 	}{
 		{filepath.Join("charly", "plugins_generated.go"), genGo},
 		{"go.work", genWork},
-		{filepath.Join("charly", "plugins_refs_generated.go"), genRefs},
 	} {
 		committed, err := os.ReadFile(filepath.Join(root, tc.rel))
 		if err != nil {
@@ -42,6 +78,142 @@ func TestPluginsGenReproducible(t *testing.T) {
 				tc.rel, committed, tc.got)
 		}
 	}
+}
+
+// TestPluginsRefsIndexSound gates the committed word->ref index on the only invariant that
+// is TRUE of a projection of a moving upstream: every word it names must STILL be served by
+// that same ref.
+//
+//   - a word the corpus no longer serves, or serves from a different ref, means the
+//     committed index is FALSE — it sends a reader to a plugin that does not provide the
+//     word. That is a real breakage, so it FAILS.
+//   - a word the corpus serves that the index does not name is an upstream ADDITION: the
+//     index is incomplete, not wrong, and nobody in this repository can make it complete
+//     except by regenerating. It is reported as an advisory and never fails, which is what
+//     keeps an upstream plugin commit from reddening `main` on its own schedule.
+//
+// The limit, stated plainly rather than papered over: a hand-edit that DELETES a row is
+// indistinguishable from an upstream addition when all you have is the committed file —
+// both leave the word absent from the committed index and present in the live one — so a
+// deletion lands on the advisory path too. Telling those apart needs the corpus commit
+// recorded alongside each entry (a pinned corpus: the other option, and a separate
+// decision). What this gate catches reliably is a FALSE index: a repointed provider, and a
+// provider the corpus has dropped — both verified to fail by tampering the committed file.
+//
+// The committed side is parsed as SOURCE rather than re-derived: the gate compares what is
+// committed against what the corpus serves — re-deriving it would compare a value to itself.
+func TestPluginsRefsIndexSound(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	names, err := readCompiledPlugins(filepath.Join(root, "charly", "charly.yml"))
+	if err != nil {
+		t.Fatalf("readCompiledPlugins: %v", err)
+	}
+	live, err := collectWordRefs(names, corpusRepoList(root, filepath.Join("charly", "plugin_corpus.txt"), names), nil)
+	if err != nil {
+		t.Fatalf("collectWordRefs: %v", err)
+	}
+	if len(live) == 0 {
+		t.Fatal("the live index is empty — the corpus fetch, not the index, is broken")
+	}
+	committed := readCommittedProviderRefs(t, filepath.Join(root, "charly", "plugins_refs_generated.go"))
+
+	var lost, repointed []string
+	for word, ref := range committed {
+		got, ok := live[word]
+		switch {
+		case !ok:
+			lost = append(lost, word)
+		case got != ref:
+			repointed = append(repointed, word+" is committed as "+ref+" but the corpus now serves it from "+got)
+		}
+	}
+	sort.Strings(lost)
+	sort.Strings(repointed)
+	if len(lost) > 0 {
+		t.Errorf("the committed index names %d word(s) no corpus plugin serves any more — the index is FALSE; regenerate and commit it:\n  %s",
+			len(lost), strings.Join(lost, "\n  "))
+	}
+	if len(repointed) > 0 {
+		t.Errorf("the committed index points %d word(s) at the wrong provider:\n  %s",
+			len(repointed), strings.Join(repointed, "\n  "))
+	}
+
+	var added []string
+	for word := range live {
+		if _, ok := committed[word]; !ok {
+			added = append(added, word)
+		}
+	}
+	if len(added) > 0 {
+		sort.Strings(added)
+		t.Logf("ADVISORY (not a failure): the corpus serves %d word(s) the committed index does not name — it is incomplete, not wrong. Regenerate with `scripts/bootstrap-charly.sh` to pick them up:\n  %s",
+			len(added), strings.Join(added, "\n  "))
+	}
+}
+
+// readCommittedProviderRefs parses the committed provider-ref index into a map, so the gate
+// above can compare it against what the corpus serves right now.
+func readCommittedProviderRefs(t *testing.T, path string) map[string]string {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	out := map[string]string{}
+	for _, decl := range file.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok || gd.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for i, name := range vs.Names {
+				if name.Name != "pluginProviderRefs" || i >= len(vs.Values) {
+					continue
+				}
+				lit, ok := vs.Values[i].(*ast.CompositeLit)
+				if !ok {
+					t.Fatalf("%s: pluginProviderRefs is not a composite literal — the index's shape changed", path)
+				}
+				for _, elt := range lit.Elts {
+					kv, ok := elt.(*ast.KeyValueExpr)
+					if !ok {
+						t.Fatalf("%s: unexpected entry in pluginProviderRefs", path)
+					}
+					key, val, ok := stringPair(kv)
+					if !ok {
+						t.Fatalf("%s: pluginProviderRefs carries a non-literal entry — the index's shape changed", path)
+					}
+					out[key] = val
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		t.Fatalf("%s: parsed no entries — the parse is broken, not the index", path)
+	}
+	return out
+}
+
+// stringPair unquotes a `"key": "value"` entry, reporting false for any other shape.
+func stringPair(kv *ast.KeyValueExpr) (key, val string, ok bool) {
+	k, kOK := kv.Key.(*ast.BasicLit)
+	v, vOK := kv.Value.(*ast.BasicLit)
+	if !kOK || !vOK || k.Kind != token.STRING || v.Kind != token.STRING {
+		return "", "", false
+	}
+	key, err := strconv.Unquote(k.Value)
+	if err != nil {
+		return "", "", false
+	}
+	val, err = strconv.Unquote(v.Value)
+	if err != nil {
+		return "", "", false
+	}
+	return key, val, true
 }
 
 // TestPluginModulePath_SourceDriven verifies the module path of record is the
