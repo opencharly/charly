@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -174,10 +175,7 @@ func TestIdleBoundedContext_PluginLocalCPUIsProgress(t *testing.T) {
 	// POSIX-only loop (no $SECONDS, a bash/ksh extension): under dash this must still
 	// actually spin, else the test would silently skip on the CI image.
 	cmd := exec.Command("sh", "-c", "i=0; while [ $i -lt 100000000 ]; do i=$((i+1)); done")
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start cpu-burner: %v", err)
-	}
-	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	startInOwnGroup(t, cmd)
 
 	// The clock polls the BURNER's pid directly (standing in for the plugin pid: the
 	// plugin's own CPU is what we must observe).
@@ -206,10 +204,7 @@ func TestIdleBoundedContext_PluginLocalCPUIsProgress(t *testing.T) {
 // TestProcCPUTicks_Monotonic sanity-checks the reader against a live child.
 func TestProcCPUTicks_Monotonic(t *testing.T) {
 	cmd := exec.Command("sh", "-c", "i=0; while [ $i -lt 3000000 ]; do i=$((i+1)); done")
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	startInOwnGroup(t, cmd)
 	// The very first sample can legitimately be 0 (the child has not accrued CPU in
 	// its first instant), so establish a nonzero baseline first.
 	first := uint64(0)
@@ -272,10 +267,7 @@ func TestProcessPid_NilSafeAndLive(t *testing.T) {
 	if got := processPid(cmd); got != 0 {
 		t.Fatalf("processPid(before Start) = %d, want 0", got)
 	}
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	startInOwnGroup(t, cmd)
 	if got := processPid(cmd); got != cmd.Process.Pid {
 		t.Fatalf("processPid(started) = %d, want %d", got, cmd.Process.Pid)
 	}
@@ -363,10 +355,7 @@ func TestIdleBoundedContext_PeerWaitingOnBusyChildIsProgress(t *testing.T) {
 	// outer sh really is the parent that blocks while the inner sh burns CPU.
 	cmd := exec.Command("sh", "-c",
 		"sh -c 'i=0; while [ $i -lt 100000000 ]; do i=$((i+1)); done' & wait")
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start waiting peer: %v", err)
-	}
-	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	startInOwnGroup(t, cmd)
 	peerPid := cmd.Process.Pid
 
 	// PREMISE, self-validated (the idiom the CPU test uses): the peer has a live child,
@@ -480,10 +469,7 @@ func TestObserve_PendingLegEventAtExpiryIsProgress(t *testing.T) {
 func TestObserve_LiveChildCPUIsProgress(t *testing.T) {
 	cmd := exec.Command("sh", "-c",
 		"sh -c 'i=0; while [ $i -lt 100000000 ]; do i=$((i+1)); done' & wait")
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start waiting peer: %v", err)
-	}
-	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	startInOwnGroup(t, cmd)
 
 	peer := newPluginActivity(cmd.Process.Pid)
 	var base uint64
@@ -530,4 +516,31 @@ func liveChildPid(pid int) int {
 		}
 	}
 	return 0
+}
+
+// startInOwnGroup starts cmd as the leader of its OWN process group and registers a
+// cleanup that kills the WHOLE group — the child AND every process it has forked.
+//
+// Killing only cmd.Process is not enough HERE, and that is not a hypothetical: the #699
+// tests spawn a peer that forks a CPU-burning grandchild (`sh -c '…' & wait`), so
+// cmd.Process.Kill() reaps the peer and ORPHANS the burner. The orphan is reparented to
+// the init process and then spins at 100% of a core until its loop ends — minutes —
+// invisible to the test that made it. Two of these tests in one `go test` run leave the
+// host above the load a disposable bed requires: this change's own R10 bed has to run on
+// an IDLE host, and a leaked burner poisons exactly that, which is the same
+// starved-host confound the idle guard's kill report warns about. A process group is the
+// only handle that still reaches a grandchild the peer has already forked.
+func startInOwnGroup(t *testing.T, cmd *exec.Cmd) {
+	t.Helper()
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start %q: %v", strings.Join(cmd.Args, " "), err)
+	}
+	// Setpgid puts the child in a group whose id is its own pid, so -pgid names exactly
+	// this child's tree and nothing else (never the test binary's own group).
+	pgid := cmd.Process.Pid
+	t.Cleanup(func() {
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		_, _ = cmd.Process.Wait()
+	})
 }
