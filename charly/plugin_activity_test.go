@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -286,4 +289,198 @@ func TestIdleBoundedContext_NilWakeLiteralStillResets(t *testing.T) {
 		// good: outlived >2x the window because the touches reset it
 	}
 	close(done)
+}
+
+// TestIdleBoundedContext_PeerWaitingOnBusyChildIsProgress is THE reproduction for
+// opencharly/charly#699: a peer plugin process whose ONLY work is one long-lived
+// CPU-active child. The peer forks the child and then blocks in wait(); the child burns
+// CPU. The peer's OWN /proc/<pid>/stat utime+stime is frozen (it is asleep), and
+// cutime+cstime aggregate a descendant's CPU only once that descendant has been REAPED
+// — so while the child is still running, procCPUTicks(peer) stands still. The guard
+// polls exactly that number and has no other signal here, so it cancels a call that is
+// plainly progressing. This is a false positive BY CONSTRUCTION, at the peer's own
+// cadence: no host load or timing luck can avoid it.
+//
+// TestIdleBoundedContext_PluginLocalCPUIsProgress does NOT cover this: it samples the
+// BURNER's own pid, i.e. it stands in for a plugin that runs its work as itself. The
+// uncovered shape is a peer that is merely the PARENT of the work — which is what the
+// deploy plugin is while its prepare-venue children (the venv build, the engine
+// invocation) run.
+func TestIdleBoundedContext_PeerWaitingOnBusyChildIsProgress(t *testing.T) {
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 300 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
+
+	// The peer: forks the busy grandchild, then blocks in wait(). `& wait` is TWO
+	// statements, which defeats the shell's single-command exec optimisation, so the
+	// outer sh really is the parent that blocks while the inner sh burns CPU.
+	cmd := exec.Command("sh", "-c",
+		"sh -c 'i=0; while [ $i -lt 100000000 ]; do i=$((i+1)); done' & wait")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start waiting peer: %v", err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	peerPid := cmd.Process.Pid
+
+	// PREMISE, self-validated (the idiom the CPU test uses): the peer has a live child,
+	// that child's CPU advances, and the peer's OWN ticks do not. If any leg does not
+	// hold on this kernel the gap is not being exercised, and the test says so rather
+	// than passing vacuously.
+	childPid := 0
+	for i := 0; i < 200 && childPid == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+		childPid = liveChildPid(peerPid)
+	}
+	if childPid == 0 {
+		t.Fatalf("no live child of peer %d — a peer blocked on a busy child is not exercised", peerPid)
+	}
+	var childFirst, peerFirst uint64
+	for i := 0; i < 50; i++ {
+		time.Sleep(20 * time.Millisecond)
+		childFirst, peerFirst = procCPUTicks(childPid), procCPUTicks(peerPid)
+		if childFirst > 0 {
+			break
+		}
+	}
+	// The reader is validated on the CHILD (a nonzero sample proves procCPUTicks works
+	// here). The PEER's own count is legitimately 0 — a shell that has forked and blocked
+	// in wait() has accrued no utime/stime of its own, and its child's CPU stays in
+	// cutime/cstime only after a reap. That 0 is precisely the trap: procCPUTicks returns
+	// 0 for "frozen" and 0 for "unreadable" alike, so the guard cannot tell a wedged peer
+	// from a parent whose work is entirely in a live child.
+	if childFirst == 0 {
+		t.Fatalf("procCPUTicks never left 0 for the peer's busy child — the CPU reader is not exercised")
+	}
+	if !procAlive(peerPid) {
+		t.Fatalf("peer %d is not alive — the reproduction's premise is broken", peerPid)
+	}
+	time.Sleep(400 * time.Millisecond)
+	childSecond, peerSecond := procCPUTicks(childPid), procCPUTicks(peerPid)
+	if childSecond <= childFirst {
+		t.Fatalf("the peer's child must be burning CPU (child %d -> %d)", childFirst, childSecond)
+	}
+	if peerSecond != peerFirst {
+		t.Skipf("peer ticks advanced (%d -> %d) — a peer that accrues its child's CPU while it is live is outside this gap",
+			peerFirst, peerSecond)
+	}
+	if !procAlive(peerPid) {
+		t.Fatalf("peer %d died before the assertion — the reproduction's premise is broken", peerPid)
+	}
+
+	// THE ASSERTION: the peer IS progressing (its child is), so the idle guard must not
+	// cancel. On the guard as shipped this FAILS — the peer's frozen ticks reset nothing
+	// and there is no host leg, so the 300ms timer fires and cancels.
+	a := newPluginActivity(peerPid)
+	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+	defer stop()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("a peer blocked in wait() on a CPU-active child must not be idle-killed, got %v", context.Cause(ctx))
+	case <-time.After(1 * time.Second):
+		// good: outlived >3x the window on its child's work alone
+	}
+}
+
+// liveChildPid returns the pid of the first live direct child of pid, or 0 when there is
+// none. /proc/<n>/stat is comm-parenthesised (field 2 may contain spaces), so the fields
+// are read from the LAST ')' — fields[0]=state (field 3), fields[1]=ppid (field 4). A
+// zombie is not live: its CPU has already been folded into the parent's cutime, which is
+// exactly the accounting difference this test is about.
+//
+// These three helpers are TEST scaffolding and deliberately do not share names with the
+// guard's own /proc readers: the production fix needs its own live-descendant tick sum
+// (a peer's children are the signal), and a name clash between the two would be a compile
+// error rather than a test failure.
+func procStatFields(pid int) []string {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return nil
+	}
+	i := strings.LastIndexByte(string(b), ')')
+	if i < 0 || i+2 >= len(b) {
+		return nil
+	}
+	f := strings.Fields(string(b[i+2:]))
+	if len(f) < 2 {
+		return nil
+	}
+	return f
+}
+
+// TestObserve_PendingLegEventAtExpiryIsProgress pins the confirmation rule the kill path
+// depends on: a host-leg progress EVENT that is sitting unread in the depth-1 wake buffer
+// at the moment the deadline expires counts as progress, so the call is not killed.
+// touch() is a non-blocking depth-1 send, so a coalesced burst can leave exactly one
+// token pending, and Go's select picks at RANDOM among ready cases — an expiry can thus
+// win with an unread touch in the buffer. observe() must drain it.
+func TestObserve_PendingLegEventAtExpiryIsProgress(t *testing.T) {
+	a := newPluginActivity(0) // pid 0: the CPU source contributes nothing here
+	a.touch()                 // one pending event = the coalesced burst still waiting
+	if _, ok := a.observe(a.wake, 0); !ok {
+		t.Fatal("a pending host-leg event must count as progress at confirmation")
+	}
+	if a.legs.Load() != 1 {
+		t.Fatalf("the drained event must be counted as a host leg, got %d", a.legs.Load())
+	}
+	// Second read: the buffer is now empty and there is no CPU source, so nothing.
+	if _, ok := a.observe(a.wake, 0); ok {
+		t.Fatal("an empty buffer with a frozen peer must not report progress")
+	}
+}
+
+// TestObserve_LiveChildCPUIsProgress is the unit-level form of the #699 gap: the CPU
+// source must see the peer's LIVE CHILD, not only the peer's own (frozen) count.
+func TestObserve_LiveChildCPUIsProgress(t *testing.T) {
+	cmd := exec.Command("sh", "-c",
+		"sh -c 'i=0; while [ $i -lt 100000000 ]; do i=$((i+1)); done' & wait")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start waiting peer: %v", err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+
+	peer := newPluginActivity(cmd.Process.Pid)
+	var base uint64
+	for i := 0; i < 200; i++ {
+		time.Sleep(10 * time.Millisecond)
+		if base = peer.cpu(); base > 0 {
+			break
+		}
+	}
+	if base == 0 {
+		t.Fatal("the peer tree's CPU never left 0 — the tree walk is not reading the child")
+	}
+	time.Sleep(200 * time.Millisecond)
+	if _, ok := peer.observe(nil, base); !ok {
+		t.Fatalf("the peer's live child is burning CPU but observe reported no progress (high-water %d, tree now %d)",
+			base, peer.cpu())
+	}
+}
+
+// procAlive reports whether pid exists and is not a zombie. Through procCPUTicks alone a
+// frozen tick count and a dead process are indistinguishable — both read 0 — so the test
+// checks liveness separately and never lets a missing peer masquerade as the gap.
+func procAlive(pid int) bool {
+	f := procStatFields(pid)
+	return f != nil && f[0] != "Z"
+}
+
+func liveChildPid(pid int) int {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0
+	}
+	for _, e := range entries {
+		n, err := strconv.Atoi(e.Name())
+		if err != nil || n <= 0 {
+			continue
+		}
+		f := procStatFields(n)
+		if f == nil || f[0] == "Z" {
+			continue
+		}
+		if pp, err := strconv.Atoi(f[1]); err == nil && pp == pid {
+			return n
+		}
+	}
+	return 0
 }
