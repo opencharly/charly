@@ -35,6 +35,9 @@ import (
 //   - the INSTALLING plugin produces a steady stream (the host child is alive for
 //     the whole install) → never trips, however long it runs.
 //
+// A SECOND source covers work a plugin does entirely on its own side, with no host leg
+// at all: the peer's process tree advancing in CPU (see pluginActivity below).
+//
 // PER-CALL, never global: the clock lives in the invoke context and is attached to
 // the reverse server that serves that call, so a hung call cannot be kept alive by
 // a DIFFERENT call's progress (the concurrency mask a global clock would allow).
@@ -67,18 +70,25 @@ var (
 // touch is a no-op and the clock is never watched, so a server without a clock never trips.
 //
 // TWO activity sources feed it:
+//
 //   - touch() from the host reverse legs (host-visible work), and
-//   - cpu() polling of the PEER PLUGIN PROCESS's monotonic CPU. The second is
-//     load-bearing: a plugin can do all its work PLUGIN-LOCALLY (the vm deploy's
-//     console bootstrap runs `virsh send-key` and its ssh readiness retries as the
-//     plugin's OWN children), which touches no host leg — measured: the idle guard
-//     false-killed a legitimately-booting ISO guest at prepare-venue because of it.
-//     /proc/<pid>/stat's utime+stime+cutime+cstime is monotonic and AGGREGATES reaped
-//     descendants' CPU, so a retry loop (ssh every few seconds) advances it while a
-//     futex-wedged plugin (no work, no children) leaves it frozen.
+//
+//   - cpu() polling of the PEER's whole LIVE PROCESS TREE. The second is load-bearing:
+//     a plugin can do all its work PLUGIN-LOCALLY (the vm deploy's console bootstrap
+//     runs `virsh send-key` and its ssh readiness retries as the plugin's OWN children),
+//     which touches no host leg — measured: the idle guard false-killed a legitimately-
+//     booting ISO guest at prepare-venue because of it.
+//
+//     cpu() used to read the peer process's OWN counters alone, and that was a
+//     false-positive class by construction (#699): /proc/<pid>/stat's
+//     utime+stime+cutime+cstime folds in a descendant's CPU only AFTER that descendant
+//     has been REAPED, so a peer parked in wait() on a live CPU-active child reads as
+//     frozen for the child's entire life — the shape of a deploy plugin while its
+//     overlay/engine children run. It now sums the whole live tree (procTree), which is
+//     monotone: a reaped descendant's ticks move into its parent's cutime, itself summed.
 type pluginActivity struct {
-	// pid is the peer plugin process whose CPU counts as progress; 0 = no polling
-	// (an in-proc/builtin peer on the host legs only, or an unplumbed pid).
+	// pid is the peer plugin process whose process tree's CPU counts as progress; 0 = no
+	// polling (an in-proc/builtin peer on the host legs only, or an unplumbed pid).
 	pid int
 	// wake is the PROGRESS EVENT channel: touch() signals it non-blockingly and the
 	// idle watchdog RESETS its deadline on each signal. This is what makes the guard
@@ -245,20 +255,21 @@ func pluginInvokeNoProgress() time.Duration {
 
 // idleBoundedContext returns a context cancelled with errPluginCallIdle when the
 // call makes no progress for noProgress, plus a stop func. Progress is EITHER a host
-// reverse leg (a.touch) OR the peer plugin process's CPU advancing (a.cpu) — the
-// second covers work the plugin does entirely locally (virsh/ssh children). NO
-// wall-clock cap (see the file header). Applied only when the caller supplied no
-// deadline of its own.
+// reverse leg (a.touch) OR CPU advancing anywhere in the peer's LIVE process tree
+// (a.cpu → procTree) — the second covers work the plugin does entirely locally, in the
+// virsh/ssh children it forks and waits on. NO wall-clock cap (see the file header).
+// Applied only when the caller supplied no deadline of its own.
 //
-// EVENT-DRIVEN, not sampled: the watchdog arms a deadline of `noProgress` and RESETS
-// it whenever a progress event arrives on a.wake (a host-leg touch) or the peer's CPU
-// advances. Because a progress event that arrives before the deadline always resets
-// it, there is NO race between the producer's touch cadence and this watchdog's check
-// cadence — the failure a fixed sample interval cannot avoid (it compared a timestamp
-// against the full window at its own tick, so equal cadences under load false-tripped).
-// CPU is still polled (it has no event source), but a CPU advance also resets the
-// deadline, and the poll interval is a small fraction of the window so a busy peer is
-// never mistaken for idle.
+// EVENT-DRIVEN for the host leg, SAMPLED for CPU. The watchdog arms a deadline of
+// `noProgress` and RESETS it whenever a host-leg event arrives on a.wake or the peer
+// tree's CPU has advanced. A host-leg event that arrives before the deadline does reset
+// it — but the producer's touch is a NON-BLOCKING depth-1 send whose token can be
+// DROPPED, and Go's select picks at RANDOM among ready cases, so an expiry can win
+// while an unread event sits in the buffer. The deadline expiring is therefore NOT by
+// itself proof of idleness: every expiry re-measures BOTH sources through observe and
+// cancels only when neither has anything. That confirmation is what a bare timer lacks
+// — one that compared a timestamp against the full window at its own tick false-tripped
+// on equal cadences under load, which is the bug this rewrite fixes.
 func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *pluginActivity) (context.Context, context.CancelFunc) {
 	a.touch() // the dispatch itself is baseline activity
 	// Guarantee a live PROGRESS EVENT channel before the watcher starts: a clock not
