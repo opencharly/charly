@@ -315,7 +315,7 @@ keywords — true per-demand skill loading.
 **What:** Update AGENTS.md to include instructions for using pi-subagents
 capabilities, and add a `.pi/subagents/` configuration.
 
-**Why this works:** The AGENTS.md "Agents, Workflows & Teams" section describes
+**Why this works:** The umbrella AGENTS.md "Agents, Workflows & Teams" section describes
 the orchestrator/teammate model for Claude Code. Pi has equivalent capabilities
 via pi-subagents but with a different API. The instructions need to cover both.
 
@@ -458,7 +458,7 @@ pi.registerTool({
 | R0 enforcement | System prompt injection + custom tool (Layer 1 + 2) | Mechanical blocking is fragile and risks false positives. Injection every turn keeps rules in the model's active context. The custom tool provides a reliable way to load skills. |
 | Dispatcher parsing | Generate JSON from the same pipeline (Layer 4) | The Markdown table is hand-maintained prose, not generated. Layer 4 would require authoring a generator (no existing pipeline emits it). Until then, the tool parses the Markdown table at runtime. |
 | PR body formatting | Pre-push gate (Layer 6) | Catches errors before the validator runs. The gate already exists and runs on every push. Adding a `gh pr view` check is cheap. |
-| Attribution model | `model-agnostic` is correct for pi | Pi is model-agnostic by design. The exact provider/model name is not exposed to extensions. The `AGENTS.md` AI Attribution section already documents this. |
+| Attribution model | `model-agnostic` is correct for pi | Pi is model-agnostic by design. The exact provider/model name is not exposed to extensions. The umbrella `AGENTS.md` AI Attribution section already documents this. |
 | Worktree lifecycle | Custom tool (Layer 7) | Pi has no `EnterWorktree` equivalent. A tool with `promptGuidelines` instructs the agent to use it at the start of every cutover. |
 | Sub-agent instructions | Update AGENTS.md + `.pi/subagents/` (Layer 5) | The orchestrator/teammate model is documented for Claude Code. pi-subagents has a different API. The instructions must cover both. |
 
