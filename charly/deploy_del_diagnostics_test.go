@@ -30,8 +30,18 @@ func TestUnresolvedDeployTargetError(t *testing.T) {
 		t.Fatalf("a typo target must NOT be reported as a known substrate, got: %s", unknown)
 	}
 
-	// A KNOWN CUE resource kind that no corpus plugin serves (kubevirt today) → the
+	// A KNOWN CUE resource kind whose deploy word no corpus plugin serves → the
 	// known-but-unserved text, and NEVER an empty plugin name ("the  plugin candy").
+	// Every resource kind is corpus-served today, so the condition is CONSTRUCTED: delete
+	// the word from BOTH seams unresolvedDeployTargetError reads — the index-derived deploy
+	// set AND the generated provider-ref index — assert, and restore both. The coverage
+	// stays real without depending on a vocabulary gap that no longer exists.
+	delete(externalizedDeploySubstrates, "kubevirt")
+	delete(pluginProviderRefs, "deploy:kubevirt")
+	defer func() {
+		externalizedDeploySubstrates["kubevirt"] = true
+		pluginProviderRefs["deploy:kubevirt"] = "github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt"
+	}()
 	if !resourceKindSet["kubevirt"] || externalizedDeploySubstrates["kubevirt"] {
 		t.Fatalf("precondition: kubevirt must be a resource kind absent from the deploy set")
 	}
