@@ -18,7 +18,7 @@ require (
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026271.2318
-	github.com/opencharly/plugin-check/candy/plugin-check v0.2026279.1651
+	github.com/opencharly/plugin-check/candy/plugin-check v0.2026279.2102
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026277.738
@@ -136,7 +136,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026277.711
-	github.com/opencharly/spec v0.2026279.630
+	github.com/opencharly/spec v0.2026279.2018
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
