@@ -183,8 +183,8 @@ github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026276.1113 h1:0L81+WY
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026276.1113/go.mod h1:d0Q5Njlav0kQqEh1a/uH+q8zvfdayKg6XmGYfVMLEaA=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959 h1:JS8EX0lGEq9GVpwIGV8ZxGzPLzLq+zyhr6CIDl2c3lw=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959/go.mod h1:UEARhUMGngvey1RFumqMwia2WUspmlKlXORZGId+8Kc=
-github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026272.143 h1:9vyvCYNA00thdoffVk5D8MDesd212lJgHgnWFB2Qqx8=
-github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026272.143/go.mod h1:fV1jbXdkX0g1kuss+6pqm0zco2l/yW8ht1x+k1em4B0=
+github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026279.629 h1:RHVJ/EQAF0xorj6Y9Bb6yNy7VCPXF2Q9W63bc4gI0z8=
+github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026279.629/go.mod h1:fV1jbXdkX0g1kuss+6pqm0zco2l/yW8ht1x+k1em4B0=
 github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235 h1:a7BZZ4lKwHBfxLUO7FmOV0scELeUJKqWLR8Xpt3U61c=
 github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235/go.mod h1:6UI9BIsUbVt4P9cXnQUN2R/XH84HFnjLGpLcB5AmSZw=
 github.com/opencharly/plugin-init/candy/plugin-init v0.2026272.301 h1:e0xPW6vnle8i+ON4hIQhJcWPNpb3kveSds/5xM+cGWA=
@@ -249,8 +249,8 @@ github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026272.2040 h1:hS72z7B67DEI4
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026272.2040/go.mod h1:t655ExueVv7WRINSeBqJxm2dtJ1fXy3clsUvrl1ylbI=
 github.com/opencharly/sdk v0.2026277.352 h1:Gs86DjvgBC/1/Rc3eElnBxsbkazg2/YhJgSkPzECvV8=
 github.com/opencharly/sdk v0.2026277.352/go.mod h1:Oo+hxnhcA5RgCWvKVffKCucVJirTY0tpMGve/Da6Sm4=
-github.com/opencharly/spec v0.2026276.1636 h1:cGNaTzOAXZ1+ysC+75Wejz3BS1cYCTaL7xJcQHTZ790=
-github.com/opencharly/spec v0.2026276.1636/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/spec v0.2026279.630 h1:gpC0gk11LlG9n4vwVmooe2HPwCKoB2S9UypOFDUECX4=
+github.com/opencharly/spec v0.2026279.630/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
