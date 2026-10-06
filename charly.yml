@@ -864,7 +864,11 @@ check-kubevirt-vm:
         ram: 8G
         lifecycle: dev
         add_candy:
-            - k3s-server
+            # Explicit pin: the bare `k3s-server` resolves its version from the catalog's
+            # `vm-k3s-server:v2026.273.2350` pin (K8s v1.31 — ImageVolume alpha/off), which the
+            # layer-k3s v1.37 consumer wave (layer-k3s#4 -> vm-k3s-server#8) did not advance.
+            # Pin the bed's cluster to the tagged K8s v1.37 so the containerDisk VMI reaches Ready.
+            - '@github.com/opencharly/vm-k3s-server:v2026.278.2001'
             - '@github.com/opencharly/layer-kubevirt-operator:v2026.275.1217' # KubeVirt + CDI, in-venue
             - '@github.com/opencharly/layer-kubevirt:v2026.272.0825' # virtctl (client candy)
             - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350' # merged: loud kube: resolve + k3s-post fail-loud
