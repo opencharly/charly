@@ -90,13 +90,10 @@ func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 		}
 	}
 
-	// `kubevirt` is a CUE resource kind AND — now that plugin-kubevirt is in the corpus — an
-	// index-derived deploy substrate, exactly like the six above. This pins that the set is a
-	// projection of the index, not of spec.ResourceKinds: the 7th substrate joins the moment
-	// its plugin is in the corpus, with no charly change.
-	if !externalizedDeploySubstrates["kubevirt"] {
-		t.Fatalf("kubevirt must be in the index-derived deploy set — plugin-kubevirt is in the corpus")
-	}
+	// `kubevirt` is BOTH a CUE resource kind AND an index-derived deploy substrate. The
+	// deploy-substrate half is asserted by the loop above (its plugin is in the corpus, so
+	// the set — a projection of the index, not of spec.ResourceKinds — includes it). This
+	// pins the remaining half: `kubevirt` stays a CUE resource kind.
 	if !resourceKindSet["kubevirt"] {
 		t.Fatalf("kubevirt must remain a CUE resource kind (it is a known substrate word)")
 	}
