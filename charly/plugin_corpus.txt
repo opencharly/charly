@@ -67,6 +67,7 @@ github.com/opencharly/plugin-jetkvm
 github.com/opencharly/plugin-k8sgen
 github.com/opencharly/plugin-kernel-param
 github.com/opencharly/plugin-kube
+github.com/opencharly/plugin-kubevirt
 github.com/opencharly/plugin-loader
 github.com/opencharly/plugin-marketplace
 github.com/opencharly/plugin-matching
