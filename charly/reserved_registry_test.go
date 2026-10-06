@@ -70,14 +70,10 @@ func TestReservedWordRegistry_KindsDispatchable(t *testing.T) {
 // checkDeployProviderBijection (which validated against the closed spec.ResourceKinds
 // vocabulary) is GONE.
 //
-// `kubevirt` is deliberately NOT in the asserted set. It remains a CUE resource kind (so
-// unresolvedDeployTargetError still classifies it as a KNOWN substrate via resourceKindSet),
-// but no plugin in `charly/plugin_corpus.txt` declares `deploy:kubevirt`: the server,
-// github.com/opencharly/plugin-kubevirt, is owned by the KubeVirt venue leg (a separate
-// in-flight session) and cannot join the corpus yet because it ALSO declares `kind:kubevirt`,
-// which the compiled-in candy/plugin-substrate declares too — a duplicate the generator
-// rejects ("a word has one canonical provider"). When that leg lands plugin-kubevirt into the
-// corpus and retires the overlap, `deploy:kubevirt` returns to this set with no charly change.
+// `kubevirt` IS in the asserted set: plugin-kubevirt joined `charly/plugin_corpus.txt` (its
+// by-design `kind:kubevirt` overlap with the compiled-in candy/plugin-substrate is retired by
+// the generator's compiled-in-wins rule), so `deploy:kubevirt` is an index-derived deploy
+// substrate like the rest — no charly code change was needed to admit it.
 func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 
@@ -85,7 +81,7 @@ func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 	// INTENTIONALLY without an in-proc DeployTargetProvider. pluginDeployTarget (S3b) reads
 	// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider — there is no separate
 	// per-substrate lifecycle registry left to assert against.
-	for _, w := range []string{"android", "kindcluster", "kubernetes", "local", "pod", "vm"} {
+	for _, w := range []string{"android", "kindcluster", "kubernetes", "kubevirt", "local", "pod", "vm"} {
 		if !externalizedDeploySubstrates[w] {
 			t.Fatalf("%s must be in externalizedDeploySubstrates (the generated deploy-provider set)", w)
 		}
@@ -94,13 +90,10 @@ func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 		}
 	}
 
-	// `kubevirt` is a CUE resource kind but is NOT in the index-derived set (its server,
-	// plugin-kubevirt, is not in the corpus yet — see the KubeVirt venue leg above). This pins
-	// that the set is a projection of the index, not of spec.ResourceKinds: a ResourceKind with
-	// no corpus plugin is absent here while still being a KNOWN word to the diagnostics.
-	if externalizedDeploySubstrates["kubevirt"] {
-		t.Fatalf("kubevirt must NOT be in the index-derived deploy set while plugin-kubevirt is absent from the corpus")
-	}
+	// `kubevirt` is BOTH a CUE resource kind AND an index-derived deploy substrate. The
+	// deploy-substrate half is asserted by the loop above (its plugin is in the corpus, so
+	// the set — a projection of the index, not of spec.ResourceKinds — includes it). This
+	// pins the remaining half: `kubevirt` stays a CUE resource kind.
 	if !resourceKindSet["kubevirt"] {
 		t.Fatalf("kubevirt must remain a CUE resource kind (it is a known substrate word)")
 	}
