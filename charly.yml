@@ -1637,23 +1637,24 @@ check-structkind:
     check-structkind-vm:
         vm:
             from: eval-vm
-        # NESTED under the vm node (tree position) → the kind:local grandchild deploys INSIDE
-        # the guest via kit.NestedExecutor. No `host:` field: the venue comes from the parent.
-        # Mirror: check-group's check-group-vm → check-group-member.
-        check-structkind-member:
-            local:
-                from: check-structkind-app
-                plan:
-                    - check: command=test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK
-                      id: sk-member-marker-in-guest
-                      description: >-
-                        The reconstructed authored member actually DEPLOYED into the eval VM guest: its composed candy dropped /etc/check-structkind-marker on the GUEST filesystem. Authored on the member's own node plan because a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy.
-                      stdout:
-                        - contains: STRUCTKIND-MEMBER-DEPLOY-OK
-                      context:
-                        - runtime
-                      command:
-                        command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
+            # NESTED under the vm node (tree position) => the kind:local grandchild deploys INSIDE
+            # the guest via kit.NestedExecutor. No `host:` field: the venue comes from the parent.
+            # NOTE: the member key must sit INSIDE the vm body — at the vm key's OWN column the
+            # fold stamps it deploy-level and it lands on the machine running charly, silently.
+            check-structkind-member:
+                local:
+                    from: check-structkind-app
+                    plan:
+                        - check: command=test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK
+                          id: sk-member-marker-in-guest
+                          description: >-
+                            The reconstructed authored member actually DEPLOYED into the eval VM guest: its composed candy dropped /etc/check-structkind-marker on the GUEST filesystem. Authored on the member's own node plan because a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy.
+                          stdout:
+                            - contains: STRUCTKIND-MEMBER-DEPLOY-OK
+                          context:
+                            - runtime
+                          command:
+                            command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
 # charly-dev candy binary-install witness against the LOCAL charly-dev candy (no @github):
 # deploys the charly-dev candy declared in THIS file to a disposable Arch Cloud VM, where
 # the layer's `copy: bin/charly` run step places the in-development binary at
@@ -3277,6 +3278,13 @@ check-r10-stage:
               context: [runtime]
     r10-stage-assertor:
         local:
+            # Deploy-level sibling of the bed's VM venue, HOST-ROOTED by construction and
+            # deliberately so: its assert step dials the WRITER member's resolved identity from the
+            # HOST (`in_container: false` + `ssh charly-check-r10-stage …`), which is the cross-venue
+            # stage walk this bed exists to prove. Marked `host: local` so the intent is explicit —
+            # the loader walks a deploy-level member as its OWN root, and without the marking that
+            # landing on the machine running charly is silent (opencharly/sdk#330).
+            host: local
             from: r10-driver
             plan:
                 - check: member B asserts the marker from the HOST over the writer's resolved identity (stage assert — only valid after stage write drained)

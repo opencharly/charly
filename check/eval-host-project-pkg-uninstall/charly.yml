@@ -193,6 +193,14 @@ check-pkg-uninstall-inner:
                 in_container: false
     check-pkg-uninstall-member:
         local:
+            # Deploy-level sibling, HOST-ROOTED and deliberately so: this fixture project is
+            # resolved by the GUEST's own charly (`charly --host charly-check-pkg-uninstall check run
+            # check-pkg-uninstall-inner`), so "the machine running charly" IS the disposable guest —
+            # the member's recorded package-remove reverse op must be replayed ON THE GUEST by
+            # `cleanup-members`. Marked `host: local` so the intent is explicit — the loader walks a
+            # deploy-level member as its OWN root, and without the marking that landing is silent
+            # (opencharly/sdk#330).
+            host: local
             from: check-pkg-uninstall-fixture-app
             install_opts:
                 allow_repo_changes: true
