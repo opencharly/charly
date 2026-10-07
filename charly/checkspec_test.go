@@ -325,11 +325,6 @@ stdout: PONG
 	}
 }
 
-// TestCheck_CaptureExtract_YAMLDecode covers the YAML surface for the
-// 2026-05 capture_extract: regex modifier — paired with capture: it
-// pulls a submatch from the value before storing in the
-// ScenarioContext.Captures stash.
-
 // TestIsRuntimeOnlyVar_DeployName (DEPLOY_NAME is deploy-scope, resolved only
 // against a live deployment) DELETED as a duplicate of sdk/kit/checkvars_expand_test.go's
 // TestIsRuntimeOnlyVar, whose case table already asserts {"DEPLOY_NAME", true}

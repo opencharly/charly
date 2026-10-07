@@ -42,7 +42,7 @@ func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
 		t.Fatalf("status=%v msg=%q, want pass", res.Status, res.Message)
 	}
 	if res.Message != "saw-op" {
-		t.Fatalf("message=%q, want saw-op (pluginCheckResult decode)", res.Message)
+		t.Fatalf("message=%q, want saw-op (the contract's reply decode)", res.Message)
 	}
 	if fake.gotWord != "kube" {
 		t.Fatalf("provider saw word %q, want kube", fake.gotWord)
