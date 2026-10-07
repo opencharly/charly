@@ -13,7 +13,7 @@ require (
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244
 	github.com/opencharly/plugin-box/candy/plugin-box v0.2026272.2039
-	github.com/opencharly/plugin-build/candy/plugin-build v0.2026276.438
+	github.com/opencharly/plugin-build/candy/plugin-build v0.2026280.647
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026271.2248
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319

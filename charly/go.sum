@@ -135,8 +135,8 @@ github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244 h1
 github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244/go.mod h1:75qGMGoV+CKerAkpOQQlRggw/4oNg66nI3EtUhQDq4w=
 github.com/opencharly/plugin-box/candy/plugin-box v0.2026272.2039 h1:R7Zvf2dT95ua1YclZd1lRhRqKs+2775B1UGaBotU+Gk=
 github.com/opencharly/plugin-box/candy/plugin-box v0.2026272.2039/go.mod h1:AOnCiK8ZwQygDtv3v7vTgXxRqWR6c7Y13Yb9BFsru38=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026276.438 h1:3NV6T70qBRZuYnHX9s9skN/MqsVYzJtIWMofuc3+8Ao=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026276.438/go.mod h1:hQil5N+znvxinYpLmZmCVm/GxRgrDuVDs6a1nN/9+hE=
+github.com/opencharly/plugin-build/candy/plugin-build v0.2026280.647 h1:dZr7b1Tml9thhvzyjSB4kJDUP1LdRd1ALDDzkwlD2VM=
+github.com/opencharly/plugin-build/candy/plugin-build v0.2026280.647/go.mod h1:hQil5N+znvxinYpLmZmCVm/GxRgrDuVDs6a1nN/9+hE=
 github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026271.2248 h1:zEKZqarHnFcVrj9SbHpraAEtnvtjmbc6QPwDhqtInPY=
 github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026271.2248/go.mod h1:C8X1kX6oD+ONgrGGCTpGj9a1albGAqe2YGFkOzH2pK4=
 github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314 h1:HHTlqU2GSnUOwZgCIAvw9ztURs9akOr6z1LmcbGjddA=
