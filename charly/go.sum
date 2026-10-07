@@ -205,8 +205,8 @@ github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026272.332 h1:trxY
 github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026272.332/go.mod h1:8I/qWLci/Sfm6VK5zyO1IMIdRK5NaVHIUTwa2I95lqM=
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338 h1:UemA8nqjIeJkz/dftKRERpFjPsHP6GmWmhWiAaYWTR4=
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338/go.mod h1:UZPYGJffJW8DR/v/eThFSpXYNLPyv+Bdze+9JyNer0c=
-github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026272.331 h1:X/IJKvT9CqQoXfvXNEZCSE7/Z6HwkW6hCM8G6owU5Vs=
-github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026272.331/go.mod h1:8yatv8+5LIEq+TIH7SlaY2vP6KkGDqX+ueenpSyvweU=
+github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026280.2122 h1:CJsP72bzAxkihLEOyL3xrSJnzVcbLwck4xqVXze91sI=
+github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026280.2122/go.mod h1:OfvY8g7IY6pft6Fy8xgC8NENbPkzWeiYo33Goo31Wns=
 github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026272.330 h1:bFsT7O6yUrxuNi+upmgG4c7jW7stV7I4dFl6V3rji/Y=
 github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026272.330/go.mod h1:htnsXfzfgs8hRiQf05Odujm0muaFkp7SqtXoOULjzIM=
 github.com/opencharly/plugin-package/candy/plugin-package v0.2026272.339 h1:Qq7KEKF570QUzT99rzFLcxf56ac35PP3rAi6e5LVhMw=
