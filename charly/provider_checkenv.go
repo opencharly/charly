@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/opencharly/spec/ops"
 
+	"github.com/opencharly/spec/ops"
+	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -54,13 +55,32 @@ func snapshotCheckEnv(cc *hostCheckCarrier, _ *spec.Op) *spec.CheckEnv {
 	return ce
 }
 
-// pluginCheckResult is the wire form a verb provider returns (Operation.Result
-// JSON for the `verb` class). Kept minimal — status + message — so the result
-// round-trips cleanly without serializing the host-only *Op/timing fields of a
-// full CheckResult.
-type pluginCheckResult struct {
-	Status  string `json:"status"` // "pass" | "fail" | "skip"
-	Message string `json:"message"`
+// checkResultFromVerbReply maps a verb provider's wire reply (Operation.Result JSON for the
+// `verb` class) to the CheckResult the plan carries and the ledger records — the OUT-OF-PROCESS
+// twin of checkResultFromVerb (checkverb_result.go), which maps the in-process verdict.
+//
+// It decodes through the contract module's OWN decoder (ops.ParseResultJSONFull) instead of a
+// hand-rolled shape: the previous local struct re-declared the wire's {status,message} pair, so
+// the producer's CapturedValue — the parsed body of a probe, the fields of a log scan, the row a
+// SQL check read — was dropped here even once the producer sent it (opencharly/charly#780; the
+// producer half landed in the SDK's ServeCheckVerb). status ∈ "pass" | "fail" | "skip"; an
+// unknown status is a FAIL, and a malformed payload is a FAIL naming the verb (R1: never a
+// silently-passed corrupt reply).
+func checkResultFromVerbReply(word string, raw json.RawMessage) spec.CheckResult {
+	status, message, captured, err := ops.ParseResultJSONFull(&pb.InvokeReply{ResultJson: raw})
+	if err != nil {
+		return spec.CheckResult{Status: spec.StatusFail, Message: fmt.Sprintf("verb %q: decode result: %v", word, err)}
+	}
+	res := spec.CheckResult{Message: message, CapturedValue: string(captured)}
+	switch status {
+	case "pass":
+		res.Status = spec.StatusPass
+	case "skip":
+		res.Status = spec.StatusSkip
+	default:
+		res.Status = spec.StatusFail
+	}
+	return res
 }
 
 // runPluginVerb dispatches the generic `plugin:` verb to its registered Provider
@@ -153,9 +173,10 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.C
 	return res
 }
 
-// invokeVerbProvider marshals the Op + the check env, Invokes the provider's ops.OpRun, and
-// decodes the pluginCheckResult into a CheckResult. It is the transport-invisible verb
-// dispatch shared by the `plugin:` verb (runPluginVerb, after plugin_input validation)
+// invokeVerbProvider marshals the Op + the check env, Invokes the provider's ops.OpRun, and maps
+// the reply through checkResultFromVerbReply — the ONE decode of a verb provider's wire. It is
+// the transport-invisible verb dispatch shared by the `plugin:` verb (runPluginVerb, after
+// plugin_input validation)
 // AND the external-charly-verb path (a live verb word — cdp/kube/… — whose provider is
 // OUT-OF-PROCESS, not a CheckVerbProvider): an external verb reads the FULL Op it is
 // handed here (params_json), so a verb's params stay authored in #Op with NO migration
@@ -230,20 +251,6 @@ func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider
 		res.Message = fmt.Sprintf("verb %q: %v", word, err)
 		return res
 	}
-	var pr pluginCheckResult
-	if err := json.Unmarshal(out.JSON, &pr); err != nil {
-		res.Status = spec.StatusFail
-		res.Message = fmt.Sprintf("verb %q: decode result: %v", word, err)
-		return res
-	}
-	switch pr.Status {
-	case "pass":
-		res.Status = spec.StatusPass
-	case "skip":
-		res.Status = spec.StatusSkip
-	default:
-		res.Status = spec.StatusFail
-	}
-	res.Message = pr.Message
+	res = checkResultFromVerbReply(word, out.JSON)
 	return res
 }

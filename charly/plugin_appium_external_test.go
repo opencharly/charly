@@ -96,17 +96,14 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invoke (out-of-proc): %v", err)
 	}
-	var pr pluginCheckResult
-	if err := json.Unmarshal(out.JSON, &pr); err != nil {
-		t.Fatalf("decode result: %v (%s)", err, out.JSON)
-	}
-	if pr.Status != "skip" {
-		t.Fatalf("box-mode appium status result = %+v, want skip (live-container verb skips under check box)", pr)
+	got := checkResultFromVerbReply("appium", out.JSON)
+	if got.Status != spec.StatusSkip {
+		t.Fatalf("box-mode appium status result = %+v, want skip (live-container verb skips under check box)", got)
 	}
 	// The skip message names the method, proving the desugared input crossed the
 	// wire intact — the plugin read it from the marshaled Op's PluginInput.
-	if !strings.Contains(pr.Message, "status") {
-		t.Fatalf("skip message %q does not name the method — the plugin input did not cross the wire", pr.Message)
+	if !strings.Contains(got.Message, "status") {
+		t.Fatalf("skip message %q does not name the method — the plugin input did not cross the wire", got.Message)
 	}
 }
 
