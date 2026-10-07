@@ -19,16 +19,15 @@ import (
 //
 // It restores ALL the state a plugin registration mutates: the registry (byKey/origins/closers)
 // AND the parse-time pluginPrimaries desugar table AND the process-wide plugin schema set
-// (pluginSchemas: sources/inputDefs/unified) that a plugin serving an authored input def fills via
-// registerPluginUnitSchema. (S3b: the former per-substrate lifecycle/preresolve sub-registries and
-// their word-index are deleted — see CHANGELOG/2026.203.0212.md; pluginDeployTarget reads
-// gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider instead, so there is nothing
-// left to snapshot for them.) Only the registry itself duplicate-ERRORS on re-register; the schema
-// set replaces/appends idempotently, but restoring it keeps one test's schema registration from
-// bleeding into the next. Restoring pluginSchemas ALSO bounds its append-only `sources` slice under
-// `-count>N`: without it, a re-registering test re-appends its def on every run — safe only because
-// identical defs unify, but the slice (and every recompile of base ++ Σ) grows monotonically. With
-// it, each test's schema registration is undone, so the seam does not lean on CUE idempotence.
+// (pluginSchemas: sources/srcSeen/defOwners/inputDefs/unified) that a plugin serving an authored
+// input def fills via registerPluginUnitSchema. (S3b: the former per-substrate lifecycle/preresolve
+// sub-registries and their word-index are deleted — see CHANGELOG/2026.203.0212.md;
+// pluginDeployTarget reads gp.lifecycle/gp.preresolve directly off the resolved *grpcProvider
+// instead, so there is nothing left to snapshot for them.) Only the registry itself
+// duplicate-ERRORS on re-register; the schema set replaces/appends idempotently — since charly#770
+// a REPLAY of an already-spliced source string is a no-op and is neither re-appended nor re-indexed,
+// so the `sources` slice no longer grows under `-count>N` — but restoring it still keeps one test's
+// schema registration from bleeding into the next.
 func snapshotProviderState() func() {
 	providerRegistry.mu.Lock()
 	byKey := maps.Clone(providerRegistry.byKey)
@@ -41,6 +40,8 @@ func snapshotProviderState() func() {
 	pluginSchemas.mu.Lock()
 	schemaSources := append([]string(nil), pluginSchemas.sources...)
 	schemaDefs := maps.Clone(pluginSchemas.inputDefs)
+	schemaDefOwners := maps.Clone(pluginSchemas.defOwners)
+	schemaSrcSeen := maps.Clone(pluginSchemas.srcSeen)
 	schemaUnified := pluginSchemas.unified
 	pluginSchemas.mu.Unlock()
 
@@ -56,6 +57,8 @@ func snapshotProviderState() func() {
 		pluginSchemas.mu.Lock()
 		pluginSchemas.sources = schemaSources
 		pluginSchemas.inputDefs = schemaDefs
+		pluginSchemas.defOwners = schemaDefOwners
+		pluginSchemas.srcSeen = schemaSrcSeen
 		pluginSchemas.unified = schemaUnified
 		pluginSchemas.mu.Unlock()
 	}

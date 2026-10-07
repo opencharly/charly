@@ -41,14 +41,60 @@ func compileBasePlusServed(servedCUE string) (cue.Value, error) {
 // loaded unit's self-contained schema). Each plugin (builtin at process start,
 // external at connect) adds its served schema through registerPluginUnitSchema,
 // which recompiles the unified value. validateAuthoredPluginInput reads from it.
+//
+// defOwners + srcSeen are the DECLARATION-IDENTITY index the collision gate consults.
+// CUE UNIFIES same-name definitions across sources in one package, so the splice
+// accepts a def-name collision without a word; nothing in the merged value can say
+// "this def was declared twice", and a value comparison CANNOT decide it either
+// (MEASURED: unifying plugin-matching's `(#MatchingMatcher | [...#MatchingMatcher])`
+// with ITSELF already yields a value that is not Equals to the original and is
+// strictly LOOSER — `_`/disjunction normalization is not idempotent). The gate is
+// therefore keyed on declaration IDENTITY, which is sound by construction:
+// defOwners is def name → the ONE unit that declared it (its registry identity — the
+// unit's declared capability words — plus its display name for the error message),
+// and srcSeen is the set of exact source strings already spliced.
 type pluginSchemaSet struct {
 	mu        sync.Mutex
 	sources   []string
-	inputDefs map[string]string // provKey → def
+	defOwners map[string]defDeclarer // top-level def name → the declaring unit
+	srcSeen   map[string]bool        // exact served-schema source strings already spliced
+	inputDefs map[string]string      // provKey → def
 	unified   cue.Value
 }
 
-var pluginSchemas = &pluginSchemaSet{inputDefs: map[string]string{}}
+// defDeclarer is the unit that declared a top-level def: identity is the unit's
+// registry identity (see unitSchemaIdentity) — two units sharing it are the SAME
+// plugin re-registering its schema, which CUE must be free to merge; name is the
+// display name the collision error reports.
+type defDeclarer struct {
+	identity string
+	name     string
+}
+
+// unitSchemaIdentity is the identity a served schema's defs are owned under. A unit's
+// registry identity IS its declared capability words, so two registrations that declare
+// the same capabilities are the same plugin (a re-registration — e.g. the builtin gate
+// re-run, or the same plugin loaded from a second copy of its source); a registration
+// declaring a DIFFERENT capability word is a different plugin, and a def name shared with
+// it is the collision this gate exists for. A unit declaring no capability (a pure "doc
+// schema" unit) is identified by its display name.
+func unitSchemaIdentity(name string, s PluginSchema) string {
+	if len(s.InputDefs) == 0 {
+		return name
+	}
+	keys := make([]string, 0, len(s.InputDefs))
+	for k := range s.InputDefs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
+}
+
+var pluginSchemas = &pluginSchemaSet{
+	inputDefs: map[string]string{},
+	defOwners: map[string]defDeclarer{},
+	srcSeen:   map[string]bool{},
+}
 
 // registerPluginUnitSchema is THE plugin schema load gate — byte-identical for a
 // builtin (in-proc) and an external (out-of-proc) unit (the zero-distinction
@@ -72,7 +118,46 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 	}
 	pluginSchemas.mu.Lock()
 	defer pluginSchemas.mu.Unlock()
-	merged := append(append([]string(nil), pluginSchemas.sources...), s.CueSource)
+	// SELF-CONTAINMENT is a precondition of the collision gate below, and the documented
+	// per-plugin contract in its own right (marketplace plugin skill "Why self-contained
+	// schemas": a plugin's #<Word>Input references NO base def, so it compiles STANDALONE —
+	// the property `cue exp gengotypes` and the SDK serve-side check both need). A schema
+	// that only compiles once spliced is exactly a schema whose def names cannot be read per
+	// source, i.e. one the gate cannot protect; it is a hard error here, never a silent skip.
+	standalone := cueSchemaCtx().CompileString(s.CueSource)
+	if err := standalone.Err(); err != nil {
+		return fmt.Errorf("plugin %q: served schema does not compile STANDALONE (a plugin schema is self-contained and references no base def; it must compile alone AND splice onto the base): %w", name, err)
+	}
+	newDefs, err := topLevelDefNames(standalone)
+	if err != nil {
+		return fmt.Errorf("plugin %q: served schema defs: %w", name, err)
+	}
+	replay := pluginSchemas.srcSeen[s.CueSource]
+	// THE DEF-NAME COLLISION GATE (charly#770) — DECLARATION IDENTITY, never a value
+	// comparison. It runs BEFORE this unit's schema is committed and names BOTH plugins and
+	// the def. A replay (the exact same source string spliced before — the builtin gate
+	// re-run from a cleared state, or the embedded-defaults path re-registering a unit) is
+	// not a new declaration and is idempotent. A plugin re-declaring a def the BASE already
+	// declares is deliberately NOT gated here: a plugin schema must be self-contained (it
+	// may reference no base def), so a host-side WIRE twin is a structural necessity of that
+	// contract, and spec/schema/tunnel.cue documents the live instance (#TunnelConfig /
+	// #TunnelPort, deliberately twinned in candy/plugin-tunnel/schema/tunnel.cue). A
+	// value-based "is the merge a no-op?" allowance would be UNSOUND there — MEASURED:
+	// unifying plugin-matching's own disjunctive defs with themselves is already not
+	// Equals-equal and yields a strictly LOOSER value.
+	if !replay {
+		newIdentity := unitSchemaIdentity(name, s)
+		for _, d := range newDefs {
+			if prev, ok := pluginSchemas.defOwners[d]; ok && prev.identity != newIdentity {
+				return fmt.Errorf("plugin %q: its served schema re-declares %s, already declared by plugin %q — CUE UNIFIES same-name definitions across sources, so the splice silently merges the two shapes into one and EVERY plugin sharing %s then rejects its own authored input (a def-name collision is never resolvable by unification). Give the def a plugin-scoped name (the documented per-plugin convention is `#<Word>Input`) or delete the duplicate declaration",
+					name, d, prev.name, d)
+			}
+		}
+	}
+	merged := pluginSchemas.sources
+	if !replay {
+		merged = append(append([]string(nil), pluginSchemas.sources...), s.CueSource)
+	}
 	v, err := compileBasePlusServed(strings.Join(merged, "\n"))
 	if err != nil {
 		return fmt.Errorf("plugin %q: schema does not splice onto the base (base ++ plugin): %w", name, err)
@@ -94,11 +179,41 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 		}
 	}
 	pluginSchemas.sources = merged
+	pluginSchemas.srcSeen[s.CueSource] = true
+	identity := unitSchemaIdentity(name, s)
+	for _, d := range newDefs {
+		if _, taken := pluginSchemas.defOwners[d]; !taken {
+			pluginSchemas.defOwners[d] = defDeclarer{identity: identity, name: name}
+		}
+	}
 	for key, def := range s.InputDefs {
 		pluginSchemas.inputDefs[key] = def
 	}
 	pluginSchemas.unified = v
 	return nil
+}
+
+// topLevelDefNames returns the top-level CUE DEFINITION names (`#Name`) a compiled schema
+// value declares, sorted. The collision gate's per-source collect: it is the ONLY way to see
+// a collision, because the merged compile cannot distinguish "declared twice" from
+// "declared once" — the merge already succeeded.
+func topLevelDefNames(v cue.Value) ([]string, error) {
+	it, err := v.Fields(cue.Definitions(true))
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for it.Next() {
+		s := it.Selector()
+		// `#Name` is a definition; `_name` (a hidden field, also IsDefinition per CUE) is
+		// package-private and cannot collide across sources, so it is not indexed.
+		if !s.IsDefinition() || !strings.HasPrefix(s.String(), "#") {
+			continue
+		}
+		out = append(out, s.String())
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // validateAuthoredPluginInput is THE only plugin_input validator — schema-source
