@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/opencharly/spec/ops"
+	"github.com/opencharly/spec/spec"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
 	pb "github.com/opencharly/spec/proto"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/transport"
 )
 
