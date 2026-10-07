@@ -2560,15 +2560,27 @@ check-commands-local:
               command:
                 command: "rm -rf /tmp/charly-p15-boxbed && ${CHARLY_BIN} box new project /tmp/charly-p15-boxbed && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed candy add-rpm my-candy curl && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new box my-box --base quay.io/fedora/fedora:43 --candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box validate && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box generate my-box && test -f /tmp/charly-p15-boxbed/.build/my-box/Containerfile"
                 in_container: false
-            - check: charly box reconcile --remote --dry-run reports "already reconciled" on THIS project (every repo's pins are at one version), exercising the cached, disk-persisted gitClient().LatestTag path (candy/plugin-box#22, charly#736) — the retired raw per-process git ls-remote reintroduced the 90-94 concurrent fanout the cache exists to avoid; a stale repo would print "would rewrite", so the assertion fails if the --remote path bypasses the cache and disagrees with the resolver
+            - check: charly box reconcile --remote --dry-run exercises the cached, disk-persisted gitClient().LatestTag path (candy/plugin-box#22, charly#736) on THIS project — the retired raw per-process git ls-remote reintroduced the 90-94 concurrent fanout the cache exists to avoid, and the churn-STABLE way to catch that regression is to require the SECOND --remote run to be served from the persisted cache (no cold "fetching git metadata" burst) and to agree with the first. The step still PRINTS a pin-drift report (the "would rewrite N pin(s)" shape) when upstream has moved; that is upstream's property, refreshed by `charly task sync`, and asserting its ABSENCE made this gate go red the moment any upstream repo published a tag (opencharly/charly#650's class — a gate keyed on a moving external state is a false-red generator)
               id: box-reconcile-remote-cached
               exit_status: 0
               stdout:
-                - contains: 'already reconciled'
+                - contains: BOX-RECONCILE-CACHED-OK
               context:
                 - runtime
               command:
-                command: ${CHARLY_BIN} box reconcile --remote --dry-run
+                command: |
+                  set -eu
+                  first=$(${CHARLY_BIN} box reconcile --remote --dry-run 2>&1)
+                  printf '%s\n' "$first"
+                  second=$(${CHARLY_BIN} box reconcile --remote --dry-run 2>&1)
+                  printf '%s\n' "$second"
+                  if printf '%s' "$second" | grep -q 'fetching git metadata'; then
+                    echo "box reconcile --remote re-probed the remote instead of serving the persisted cache"; exit 1
+                  fi
+                  report() { printf '%s\n' "$1" | grep -vE '^charly: (fetching git metadata|git metadata cached)'; }
+                  test "$(report "$first")" = "$(report "$second")"
+                  printf '%s\n' "$first" | grep -qE '^already reconciled|^would rewrite [0-9]+ pin\(s\):'
+                  echo BOX-RECONCILE-CACHED-OK
                 in_container: false
             - check: charly box authoring verbs (set/add-candy/rm-candy/write/cat) dispatch NESTED under the box grammar group and mutate a scratch project's charly.yml byte-faithfully, proving the authoring command plugin (candy/plugin-authoring, command:set/add-candy/rm-candy/write/cat, P14b) owns the yaml.Node candy-list edits (kit.MappingChild / kit.SaveYAMLNodeFile) + the dot-path writer (kit.SetByDotPath) + the project-rooted file escape hatch (resolveProjectFile) host-side — add-candy appends, rm-candy removes (curl absent after), set writes defaults.registry, write+cat round-trip a file. fetch/refresh stay covered by the Go tests + the golden-parity spike (they reenter core over HostBuild("cli") and hit the network, unsuitable for this bed)
               id: box-authoring-dispatches
