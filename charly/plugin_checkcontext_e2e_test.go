@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/opencharly/spec/ops"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +10,7 @@ import (
 	"time"
 
 	"github.com/opencharly/spec/exec"
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -70,7 +69,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dispatch := func(op *spec.Op) pluginCheckResult {
+	dispatch := func(op *spec.Op) spec.CheckResult {
 		t.Helper()
 		params, mErr := marshalJSON(op)
 		if mErr != nil {
@@ -82,24 +81,22 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 		if iErr != nil {
 			t.Fatalf("InvokeWithExecutor: %v", iErr)
 		}
-		var res pluginCheckResult
-		if uErr := json.Unmarshal(out.JSON, &res); uErr != nil {
-			t.Fatalf("decode result: %v", uErr)
-		}
-		return res
+		// The HOST's own decode of the reply, not a shape re-declared here: what this
+		// asserts is what the check run would carry.
+		return checkResultFromVerbReply("http", out.JSON)
 	}
 
 	// Success: status 200 + body contains "ready" → pass, end-to-end over the reverse channel.
 	pass := dispatch(&spec.Op{Plugin: "http", PluginInput: map[string]any{
 		"http": srv.URL, "status": 200, "body": []any{map[string]any{"contains": "ready"}},
 	}})
-	if pass.Status != "pass" {
-		t.Fatalf("out-of-process http verb: status=%q msg=%q, want pass", pass.Status, pass.Message)
+	if pass.Status != spec.StatusPass {
+		t.Fatalf("out-of-process http verb: status=%v msg=%q, want pass", pass.Status, pass.Message)
 	}
 
 	// Negative: status 500 expected vs 200 actual → fail (the verdict also crosses the channel).
 	fail := dispatch(&spec.Op{Plugin: "http", PluginInput: map[string]any{"http": srv.URL, "status": 500}})
-	if fail.Status != "fail" {
-		t.Fatalf("status mismatch over reverse channel: status=%q, want fail", fail.Status)
+	if fail.Status != spec.StatusFail {
+		t.Fatalf("status mismatch over reverse channel: status=%v, want fail", fail.Status)
 	}
 }

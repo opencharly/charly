@@ -48,7 +48,7 @@ require (
 	github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026272.230
 	github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026272.332
 	github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338
-	github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026272.331
+	github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026280.2122
 	github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026272.330
 	github.com/opencharly/plugin-package/candy/plugin-package v0.2026272.339
 	github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026274.652
@@ -104,7 +104,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ollama/ollama v0.32.14 // indirect
-	github.com/opencharly/sdk v0.2026280.1251 // indirect
+	github.com/opencharly/sdk v0.2026280.2133 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
