@@ -2560,7 +2560,7 @@ check-commands-local:
               command:
                 command: "rm -rf /tmp/charly-p15-boxbed && ${CHARLY_BIN} box new project /tmp/charly-p15-boxbed && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed candy add-rpm my-candy curl && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new box my-box --base quay.io/fedora/fedora:43 --candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box validate && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box generate my-box && test -f /tmp/charly-p15-boxbed/.build/my-box/Containerfile"
                 in_container: false
-            - check: charly box reconcile --remote --dry-run exercises the cached, disk-persisted gitClient().LatestTag path (candy/plugin-box#22, charly#736) on THIS project — the retired raw per-process git ls-remote reintroduced the 90-94 concurrent fanout the cache exists to avoid, and the churn-STABLE way to catch that regression is to require the SECOND --remote run to be served from the persisted cache (no cold "fetching git metadata" burst) and to agree with the first. The step still PRINTS a pin-drift report (the "would rewrite N pin(s)" shape) when upstream has moved; that is upstream's property, refreshed by `charly task sync`, and asserting its ABSENCE made this gate go red the moment any upstream repo published a tag (opencharly/charly#650's class — a gate keyed on a moving external state is a false-red generator). The two invocations run under an ISOLATED cache directory (XDG_CACHE_HOME), because the shared ref cache is mutable by any other charly process on the host — that was this step's last false-red generator, and with an isolated cache the second run is cache-served by construction rather than by luck
+            - check: charly box reconcile --remote --dry-run exercises the cached, disk-persisted gitClient().LatestTag path (candy/plugin-box#22, charly#736) on THIS project — the retired raw per-process git ls-remote reintroduced the 90-94 concurrent fanout the cache exists to avoid, and the churn-STABLE way to catch that regression is to require the SECOND --remote run to be served from the persisted cache (no cold "fetching git metadata" burst) and to agree with the first. The step still PRINTS a pin-drift report (the "would rewrite N pin(s)" shape) when upstream has moved; that is upstream's property, refreshed by `charly task sync`, and asserting its ABSENCE made this gate go red the moment any upstream repo published a tag (opencharly/charly#650's class — a gate keyed on a moving external state is a false-red generator)
               id: box-reconcile-remote-cached
               exit_status: 0
               stdout:
@@ -2570,17 +2570,9 @@ check-commands-local:
               command:
                 command: |
                   set -eu
-                  # The ref cache lives under os.UserCacheDir() and is PROCESS-SHARED: any other
-                  # charly process on this host (another session's bed, an operator's build) can
-                  # perturb it between these two invocations, which is a gate keyed on shared
-                  # mutable state — a false-red generator (charly#650). Isolating the cache makes
-                  # the second run cache-served BY CONSTRUCTION, which is what this step has
-                  # always meant to assert.
-                  cache=$(mktemp -d)
-                  trap 'rm -rf "$cache"' EXIT
-                  first=$(XDG_CACHE_HOME=$cache ${CHARLY_BIN} box reconcile --remote --dry-run 2>&1)
+                  first=$(${CHARLY_BIN} box reconcile --remote --dry-run 2>&1)
                   printf '%s\n' "$first"
-                  second=$(XDG_CACHE_HOME=$cache ${CHARLY_BIN} box reconcile --remote --dry-run 2>&1)
+                  second=$(${CHARLY_BIN} box reconcile --remote --dry-run 2>&1)
                   printf '%s\n' "$second"
                   if printf '%s' "$second" | grep -q 'fetching git metadata'; then
                     echo "box reconcile --remote re-probed the remote instead of serving the persisted cache"; exit 1
