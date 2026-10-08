@@ -393,6 +393,16 @@ charly-dev:
                 # wouldn't match the trailing newline).
                 - matches: "/usr/(local/)?s?bin/charly"
               command: command -v charly
+            - check: the compiled plugin-candy command is registered in the image
+              id: candy-command-registered
+              exit_status: 0
+              stdout:
+                # The plugin-candy module pin (charly/go.mod) is what registers the `candy`
+                # command family. Without it `charly candy` is not a known command; with it
+                # the dispatcher answers. The contrast that makes this a real assertion:
+                # an unregistered verb exits 80.
+                - matches: "out-of-process command plugin"
+              command: charly candy --help 2>&1
 # check-k3s-vm-ctx / check-k8s-deploy-cluster-ctx — per-BED kind:kubernetes cluster templates (task #18
 # rework). check-k3s-vm and check-k8s-deploy (the group root's own vm:) both `from: k3s-vm` (the SAME shared kind:vm
 # entity), so their kubeconfig contexts are now per-deploy-DOMAIN-scoped, not shared by entity (see
