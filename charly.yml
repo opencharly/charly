@@ -20,7 +20,7 @@ import:
     - arch: '@github.com/opencharly/distro-arch:v2026.274.1256'
     - cachyos: '@github.com/opencharly/distro-cachyos:v2026.281.1001'
     - debian: '@github.com/opencharly/distro-debian:v2026.274.0746'
-    - fedora: '@github.com/opencharly/distro-fedora:v2026.274.2213'
+    - fedora: '@github.com/opencharly/distro-fedora:v2026.281.1250'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.274.0752'
     # omarchy imports the `arch` namespace the same way cachyos does — its distro
     # entity `inherits: arch`, and its boxes base on arch.arch / arch.arch-builder.
