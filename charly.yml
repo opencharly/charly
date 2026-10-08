@@ -393,6 +393,16 @@ charly-dev:
                 # wouldn't match the trailing newline).
                 - matches: "/usr/(local/)?s?bin/charly"
               command: command -v charly
+            - check: the plugin-candy `params` verb is registered (the pin's own effect)
+              id: candy-params-registered
+              exit_status: 0
+              stdout:
+                # plugin-candy v0.2026281.948 registers `params` (command.go: `case "params"`);
+                # v0.2026271.2318 does NOT, so this check fails on the old pin and passes on
+                # the new one - which is what makes it coverage for THIS change rather than a
+                # statement that the `candy` command family exists at all.
+                - matches: "usage: charly candy params"
+              command: charly candy params --help 2>&1
 # check-k3s-vm-ctx / check-k8s-deploy-cluster-ctx — per-BED kind:kubernetes cluster templates (task #18
 # rework). check-k3s-vm and check-k8s-deploy (the group root's own vm:) both `from: k3s-vm` (the SAME shared kind:vm
 # entity), so their kubeconfig contexts are now per-deploy-DOMAIN-scoped, not shared by entity (see
