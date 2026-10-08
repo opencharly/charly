@@ -2542,6 +2542,61 @@ check-commands-local:
               command:
                 command: ${CHARLY_BIN} candy --help
                 in_container: false
+            - check: command=charly candy params generates params/cue_types_gen.go for a scratch plugin candy authored IN the step (a yaml tag beside every json tag), AND command=charly candy params --check is green on a current projection and RED in BOTH failing directions - a drifted file (is STALE) and a missing projection (is missing) - naming the file in every failing case
+              id: candy-params-contracts
+              exit_status: 0
+              stdout:
+                - contains: 'wrote'
+              context:
+                - runtime
+              command:
+                command: |
+                  set -eu
+                  # charly#839: the R4a `candy params` verb had no standing witness in the bed roster.
+                  # ONE step, because the four contracts share ONE scratch fixture (R3: the setup is not
+                  # copy-pasted per arm), and because the label above must not claim more than the step
+                  # asserts - each failing arm checks the file name it says it checks.
+                  #
+                  # Exit status is asserted with if/grep -q and NEVER through a pipe: `cmd | grep`
+                  # reports GREP's status, so a piped assertion cannot tell a red gate from a green one -
+                  # the trap codified in the rulebook (opencharly/opencharly#444) after a false rc=0.
+                  d=$(mktemp -d)
+                  trap 'rm -rf "$d"' EXIT
+                  ${CHARLY_BIN} -C "$d" box new project . >/dev/null
+                  ${CHARLY_BIN} -C "$d" box new candy p839 >/dev/null
+                  # `box new candy` alone is NOT enough: `candy params` refuses a candy with no CUE
+                  # schema ("no schema directory at candy/<name>/schema"), so the step authors the
+                  # minimal params-bearing schema itself. Measured while spiking this row.
+                  mkdir -p "$d/candy/p839/schema"
+                  printf '#P839Input: {\n\tName: string\n\tTags?: [...string]\n}\n' > "$d/candy/p839/schema/p839.cue"
+                  f="$d/candy/p839/params/cue_types_gen.go"
+                  out="$d/check.out"
+                  # ARM 1 - generate: the projection is written and carries the schemaretag contract.
+                  ${CHARLY_BIN} -C "$d" candy params p839
+                  test -f "$f"
+                  if grep -n 'json:"' "$f" | grep -v 'yaml:"' | grep -q .; then
+                    echo "a json tag without a yaml tag in $f"; exit 1
+                  fi
+                  grep -q 'yaml:"Name,omitempty" json:"Name"' "$f"
+                  # ARM 2 - current: green.
+                  if ! ${CHARLY_BIN} -C "$d" candy params p839 --check >"$out" 2>&1; then
+                    echo "a current projection failed --check"; cat "$out"; exit 1
+                  fi
+                  grep -q 'is current' "$out"
+                  # ARM 3 - drift: RED, and it NAMES the file.
+                  printf '\n// drift\n' >> "$f"
+                  if ${CHARLY_BIN} -C "$d" candy params p839 --check >"$out" 2>&1; then
+                    echo "a DRIFTED projection passed --check"; cat "$out"; exit 1
+                  fi
+                  grep -q 'is STALE' "$out"
+                  grep -q 'cue_types_gen.go' "$out"
+                  # ARM 4 - missing projection: RED, and it NAMES the file too (the arm the label promises).
+                  rm -f "$f"
+                  if ${CHARLY_BIN} -C "$d" candy params p839 --check >"$out" 2>&1; then
+                    echo "a MISSING projection passed --check"; cat "$out"; exit 1
+                  fi
+                  grep -q 'is missing' "$out"
+                  grep -q 'cue_types_gen.go' "$out"
             - check: command=charly clean --dry-run exits 0 and prints the would-remove retention report (proving the externalized clean command owns the report + reaches the shared retention engine over the "retention" HostBuild seam, touching nothing)
               id: clean-dry-run-runs
               exit_status: 0
