@@ -3,7 +3,7 @@ module github.com/opencharly/charly/tools/golden-compile
 go 1.26.4
 
 require (
-	github.com/opencharly/sdk v0.2026280.1251
+	github.com/opencharly/sdk v0.2026280.2133
 	github.com/opencharly/spec v0.2026280.1255
 	google.golang.org/grpc v1.61.0
 	gopkg.in/yaml.v3 v3.0.1
