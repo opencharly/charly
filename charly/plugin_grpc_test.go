@@ -2,18 +2,18 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/opencharly/spec/ops"
 	"net"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/spec/ops"
+	"github.com/opencharly/spec/spec"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
 	pb "github.com/opencharly/spec/proto"
-	"github.com/opencharly/spec/spec"
 	"github.com/opencharly/spec/transport"
 )
 
@@ -23,11 +23,11 @@ type testVerbProvider struct{ word string }
 func (p testVerbProvider) Reserved() string     { return p.word }
 func (p testVerbProvider) Class() ProviderClass { return ClassVerb }
 func (p testVerbProvider) Invoke(_ context.Context, op *Operation) (*Result, error) {
-	j, err := json.Marshal(pluginCheckResult{Status: "pass", Message: "testprobe-ok reserved=" + op.Reserved})
+	rep, err := ops.ResultJSON("pass", "testprobe-ok reserved="+op.Reserved)
 	if err != nil {
 		return nil, err
 	}
-	return &Result{JSON: j}, nil
+	return &Result{JSON: rep.GetResultJson()}, nil
 }
 
 // TestPluginGRPCRoundTrip proves the uniform Provider envelope AND the served
@@ -102,12 +102,9 @@ func TestPluginGRPCRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invoke: %v", err)
 	}
-	var pr pluginCheckResult
-	if err := json.Unmarshal(out.JSON, &pr); err != nil {
-		t.Fatalf("decode result: %v (%s)", err, out.JSON)
-	}
-	if pr.Status != "pass" || !strings.Contains(pr.Message, "testprobe-ok") {
-		t.Fatalf("result = %+v, want pass + testprobe-ok", pr)
+	verbRes := checkResultFromVerbReply("testprobe", out.JSON)
+	if verbRes.Status != spec.StatusPass || !strings.Contains(verbRes.Message, "testprobe-ok") {
+		t.Fatalf("result = %+v, want pass + testprobe-ok", verbRes)
 	}
 }
 

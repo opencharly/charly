@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/opencharly/spec/ops"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/opencharly/spec/ops"
+	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue/cuecontext"
 )
@@ -74,12 +75,9 @@ func TestExternalPluginEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invoke (out-of-proc): %v", err)
 	}
-	var pr pluginCheckResult
-	if err := json.Unmarshal(out.JSON, &pr); err != nil {
-		t.Fatalf("decode result: %v (%s)", err, out.JSON)
-	}
-	if pr.Status != "pass" || pr.Message != "external-plugin-ok" {
-		t.Fatalf("result = %+v, want pass + external-plugin-ok (marker round-trip)", pr)
+	got := checkResultFromVerbReply("externalprobe", out.JSON)
+	if got.Status != spec.StatusPass || got.Message != "external-plugin-ok" {
+		t.Fatalf("result = %+v, want pass + external-plugin-ok (marker round-trip)", got)
 	}
 }
 
