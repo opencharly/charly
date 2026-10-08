@@ -73,22 +73,45 @@ func TestDiscoverBakedPluginWordsRecordsEveryClass(t *testing.T) {
 	}
 }
 
-// TestBakedLookupPrecedesTheProjectScan states the ORDER the fix depends on, without needing a real
-// project: connectPluginByWordRef asks the baked map FIRST, so a recorded deploy word answers before
-// any closure scan happens. The scan leg is what makes this expensive and network-touching, which is
-// precisely why the baked hit must short-circuit it (`/charly-internals:go`).
+// TestBakedLookupPrecedesTheProjectScan exercises the REAL entry point
+// (connectPluginByWordRef) and proves the ORDER it documents: the baked lookup runs BEFORE the
+// project scan, so a recorded word answers without any project config at all.
+//
+// The proof is a side effect, not a claim: the recorded binary is a script that touches a marker and
+// exits, and the test runs in a directory with NO charly.yml. connectPluginByWordRef returns at its
+// `LoadConfig` failure for a project it cannot read — so a marker that exists when it returns false
+// can only have been created by the baked leg, which therefore ran first. (The connect itself fails,
+// as it must: a script is not a plugin. That is why the assertion is "was it TRIED, and before the
+// scan", not "did it succeed" — a successful connect is what the live acceptance run proves.)
 func TestBakedLookupPrecedesTheProjectScan(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "baked-leg-ran")
+	bin := filepath.Join(dir, "plugin-deploy-pod")
+	script := "#!/bin/sh\ntouch " + marker + "\nexit 0\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
 	key := providerKey(ClassDeployTarget, "pod", "")
-	bakedPluginBinaries[key] = "/nonexistent/plugin-deploy-pod"
+	bakedPluginBinaries[key] = bin
 	defer delete(bakedPluginBinaries, key)
 
-	// The connect itself will fail (the binary does not exist), and THAT is the assertion: a
-	// recorded word is consumed by connectBakedPlugin's own attempt rather than falling through to
-	// the project scan — which, in a module with no project config, cannot produce a provider at all.
-	if _, ok := connectBakedPlugin(ClassDeployTarget, "pod", ""); ok {
-		t.Fatal("connectBakedPlugin reported a provider from a nonexistent binary")
+	// No charly.yml here, so the project-scan leg cannot succeed: every answer this call can give
+	// comes from the baked leg.
+	dir2 := t.TempDir()
+	old, _ := os.Getwd()
+	if err := os.Chdir(dir2); err != nil {
+		t.Fatal(err)
 	}
-	if _, still := bakedPluginBinaries[key]; !still {
-		t.Error("connectBakedPlugin consumed the recorded entry instead of leaving it for the next resolve")
+	defer func() { _ = os.Chdir(old) }()
+
+	if _, ok := connectPluginByWordRef(ClassDeployTarget, "pod", "", ""); ok {
+		t.Fatal("connectPluginByWordRef reported a provider from a script that is not a plugin")
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("the baked leg never ran: connectPluginByWordRef consulted the project scan without "+
+			"trying the recorded baked binary first (marker %s absent: %v).\n"+
+			"  The baked lookup must precede the scan — that order is what makes a local plugin "+
+			"reachable on a bed (opencharly/charly#831).", marker, err)
 	}
 }
