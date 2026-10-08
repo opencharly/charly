@@ -11,7 +11,13 @@ import (
 // The trailing `// indirect` marker is deliberately not part of the capture: whether a
 // module imports a contract directly or transitively does not change which VERSION it
 // must agree on.
-var contractRequireRe = regexp.MustCompile(`(?m)^\s*github\.com/opencharly/(sdk|spec)\s+(v\S+)`)
+//
+// The optional leading `require ` matters: a module may carry its contract requirement
+// as a SINGLE-LINE directive (`require github.com/opencharly/sdk v…`) instead of inside
+// a parenthesized block, and the anchored form could not see that shape at all — which is
+// how `tools/golden-cloudinit` kept a stale sdk pin while this test named only the two
+// modules that carry theirs in a block (charly#836: three stale pins, two reported).
+var contractRequireRe = regexp.MustCompile(`(?m)^\s*(?:require\s+)?github\.com/opencharly/(sdk|spec)\s+(v\S+)`)
 
 // contractReplaceRe matches a `replace` of either contract module onto a local path.
 // After the sdk de-submodule cutover NO in-repo module may replace either contract:
