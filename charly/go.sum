@@ -145,6 +145,8 @@ github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319 
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319/go.mod h1:sJZfp6ovCsj1LzQAzq/RFw5FmtzBbnWZk8IPvyK/v+c=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026271.2318 h1:7bXPTBvIjO/NSvezL0i4/651VgE10O8QCqJlZVFd6c0=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026271.2318/go.mod h1:pjKhnMDRzFv4CKJ+dkZk7fuRiwI92Lu0qK6qLfUvomg=
+github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948 h1:becOqUxBQxNBTMwazoqmF24b4ApCfDHAQmzOfVwUTWg=
+github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948/go.mod h1:UC/PfR3DaB6yXAeqWPUwpqn/hpvOh3YhWjiay5zJW+U=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026280.1627 h1:wZ4MucwIfD9KJI9plHqvbRB1M6o1G2bARKKEju5YCNo=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026280.1627/go.mod h1:fd34kI1jFHI/UlbSaedkiAFCIti4PGu4aRm7ZxUdy24=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313 h1:gt2nSmXaEpJFWQMGVENgIu6hsgq9Jtp1b7PlRf3PWY8=
@@ -251,6 +253,8 @@ github.com/opencharly/sdk v0.2026280.2133 h1:+aj/sWKiOHf0tBZLWfqa/uFGQr0eTxlr5EU
 github.com/opencharly/sdk v0.2026280.2133/go.mod h1:Oo+hxnhcA5RgCWvKVffKCucVJirTY0tpMGve/Da6Sm4=
 github.com/opencharly/spec v0.2026280.1255 h1:T5Den4FoHmEtv1OlEILUaPt7+LkeumQGadMUOAWuJek=
 github.com/opencharly/spec v0.2026280.1255/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/spec v0.2026281.933 h1:CpfCSIQX/ez72kZW4LydEs/ES9uixSdtfAQEQR9QDRY=
+github.com/opencharly/spec v0.2026281.933/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
@@ -335,5 +339,3 @@ gotest.tools/v3 v3.0.3 h1:4AuOwCGf4lLR9u3YOe2awrHygurzhO/HeQ6laiA6Sx0=
 gotest.tools/v3 v3.0.3/go.mod h1:Z7Lb0S5l+klDB31fvDQX8ss/FlKDxtlFlw3Oa8Ymbl8=
 libvirt.org/go/libvirtxml v1.12005.0 h1:KOxYULmLDHBR4GOd/c+8K65XtTYilVmiDPyr37mUGms=
 libvirt.org/go/libvirtxml v1.12005.0/go.mod h1:7Oq2BLDstLr/XtoQD8Fr3mfDNrzlI3utYKySXF2xkng=
-github.com/opencharly/spec v0.2026281.933/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
-github.com/opencharly/spec v0.2026281.933 h1:CpfCSIQX/ez72kZW4LydEs/ES9uixSdtfAQEQR9QDRY=
