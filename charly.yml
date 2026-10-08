@@ -2542,6 +2542,74 @@ check-commands-local:
               command:
                 command: ${CHARLY_BIN} candy --help
                 in_container: false
+            - check: command=charly candy params generates params/cue_types_gen.go for a scratch plugin candy authored IN the step, with a yaml tag beside every json tag (the schemaretag contract)
+              id: candy-params-generates
+              exit_status: 0
+              stdout:
+                - contains: 'wrote'
+              context:
+                - runtime
+              command:
+                command: |
+                  set -eu
+                  # charly#839: the R4a `candy params` verb had no standing witness in the bed roster.
+                  # A scratch project in a TEMP dir - never the checkout this bed runs in.
+                  d=$(mktemp -d)
+                  trap 'rm -rf "$d"' EXIT
+                  ${CHARLY_BIN} -C "$d" box new project . >/dev/null
+                  ${CHARLY_BIN} -C "$d" box new candy p839 >/dev/null
+                  # `box new candy` alone is NOT enough: `candy params` refuses a candy with no CUE
+                  # schema ("no schema directory at candy/<name>/schema"), so the step authors the
+                  # minimal params-bearing schema itself. Measured while spiking this row.
+                  mkdir -p "$d/candy/p839/schema"
+                  printf '#P839Input: {\n\tName: string\n\tTags?: [...string]\n}\n' > "$d/candy/p839/schema/p839.cue"
+                  ${CHARLY_BIN} -C "$d" candy params p839
+                  f="$d/candy/p839/params/cue_types_gen.go"
+                  test -f "$f"
+                  # the schemaretag contract: no json tag may appear without a yaml tag on its line
+                  if grep -n 'json:"' "$f" | grep -v 'yaml:"' | grep -q .; then
+                    echo "a json tag without a yaml tag in $f"; exit 1
+                  fi
+                  grep -q 'yaml:"Name,omitempty" json:"Name"' "$f"
+            - check: command=charly candy params --check is green on a current projection and RED in BOTH failing directions - a drifted file (is STALE) and a missing projection (is missing) - naming the file each time
+              id: candy-params-check-both-directions
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: |
+                  set -eu
+                  # charly#839 asks for the drift gate in its FAILING direction, not just its passing one.
+                  # Exit status is asserted with `if`/`grep -q` and NEVER through a pipe: `cmd | grep`
+                  # reports GREP's status, so a piped assertion cannot tell a red gate from a green one -
+                  # the trap codified in the rulebook (opencharly/opencharly#444) after a false rc=0.
+                  d=$(mktemp -d)
+                  trap 'rm -rf "$d"' EXIT
+                  ${CHARLY_BIN} -C "$d" box new project . >/dev/null
+                  ${CHARLY_BIN} -C "$d" box new candy p839 >/dev/null
+                  mkdir -p "$d/candy/p839/schema"
+                  printf '#P839Input: {\n\tName: string\n\tTags?: [...string]\n}\n' > "$d/candy/p839/schema/p839.cue"
+                  ${CHARLY_BIN} -C "$d" candy params p839 >/dev/null
+                  f="$d/candy/p839/params/cue_types_gen.go"
+                  out="$d/check.out"
+                  # (1) current -> MUST pass
+                  if ! ${CHARLY_BIN} -C "$d" candy params p839 --check >"$out" 2>&1; then
+                    echo "a current projection failed --check"; cat "$out"; exit 1
+                  fi
+                  grep -q 'is current' "$out"
+                  # (2) drifted -> MUST fail, and say so
+                  printf '\n// drift\n' >> "$f"
+                  if ${CHARLY_BIN} -C "$d" candy params p839 --check >"$out" 2>&1; then
+                    echo "a DRIFTED projection passed --check"; cat "$out"; exit 1
+                  fi
+                  grep -q 'is STALE' "$out"
+                  grep -q 'cue_types_gen.go' "$out"
+                  # (3) missing projection -> MUST fail, and say so
+                  rm -f "$f"
+                  if ${CHARLY_BIN} -C "$d" candy params p839 --check >"$out" 2>&1; then
+                    echo "a MISSING projection passed --check"; cat "$out"; exit 1
+                  fi
+                  grep -q 'is missing' "$out"
             - check: command=charly clean --dry-run exits 0 and prints the would-remove retention report (proving the externalized clean command owns the report + reaches the shared retention engine over the "retention" HostBuild seam, touching nothing)
               id: clean-dry-run-runs
               exit_status: 0
