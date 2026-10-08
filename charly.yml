@@ -18,7 +18,7 @@ import:
     # imports main back (they reach main's shared candies via @github refs), so the
     # former main↔cachyos / main↔fedora mutual cycles are dissolved.
     - arch: '@github.com/opencharly/distro-arch:v2026.274.1256'
-    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.274.2120'
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.281.1001'
     - debian: '@github.com/opencharly/distro-debian:v2026.274.0746'
     - fedora: '@github.com/opencharly/distro-fedora:v2026.274.2213'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.274.0752'
