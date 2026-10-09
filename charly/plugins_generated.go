@@ -54,6 +54,7 @@ import (
 	cp_plugin_mount "github.com/opencharly/plugin-mount/candy/plugin-mount"
 	cp_plugin_oci "github.com/opencharly/plugin-oci/candy/plugin-oci"
 	cp_plugin_ollama "github.com/opencharly/plugin-ollama/candy/plugin-ollama"
+	cp_plugin_openclaw "github.com/opencharly/plugin-openclaw/candy/plugin-openclaw"
 	cp_plugin_package "github.com/opencharly/plugin-package/candy/plugin-package"
 	cp_plugin_pod "github.com/opencharly/plugin-pod/candy/plugin-pod"
 	cp_plugin_port "github.com/opencharly/plugin-port/candy/plugin-port"
@@ -139,4 +140,5 @@ func init() {
 	registerCompiledPlugin(cp_plugin_agentteams.NewProvider(), cp_plugin_agentteams.NewMeta())
 	registerCompiledPlugin(cp_plugin_dsh.NewProvider(), cp_plugin_dsh.NewMeta())
 	registerCompiledPlugin(cp_plugin_ollama.NewProvider(), cp_plugin_ollama.NewMeta())
+	registerCompiledPlugin(cp_plugin_openclaw.NewProvider(), cp_plugin_openclaw.NewMeta())
 }

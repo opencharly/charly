@@ -13,8 +13,6 @@ github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40/go.mod h1:Q7
 github.com/aymanbagabas/go-osc52/v2 v2.0.1/go.mod h1:uYgXzlJ7ZpABp8OJ+exZzJJhRNQ2ASbcXHWsFqH8hp8=
 github.com/bits-and-blooms/bitset v1.24.4/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
 github.com/blakesmith/ar v0.0.0-20190502131153-809d4375e1fb/go.mod h1:PkYb9DJNAwrSvRx5DYA+gUcOIgTGVMNkfSCbZM8cWpI=
-github.com/buger/jsonparser v1.1.2 h1:frqHqw7otoVbk5M8LlE/L7HTnIq2v9RX6EJ48i9AxJk=
-github.com/buger/jsonparser v1.1.2/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
 github.com/bytedance/sonic v1.11.6/go.mod h1:LysEHSvpvDySVdC2f87zGWf6CIKJcAvqab1ZaiQtds4=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=
 github.com/cavaliergopher/cpio v1.0.1/go.mod h1:pBdaqQjnvXxdS/6CvNDwIANIFSP0xRKI16PX4xejRQc=
@@ -101,14 +99,14 @@ github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3
 github.com/nlpodyssey/gopickle v0.3.0/go.mod h1:f070HJ/yR+eLi5WmM1OXJEGaTpuJEUiib19olXgYha0=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
 github.com/openai/openai-go/v3 v3.61.0/go.mod h1:ufI1+K+t0ijRB3gk8eztiw1crcDpsBuxRQL4sbLIrts=
-github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948 h1:becOqUxBQxNBTMwazoqmF24b4ApCfDHAQmzOfVwUTWg=
-github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948/go.mod h1:UC/PfR3DaB6yXAeqWPUwpqn/hpvOh3YhWjiay5zJW+U=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.1841 h1:3Xeei5BpdEXe3RvhpEQ6z4EAPni+ZYSBc6FvKCTPJaA=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026268.1841/go.mod h1:3WRmvtXLybza1C0c54Zt8gikRPZ5N8MwtumbMhLQPKo=
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845 h1:w5NX80kiApaXyT8JmGbrW9i02WZns2uO8CKcFU6+B48=
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026268.1845/go.mod h1:cnet2p4CbE6oh9DEoPewlkArwUEGdKZsqAr3aBzCpGY=
 github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026272.244 h1:uChJgZfvPgc/azCTcXUmR3Nj0jCG9RMYH2LDMlQEaEU=
 github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026272.244/go.mod h1:gN1fYiEssZoKRWWoJpP2uOHcAomlficRM2PSE8DpKy0=
+github.com/opencharly/plugin-openclaw/candy/plugin-openclaw v0.2026281.1647 h1:UUIQkmNnvXe3OfJ9EV0zQpHefAQ2LNuyu1CCbwwqb00=
+github.com/opencharly/plugin-openclaw/candy/plugin-openclaw v0.2026281.1647/go.mod h1:9mBlqHedZILLq40pbniR4IVjXySu1BOHp17tovq5TJ8=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.534 h1:AtKpvdMNgKrSsJqwwqV7/OuoZ4QXn4/TSpW5pu59aS0=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026268.534/go.mod h1:QktfTESS3KTxlzESYJ2ImS1njOZPWOqKuJ+doAIfSvo=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026272.822 h1:GloCGf7aQBFFSTOLkRF1IC/ntgyfRTQYkdKGKydbxMM=

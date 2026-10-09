@@ -18,6 +18,7 @@ require (
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948
+	github.com/opencharly/plugin-openclaw/candy/plugin-openclaw v0.2026281.1647
 	github.com/opencharly/plugin-check/candy/plugin-check v0.2026280.1627
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039
@@ -144,3 +145,4 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17 // indirect
 )
+
