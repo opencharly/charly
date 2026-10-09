@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/alecthomas/kong"
 	"github.com/opencharly/spec/exitcode"
@@ -157,6 +158,20 @@ func (c *VersionCmd) Run() error {
 // a defer, and the explicit post-dispatch site.
 func reapPlugins() { _ = providerRegistry.Close() }
 
+// seedDevRepoOverrides installs the out-of-process -dev-plugin overrides this build was generated
+// with (devRepoOverrideEntries, written by charly/internal/pluginsgen) into CHARLY_REPO_OVERRIDE.
+// A no-op on any build without one, and on any run where the operator already set the variable —
+// the override names LOCAL checkouts of unmerged work, so a build artefact must never silently
+// displace a value a person set deliberately.
+func seedDevRepoOverrides() {
+	if len(devRepoOverrideEntries) == 0 || os.Getenv(proc.RepoOverrideEnv) != "" {
+		return
+	}
+	if err := os.Setenv(proc.RepoOverrideEnv, strings.Join(devRepoOverrideEntries, ",")); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: seeding %s: %v\n", proc.RepoOverrideEnv, err)
+	}
+}
+
 func main() {
 	// Load project .env into process environment before any config resolution.
 	// Real env vars take precedence over .env values.
@@ -165,6 +180,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Warning: loading .env: %v\n", err)
 		}
 	}
+
+	// A dev build may carry OUT-OF-PROCESS -dev-plugin overrides. A compiled-in plugin's override
+	// rides go.work.dev, which the BUILD reads; an out-of-process plugin is built by the HOST at run
+	// time, and the seam that serves it parses CHARLY_REPO_OVERRIDE — the one channel both sides
+	// share (opencharly/charly#835). Seeded AFTER the .env load and only when unset, so an
+	// operator's own value always wins.
+	seedDevRepoOverrides()
 
 	var cli CLI
 	// Pre-parse: learn the project's external COMMAND words (byte-gated, best-effort) so the
