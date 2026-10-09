@@ -632,10 +632,12 @@ func bakedPluginBinary(name string) string {
 var bakedPluginBinaries = map[string]string{}
 
 // discoverBakedPluginWords reads the `.providers` word manifests baked beside each plugin
-// binary (bake_plugin:, or a host install into /usr/lib/charly/plugins) and registers their
-// declared external COMMAND words into the kong grammar (registerDeclaredExternalCommand) AND
-// their external VERB words (registerDeclaredExternalVerb) — CHEAPLY, WITHOUT connecting any
-// plugin (the connect is lazy, on the first dispatch / ResolveVerb miss, via connectBakedPlugin).
+// binary (bake_plugin:, or a host install into /usr/lib/charly/plugins), registers their declared
+// external COMMAND words into the kong grammar (registerDeclaredExternalCommand) and their external
+// VERB words (registerDeclaredExternalVerb) — CHEAPLY, WITHOUT connecting any plugin (the connect is
+// lazy, on the first dispatch / ResolveVerb miss, via connectBakedPlugin) — and records EVERY
+// declared word, of EVERY class, in bakedPluginBinaries so connectPluginByWordRef can answer for it
+// (opencharly/charly#831: a `deploy:` word needs no eager registration, but it does need recording).
 // It records class:word → baked-binary in bakedPluginBinaries, so a deployed container (or a
 // project-less host where the plugin is installed beside charly) recognizes `charly <word>` for
 // a baked command AND resolves verb:<word> for a baked verb (the credential store). A NO-OP when
@@ -661,13 +663,24 @@ func discoverBakedPluginWords() {
 				if !ok {
 					continue
 				}
+				// Register the EAGER surface per class, then record the binary for EVERY class.
+				//
+				// Only a command needs a kong grammar entry and only a verb needs the lazy verb
+				// dispatch hook, because those are the two classes the CLI reaches BY WORD before any
+				// dispatch exists. Every other class — a `deploy:` substrate, a `kind:`, a `step:`, a
+				// `builder:` — is resolved on demand through connectPluginByWordRef, which consults
+				// `bakedPluginBinaries` FIRST, before the project scan. That lookup is class-agnostic
+				// by construction (the map is keyed `class:word[:parent]`), so the ONLY thing that
+				// stopped a baked DEPLOY-class plugin from being reachable was this switch skipping
+				// the record below — which made an R10 bed unable to witness a local
+				// `plugin-deploy-pod`, while the same baked directory worked for a verb
+				// (opencharly/charly#831). Recording is not registering: no class gains a CLI surface
+				// it did not have.
 				switch class {
 				case ClassCommand:
 					registerDeclaredExternalCommand(word, parent)
 				case ClassVerb:
 					registerDeclaredExternalVerb(word)
-				default:
-					continue // only command + verb words are dispatched lazily by word today
 				}
 				// FIRST dir wins (CHARLY_PLUGIN_DIR ahead of the FHS path) — consistent with
 				// bakedPluginBinary's first-hit lookup. Precedence only: a word baked under the
