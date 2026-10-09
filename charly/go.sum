@@ -203,6 +203,8 @@ github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026272.230 h1:6/
 github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026272.230/go.mod h1:gIaY1ftm091L5fh6O6W4dJEt0Am48NRd3Gmp8Bnc6rU=
 github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026272.332 h1:trxYuo6su8LKzMdems9LfxZnPHLvMpJC0+CnbQPMSN8=
 github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026272.332/go.mod h1:8I/qWLci/Sfm6VK5zyO1IMIdRK5NaVHIUTwa2I95lqM=
+github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026280.2238 h1:+TSzZyytVO5dw0Bo2cgbBFvS4zxSteB8iff2QRremKE=
+github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026280.2238/go.mod h1:8I/qWLci/Sfm6VK5zyO1IMIdRK5NaVHIUTwa2I95lqM=
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338 h1:UemA8nqjIeJkz/dftKRERpFjPsHP6GmWmhWiAaYWTR4=
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338/go.mod h1:UZPYGJffJW8DR/v/eThFSpXYNLPyv+Bdze+9JyNer0c=
 github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026280.2122 h1:CJsP72bzAxkihLEOyL3xrSJnzVcbLwck4xqVXze91sI=
