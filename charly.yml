@@ -516,9 +516,6 @@ kimi:
 #   check-openclaw-pod         (pod) — the OpenClaw family's gateway bed. The family is
 #                                     imported under the `openclaw` namespace (see import:),
 #                                     so it runs qualified: openclaw.check-openclaw-pod
-#                                     gogcli@latest, ffmpeg/sqlite arch coverage)
-#                                     (claude-code/codex/gemini) + CPU ollama +
-#                                     nested charly toolchain (charly+container-nesting)
 #
 # Zero-operator-side-effect: pod beds → rootless podman; check-k3s-vm → libvirt
 # qcow2; check-local → a disposable scratch dir. No test writes to ~/.local/bin,
