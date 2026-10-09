@@ -160,12 +160,19 @@ func writeDevWork(root, rel string, body []byte) error {
 func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[string]string, error) {
 	wordRefs := map[string]string{}
 	for _, repo := range repoList {
-		_, compiled := repoSetCompiled(names, repo)
+		name, compiled := repoSetCompiled(names, repo)
 		// A -dev-plugin override applies to the repo it names whether or not this build COMPILES
 		// that plugin in: an out-of-process plugin is served from its own module at run time, and
 		// the ref this index publishes is the thing that decides where the host looks. Keying it on
 		// `compiled` was the whole of charly#835's limitation.
-		repoRoot := devRepoRoot(devRoots, repo)
+		//
+		// ONE match per repo: a compiled plugin's override is keyed by the name just resolved, so it
+		// is a map lookup; only a plugin this build does NOT compile in has to be matched against the
+		// override set's own keys.
+		repoRoot := devRoots[name]
+		if repoRoot == "" && !compiled {
+			repoRoot = devRepoRoot(devRoots, repo)
+		}
 		if repoRoot == "" {
 			fetched, ferr := refs.DownloadRepo(repo, "HEAD")
 			if ferr != nil {
@@ -607,20 +614,27 @@ func readCorpus(root, path string) []string {
 // rather than re-derived so the two cannot drift (R3).
 func devRepoRoot(devRoots map[string]string, repo string) string {
 	for name, dir := range devRoots {
-		root := "github.com/opencharly/" + name
-		if repo == root || strings.HasPrefix(repo, root+"/") {
+		if pluginRepoMatches(repo, name) {
 			return dir
 		}
 	}
 	return ""
 }
 
+// pluginRepoMatches reports whether repo IS the plugin repo named name — the repository root
+// github.com/opencharly/<name>, or a path under it (a candy/provider REF is "<root>/candy/<x>", a
+// repo PATH is exactly <root>). ONE predicate: two spellings of it is how a dev override silently
+// stops matching the repo it names (opencharly/charly#835).
+func pluginRepoMatches(repo, name string) bool {
+	root := "github.com/opencharly/" + name
+	return repo == root || strings.HasPrefix(repo, root+"/")
+}
+
 func repoSetCompiled(names []string, repo string) (string, bool) {
 	for _, n := range names {
-		root := "github.com/opencharly/" + n
 		// root OR a subpath: a candy/provider REF is "<root>/candy/<x>", while a repo
 		// PATH is exactly <root> — one predicate serves both (R3).
-		if repo == root || strings.HasPrefix(repo, root+"/") {
+		if pluginRepoMatches(repo, n) {
 			return n, true
 		}
 	}
