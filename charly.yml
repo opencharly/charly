@@ -523,12 +523,9 @@ kimi:
 #   check-jupyter-ml-pod       (pod) — jupyter-ml spacy/quarto + GPU MCP probes
 #   check-versa-pod            (pod) — versa OSM analytics + vector-tile + marimo MCP
 #   check-android-emulator-pod (pod) — Android 16 emulator (/dev/kvm) + adb/appium
-#   check-openclaw-pod         (pod) — minimal openclaw gateway on the cachyos base
-#   check-openclaw-full-pod    (pod) — maximal openclaw-full on cachyos (AUR chrome,
-#                                     gogcli@latest, ffmpeg/sqlite arch coverage)
-#   check-openclaw-desktop-pod (pod) — all-in-one: selkies desktop + openclaw-full
-#                                     (claude-code/codex/gemini) + CPU ollama +
-#                                     nested charly toolchain (charly+container-nesting)
+#   check-openclaw-pod         (pod) — the OpenClaw family's gateway bed. The family is
+#                                     imported under the `openclaw` namespace (see import:),
+#                                     so it runs qualified: openclaw.check-openclaw-pod
 #
 # Zero-operator-side-effect: pod beds → rootless podman; check-k3s-vm → libvirt
 # qcow2; check-local → a disposable scratch dir. No test writes to ~/.local/bin,
