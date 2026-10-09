@@ -140,3 +140,7 @@ func init() {
 	registerCompiledPlugin(cp_plugin_dsh.NewProvider(), cp_plugin_dsh.NewMeta())
 	registerCompiledPlugin(cp_plugin_ollama.NewProvider(), cp_plugin_ollama.NewMeta())
 }
+
+// devRepoOverrideEntries are this build's OUT-OF-PROCESS -dev-plugin overrides, as
+// CHARLY_REPO_OVERRIDE entries. Empty on any build without one. See main's seed.
+var devRepoOverrideEntries = []string{}

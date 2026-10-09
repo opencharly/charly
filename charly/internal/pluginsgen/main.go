@@ -160,11 +160,12 @@ func writeDevWork(root, rel string, body []byte) error {
 func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[string]string, error) {
 	wordRefs := map[string]string{}
 	for _, repo := range repoList {
-		name, compiled := repoSetCompiled(names, repo)
-		repoRoot := ""
-		if compiled {
-			repoRoot = devRoots[name]
-		}
+		_, compiled := repoSetCompiled(names, repo)
+		// A -dev-plugin override applies to the repo it names whether or not this build COMPILES
+		// that plugin in: an out-of-process plugin is served from its own module at run time, and
+		// the ref this index publishes is the thing that decides where the host looks. Keying it on
+		// `compiled` was the whole of charly#835's limitation.
+		repoRoot := devRepoRoot(devRoots, repo)
 		if repoRoot == "" {
 			fetched, ferr := refs.DownloadRepo(repo, "HEAD")
 			if ferr != nil {
@@ -211,7 +212,7 @@ func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, g
 	// devRoots: candy name -> local plugin repo checkout, for the compiled-in plugins a
 	// -dev-plugin override re-points. Empty (nil) on a plain build, which then takes every
 	// path below exactly as it did before.
-	devRoots, err := resolveDevPlugins(names, cfg, devs)
+	devRoots, err := resolveDevPlugins(devs)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -308,6 +309,35 @@ func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, g
 		}
 		g.WriteString("}\n")
 	}
+	// --- the OUT-OF-PROCESS dev overrides (opencharly/charly#835) ---
+	// A COMPILED-IN plugin's -dev-plugin override rides go.work.dev, which the BUILD reads. An
+	// out-of-process plugin is built by the HOST at run time, long after any build-time artefact is
+	// out of scope — and the seam that serves it (spec.ProjectLoader.RepoOverrideDir, whose one
+	// implementation lives in plugin-loader's own repo) cannot import anything generated here. The
+	// env var that seam already parses is the only channel both sides share, so a dev build emits
+	// its out-of-process overrides as entries for it; main seeds them, and an operator's own
+	// CHARLY_REPO_OVERRIDE always wins.
+	compiledSet := make(map[string]bool, len(names))
+	for _, n := range names {
+		compiledSet[n] = true
+	}
+	var envPairs []string
+	for name, dir := range devRoots {
+		if !compiledSet[name] {
+			envPairs = append(envPairs, "github.com/opencharly/"+name+"="+dir)
+		}
+	}
+	sort.Strings(envPairs)
+	// Declared on EVERY build, empty or not: main's seed reads it unconditionally, and a var that
+	// exists only under a dev flag would make the plain build fail to compile.
+	g.WriteString("\n// devRepoOverrideEntries are this build's OUT-OF-PROCESS -dev-plugin overrides, as\n")
+	g.WriteString("// CHARLY_REPO_OVERRIDE entries. Empty on any build without one. See main's seed.\n")
+	g.WriteString("var devRepoOverrideEntries = []string{\n")
+	for _, pair := range envPairs {
+		fmt.Fprintf(&g, "\t%q,\n", pair)
+	}
+	g.WriteString("}\n")
+
 	formatted, err := format.Source(g.Bytes())
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("format generated go: %w\n%s", err, g.String())
@@ -370,13 +400,9 @@ func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, g
 //   - the checkout must BE that plugin's module: the generated registration imports
 //     github.com/opencharly/<name>/candy/<name> by the standalone convention, so a checkout whose
 //     candy/<name>/go.mod declares any other module path cannot satisfy that import.
-func resolveDevPlugins(names []string, cfg string, devs []devPlugin) (map[string]string, error) {
+func resolveDevPlugins(devs []devPlugin) (map[string]string, error) {
 	if len(devs) == 0 {
 		return nil, nil
-	}
-	compiled := make(map[string]bool, len(names))
-	for _, n := range names {
-		compiled[n] = true
 	}
 	out := make(map[string]string, len(devs))
 	for _, d := range devs {
@@ -385,9 +411,6 @@ func resolveDevPlugins(names []string, cfg string, devs []devPlugin) (map[string
 		}
 		if _, dup := out[d.name]; dup {
 			return nil, fmt.Errorf("-dev-plugin %s: given twice", d.name)
-		}
-		if !compiled[d.name] {
-			return nil, fmt.Errorf("-dev-plugin %s: not in the compiled_plugins: list of %s — only a plugin this build COMPILES IN can be re-pointed at a local checkout", d.name, cfg)
 		}
 		abs, err := filepath.Abs(d.dir)
 		if err != nil {
@@ -545,6 +568,20 @@ func readCorpus(root, path string) []string {
 // repoSetCompiled reports whether a repo path (or a candy/provider REF under it) is one of
 // the compiled-in plugin repos (github.com/opencharly/<name>) — a compiled repo that cannot
 // be indexed is fatal.
+// devRepoRoot returns the local checkout a -dev-plugin override points this repo at, whether or not
+// this build compiles that plugin in. Keyed by candy name, and a repo is
+// github.com/opencharly/<name> (or a subpath of it) — the same predicate repoSetCompiled uses, shared
+// rather than re-derived so the two cannot drift (R3).
+func devRepoRoot(devRoots map[string]string, repo string) string {
+	for name, dir := range devRoots {
+		root := "github.com/opencharly/" + name
+		if repo == root || strings.HasPrefix(repo, root+"/") {
+			return dir
+		}
+	}
+	return ""
+}
+
 func repoSetCompiled(names []string, repo string) (string, bool) {
 	for _, n := range names {
 		root := "github.com/opencharly/" + n
