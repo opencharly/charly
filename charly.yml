@@ -523,12 +523,9 @@ kimi:
 #   check-jupyter-ml-pod       (pod) — jupyter-ml spacy/quarto + GPU MCP probes
 #   check-versa-pod            (pod) — versa OSM analytics + vector-tile + marimo MCP
 #   check-android-emulator-pod (pod) — Android 16 emulator (/dev/kvm) + adb/appium
-#   check-openclaw-pod         (pod) — minimal openclaw gateway on the cachyos base
-#   check-openclaw-full-pod    (pod) — maximal openclaw-full on cachyos (AUR chrome,
-#                                     gogcli@latest, ffmpeg/sqlite arch coverage)
-#   check-openclaw-desktop-pod (pod) — all-in-one: selkies desktop + openclaw-full
-#                                     (claude-code/codex/gemini) + CPU ollama +
-#                                     nested charly toolchain (charly+container-nesting)
+#   check-openclaw-pod         (pod) — the OpenClaw family's gateway bed. The family is
+#                                     imported under the `openclaw` namespace (see import:),
+#                                     so it runs qualified: openclaw.check-openclaw-pod
 #
 # Zero-operator-side-effect: pod beds → rootless podman; check-k3s-vm → libvirt
 # qcow2; check-local → a disposable scratch dir. No test writes to ~/.local/bin,
@@ -2510,7 +2507,7 @@ check-commands-app:
         candy:
             - '@github.com/opencharly/plugin-clean/candy/plugin-clean:v2026.271.2313'
             - '@github.com/opencharly/plugin-settings/candy/plugin-settings:v2026.272.0410'
-            - '@github.com/opencharly/plugin-candy/candy/plugin-candy:v2026.271.2318'
+            - '@github.com/opencharly/plugin-candy/candy/plugin-candy:v2026.281.0948'
             - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.276.1843'
             - '@github.com/opencharly/plugin-authoring/candy/plugin-authoring:v2026.271.2244'
             - '@github.com/opencharly/plugin-status/candy/plugin-status:v2026.272.0442'

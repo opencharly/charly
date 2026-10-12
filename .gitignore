@@ -148,3 +148,6 @@ pytorch_model*.bin
 
 # scratch project golden-compile and the parity test materialize the fixtures into
 .parity/
+
+# pluginsgen dev sibling (charly#835) — untracked by design: a dev build must leave the tracked tree clean
+charly/plugins_dev_generated.go

@@ -347,16 +347,41 @@ func TestDevWorkspaceQuotesAPathThatNeedsIt(t *testing.T) {
 	}
 }
 
-// TestResolveDevPluginsRejectsANameThatIsNotCompiledIn: only a plugin this build COMPILES IN can be
-// re-pointed at a local checkout, so naming anything else must fail at the flag rather than
-// silently do nothing (the module would not even be linked into the binary).
-func TestResolveDevPluginsRejectsANameThatIsNotCompiledIn(t *testing.T) {
-	_, err := resolveDevPlugins([]string{"plugin-fake"}, "charly/charly.yml", []devPlugin{{name: "plugin-other", dir: t.TempDir()}})
-	if err == nil {
-		t.Fatal("resolveDevPlugins accepted a name that is not in compiled_plugins:")
+// TestResolveDevPluginsAcceptsAPluginThisBuildDoesNotCompileIn: the flag is the ONE dev-loop bridge,
+// and an OUT-OF-PROCESS plugin is not in compiled_plugins: — it is served from its own module at run
+// time, and the ref this generator publishes decides where the host looks. Refusing it here was
+// charly#835: every deploy-substrate plugin's change was unprovable against its own unmerged head.
+// The checkout must still BE that plugin's module, which the sibling test below pins.
+func TestResolveDevPluginsAcceptsAPluginThisBuildDoesNotCompileIn(t *testing.T) {
+	dir := t.TempDir()
+	writeCandy(t, dir, map[string]string{
+		"candy/plugin-other/go.mod": "module github.com/opencharly/plugin-other/candy/plugin-other\n\ngo 1.26.4\n",
+	})
+	got, err := resolveDevPlugins([]devPlugin{{name: "plugin-other", dir: dir}})
+	if err != nil {
+		t.Fatalf("resolveDevPlugins refused a plugin this build does not COMPILE IN: %v", err)
 	}
-	if !strings.Contains(err.Error(), "not in the compiled_plugins: list of charly/charly.yml") {
-		t.Fatalf("resolveDevPlugins err = %v, want it to name compiled_plugins: and the config file", err)
+	abs, _ := filepath.Abs(dir)
+	if got["plugin-other"] != abs {
+		t.Fatalf("resolveDevPlugins = %v, want plugin-other -> %s", got, abs)
+	}
+}
+
+// TestDevRepoRootMatchesACheckoutWhicheverPlacement: the ref-index projection must apply a
+// -dev-plugin override for the repo it names regardless of placement, or the out-of-process case
+// stays unreachable and the flag is class-specific again.
+func TestDevRepoRootMatchesACheckoutWhicheverPlacement(t *testing.T) {
+	devs := map[string]string{"plugin-other": "/checkout"}
+	for _, repo := range []string{
+		"github.com/opencharly/plugin-other",
+		"github.com/opencharly/plugin-other/candy/plugin-other",
+	} {
+		if got := devRepoRoot(devs, repo); got != "/checkout" {
+			t.Errorf("devRepoRoot(%q) = %q, want /checkout", repo, got)
+		}
+	}
+	if got := devRepoRoot(devs, "github.com/opencharly/plugin-fake"); got != "" {
+		t.Errorf("devRepoRoot matched an unrelated repo: %q", got)
 	}
 }
 
@@ -369,7 +394,7 @@ func TestResolveDevPluginsRejectsACheckoutThatIsNotThatPlugin(t *testing.T) {
 	writeCandy(t, dir, map[string]string{
 		"candy/plugin-fake/go.mod": "module github.com/opencharly/plugin-other/candy/plugin-fake\n\ngo 1.26.4\n",
 	})
-	_, err := resolveDevPlugins([]string{"plugin-fake"}, "charly/charly.yml", []devPlugin{{name: "plugin-fake", dir: dir}})
+	_, err := resolveDevPlugins([]devPlugin{{name: "plugin-fake", dir: dir}})
 	if err == nil {
 		t.Fatal("resolveDevPlugins accepted a checkout whose module path is not the compiled-in plugin's")
 	}
