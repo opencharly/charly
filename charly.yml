@@ -594,12 +594,14 @@ check-k3s-vm:
               kube:
                 method: nodes
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
               context: [runtime]
             - check: kubernetes=wait-nodes
               id: kv-kubernetes-wait-nodes
               kube:
                 method: "wait-nodes"
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 kube_count: 1
               timeout: "300s"
               context: [runtime]
@@ -608,6 +610,7 @@ check-k3s-vm:
               kube:
                 method: pods
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 namespace: kube-system
               context: [runtime]
             - check: kubernetes=wait-ready
@@ -615,6 +618,7 @@ check-k3s-vm:
               kube:
                 method: "wait-ready"
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 kube_kind: Deployment
                 namespace: kube-system
                 name: coredns
@@ -625,12 +629,14 @@ check-k3s-vm:
               kube:
                 method: addons
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
               context: [runtime]
             - check: kubernetes=ingressclass
               id: kv-kubernetes-ingressclass-traefik
               kube:
                 method: ingressclass
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
               stdout: {contains: "traefik"}
               context: [runtime]
             - check: kubernetes=storageclass
@@ -638,6 +644,7 @@ check-k3s-vm:
               kube:
                 method: storageclass
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
               stdout: {contains: "local-path"}
               context: [runtime]
             - check: kubernetes=raw — the raw escape hatch lists an arbitrary resource (namespaces)
@@ -645,6 +652,7 @@ check-k3s-vm:
               kube:
                 method: raw
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 kube_resource: namespaces
               context: [runtime]
               stdout:
@@ -654,6 +662,7 @@ check-k3s-vm:
               kube:
                 method: service
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 namespace: default
                 name: kubernetes
               context: [runtime]
