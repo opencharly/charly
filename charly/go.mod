@@ -35,7 +35,7 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026272.139
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026272.145
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026276.1113
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026286.700
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026279.629
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235
@@ -135,7 +135,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/plugin-task/candy/plugin-task v0.2026279.1656
+	github.com/opencharly/plugin-task/candy/plugin-task v0.2026283.105
 	github.com/opencharly/spec v0.2026281.933
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
