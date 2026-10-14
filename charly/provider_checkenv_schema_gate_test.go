@@ -31,12 +31,20 @@ import (
 // verb passes.
 func TestRunPluginVerb_GatesBuiltinSchemaBeforeAuthoredInputValidation(t *testing.T) {
 	// Snapshot + clear the process-wide schema set: the "fresh container" state.
+	// The DECLARATION-IDENTITY index (defOwners/srcSeen — the charly#770 collision
+	// gate's state) is part of that set and must be cleared with it: a fresh process has
+	// neither, and leaving a stale index behind would make the re-registration below look
+	// like a second declaration by a different source.
 	pluginSchemas.mu.Lock()
 	savedSources := pluginSchemas.sources
 	savedDefs := pluginSchemas.inputDefs
+	savedDefOwners := pluginSchemas.defOwners
+	savedSrcSeen := pluginSchemas.srcSeen
 	savedUnified := pluginSchemas.unified
 	pluginSchemas.sources = nil
 	pluginSchemas.inputDefs = map[string]string{}
+	pluginSchemas.defOwners = map[string]defDeclarer{}
+	pluginSchemas.srcSeen = map[string]bool{}
 	pluginSchemas.unified = cue.Value{}
 	pluginSchemas.mu.Unlock()
 
@@ -50,6 +58,8 @@ func TestRunPluginVerb_GatesBuiltinSchemaBeforeAuthoredInputValidation(t *testin
 		pluginSchemas.mu.Lock()
 		pluginSchemas.sources = savedSources
 		pluginSchemas.inputDefs = savedDefs
+		pluginSchemas.defOwners = savedDefOwners
+		pluginSchemas.srcSeen = savedSrcSeen
 		pluginSchemas.unified = savedUnified
 		pluginSchemas.mu.Unlock()
 		builtinGateOnce = sync.Once{}
