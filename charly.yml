@@ -2753,8 +2753,13 @@ check-loader-flat-import-local:
 # platform) rather than by the absolute source PATH.
 #
 # WHAT THIS BED PROVES, AND WHAT IT DOES NOT.
-#   Proves: BOTH of the cutover's changed build call sites go through
-#   buildcache.Build. Arms 1-3 drive resolvePluginBinary's host-build leg — a
+#   Proves: the LOADER's two changed build call sites go through
+#   buildcache.Build. (The THIRD changed site — the F10 `plugin-binary` HostBuild
+#   leg hostBuildPluginBinary — is NOT driven here: it is a plugin→host leg whose
+#   caller is an out-of-process plugin, and it is witnessed by
+#   TestPluginDispatch_InvokeProviderAndHostBuild, which drives HostBuild with
+#   kind "plugin-binary" + build_candy_dir and asserts the returned path exists.)
+#   Arms 1-3 drive resolvePluginBinary's host-build leg — a
 #   REPEATED build of an unchanged plugin performs NO `go build`, an edited source
 #   performs exactly one, and the result is served as the store's hardlink view
 #   with the binary published once as a content-addressed payload blob. ARM 4
@@ -2763,6 +2768,8 @@ check-loader-flat-import-local:
 #   asserts both its provenance tell ("using LOCAL OVERRIDE") and that its build
 #   lands in its own store's view dir. A changed call site named in a claim must be
 #   executed by the run that makes the claim.
+#   Does NOT DRIVE: the F10 `plugin-binary` HostBuild leg (named above — witnessed
+#   by TestPluginDispatch_InvokeProviderAndHostBuild, not by this bed).
 #   Does NOT prove: the `plugin-build` candy's own host build (it is compiled IN,
 #   so it is never host-built — it owns the mechanism, it is not a consumer of
 #   it), nor the package-delivery path (the plugins the OS package installs under
@@ -2846,7 +2853,7 @@ check-plugin-buildcache-local:
             is out-of-tree and non-welded, and the arms drive `${CHARLY_BIN}`, so the
             binary under review is what is measured.
         plan:
-            - check: BOTH changed build call sites serve the store's hardlink view — the host-build arm records exactly ONE `go build` cold, NONE on a repeated build of unchanged source, and exactly one more after an edit, while the CHARLY_REPO_OVERRIDE arm logs its LOCAL OVERRIDE provenance and builds into its own store (all measured through a PATH shim that records every go build the cache spawns, plus the store's blob and view counts)
+            - check: the LOADER's two changed build call sites serve the store's hardlink view — the host-build arm records exactly ONE `go build` cold, NONE on a repeated build of unchanged source, and exactly one more after an edit, while the CHARLY_REPO_OVERRIDE arm logs its LOCAL OVERRIDE provenance and builds into its own store (all measured through a PATH shim that records every go build the cache spawns, plus the store's blob and view counts)
               id: buildcache-arms
               exit_status: 0
               stdout:
