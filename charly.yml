@@ -109,7 +109,6 @@ k3s-vm:
             url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
             checksum:
                 type: sha256
-                value: 360f0fa49db6813bdc8e35bed230a2dc2ae3567b7b5ab74719c0a706e4e34e87
             base_user: arch
             distro: arch
         backend: libvirt
@@ -169,7 +168,6 @@ eval-vm:
             url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
             checksum:
                 type: sha256
-                value: 360f0fa49db6813bdc8e35bed230a2dc2ae3567b7b5ab74719c0a706e4e34e87
             base_user: arch
             distro: arch
         backend: libvirt
@@ -208,7 +206,6 @@ eval-host-vm:
             url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
             checksum:
                 type: sha256
-                value: 360f0fa49db6813bdc8e35bed230a2dc2ae3567b7b5ab74719c0a706e4e34e87
             base_user: arch
             distro: arch
         backend: libvirt
@@ -243,7 +240,6 @@ charly-vm:
             url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
             checksum:
                 type: sha256
-                value: 360f0fa49db6813bdc8e35bed230a2dc2ae3567b7b5ab74719c0a706e4e34e87
             base_user: arch
             distro: arch
         backend: libvirt
@@ -812,7 +808,6 @@ check-kubevirt-vm-box:
             url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
             checksum:
                 type: sha256
-                value: 360f0fa49db6813bdc8e35bed230a2dc2ae3567b7b5ab74719c0a706e4e34e87
             base_user: arch
             distro: arch
         disk_size: 10G
@@ -2909,7 +2904,6 @@ agentteams-vm:
             url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
             checksum:
                 type: sha256
-                value: 360f0fa49db6813bdc8e35bed230a2dc2ae3567b7b5ab74719c0a706e4e34e87
             base_user: arch
             distro: arch
         backend: libvirt
