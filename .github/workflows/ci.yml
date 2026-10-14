@@ -62,13 +62,20 @@ jobs:
       # it. This step runs every tools module, so the gate can no longer rot
       # silently — the same class of hole the golangci-lint step above closes.
       - name: Test tools modules
+        # -count=1 defeats Go's test cache for this sweep, and it is load-bearing rather
+        # than cosmetic: `tools/gomod-canonical`'s TestContractPinsMatchShared reads files
+        # OUTSIDE its own package's input set (../../charly/go.mod as the shared-pin anchor
+        # and ../../tools/*/go.mod as the lockstep modules), so a pin move inside
+        # charly/go.mod leaves the package's inputs unchanged and the cached PASS stands.
+        # Measured: main's own run 37746359346 logged `ok ...gomod-canonical (cached)`
+        # while the assertion failed on a fresh evaluation of the same tree (charly#836).
         run: |
           set -e
           fail=0
           for d in tools/*/; do
             [ -f "$d/go.mod" ] || continue
             echo "== $d =="
-            ( cd "$d" && GOWORK=off go test ./... ) || fail=1
+            ( cd "$d" && GOWORK=off go test -count=1 ./... ) || fail=1
           done
           exit $fail
 
