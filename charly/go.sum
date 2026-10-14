@@ -145,8 +145,8 @@ github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319 
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319/go.mod h1:sJZfp6ovCsj1LzQAzq/RFw5FmtzBbnWZk8IPvyK/v+c=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948 h1:becOqUxBQxNBTMwazoqmF24b4ApCfDHAQmzOfVwUTWg=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948/go.mod h1:UC/PfR3DaB6yXAeqWPUwpqn/hpvOh3YhWjiay5zJW+U=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026280.1627 h1:wZ4MucwIfD9KJI9plHqvbRB1M6o1G2bARKKEju5YCNo=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026280.1627/go.mod h1:fd34kI1jFHI/UlbSaedkiAFCIti4PGu4aRm7ZxUdy24=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026287.1745 h1:wTiZ6vXk2iR0xkGQjYA/FlyIHT3zpcZSgszHfYq63xc=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026287.1745/go.mod h1:1IWFD+Sjy/R3PU+XCCPQXQyNer1N43pNLHJxlkDXJZU=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313 h1:gt2nSmXaEpJFWQMGVENgIu6hsgq9Jtp1b7PlRf3PWY8=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313/go.mod h1:SKeBh4UP51CHV9KMSdWvdAPvN9kxK9NGPiWqM+E49eM=
 github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039 h1:gVsGunNwjAjPTX/rTXFzqFwwaEs5FKKZRhTFeO+RR0I=
