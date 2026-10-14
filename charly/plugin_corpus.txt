@@ -111,3 +111,4 @@ github.com/opencharly/plugin-user
 github.com/opencharly/plugin-vm
 github.com/opencharly/plugin-vnc
 github.com/opencharly/plugin-wl
+github.com/opencharly/plugin-firecracker
