@@ -545,19 +545,25 @@ func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) 
 	return providerRegistry.resolveIdentity(class, word, parent)
 }
 
-// pluginArtifactID renders the identity of the bytes at bin. A HOST-BUILT plugin is identified by
-// its CONTENT ADDRESS — the `sha256:<hex>` the build cache published it under (buildcache's
-// Result.Digest), which is the same string the store addresses the payload blob by, so the line
-// names an identity a reader can look up rather than a file that a later build may overwrite. A
-// baked binary carries no store entry, so it falls back to size + mtime. Empty when bin cannot be
-// stat'd.
+// pluginArtifactID renders the identity of the bytes at bin. The identity is the CONTENT ADDRESS —
+// `sha256:<hex>` over the bytes — which is the same string the store addresses a host-built
+// payload blob by, so the line names something a reader can look up rather than a file a later
+// build may overwrite.
+//
+// The digest is supplied by the caller (the sole production caller is pluginServedLine, which
+// passes contentDigestOf(bin)); an empty digest falls back to size + mtime. NOTE what that means
+// for a BAKED binary: it carries no store entry, but its bytes are still hashed, so it is rendered
+// with its own content address rather than falling back — the digest identifies the BYTES, not the
+// store entry, and TestPluginServedLine_DistinguishesEveryServedArtifact pins that. Empty when bin
+// cannot be stat'd.
 //
 // The content address replaces the old `.stamp` sidecar (plugin_build_stamp.go, deleted with this
 // cutover): freshness IS the cache key now, so there is no stamp file to read and nothing to keep
-// in step. Deriving the digest here — rather than threading buildcache.Result through every
-// provenance caller — is deliberate: the digest is a pure function of the bytes, so a host-built
-// view and a baked file are identified by the same rule, and the two call shapes that reach this
-// line (the loader and the external COMMAND dispatch) need no shared build result to be correct.
+// in step. Deriving the digest in this process — rather than threading buildcache.Result through
+// every provenance caller — is deliberate: the digest is a pure function of the bytes, so a
+// host-built view and a baked file are identified by the same rule, and the two call shapes that
+// reach this line (the loader and the external COMMAND dispatch) need no shared build result to be
+// correct.
 func pluginArtifactID(bin, digest string) string {
 	st, err := os.Stat(bin)
 	if err != nil || st.IsDir() {

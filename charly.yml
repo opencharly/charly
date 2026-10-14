@@ -2753,11 +2753,16 @@ check-loader-flat-import-local:
 # platform) rather than by the absolute source PATH.
 #
 # WHAT THIS BED PROVES, AND WHAT IT DOES NOT.
-#   Proves: the loader's HOST-BUILD ARM (resolvePluginBinary's host-build leg and
-#   overridePluginBinary) builds an out-of-tree plugin through buildcache.Build —
-#   a REPEATED build of an unchanged plugin performs NO `go build`, an edited
-#   source performs exactly one, and the result is served as the store's hardlink
-#   view with the binary published once as a content-addressed payload blob.
+#   Proves: BOTH of the cutover's changed build call sites go through
+#   buildcache.Build. Arms 1-3 drive resolvePluginBinary's host-build leg — a
+#   REPEATED build of an unchanged plugin performs NO `go build`, an edited source
+#   performs exactly one, and the result is served as the store's hardlink view
+#   with the binary published once as a content-addressed payload blob. ARM 4
+#   drives overridePluginBinary — the LOCAL-OVERRIDE arm, which no other arm
+#   reaches because it needs CHARLY_REPO_OVERRIDE set for the plugin's repo — and
+#   asserts both its provenance tell ("using LOCAL OVERRIDE") and that its build
+#   lands in its own store's view dir. A changed call site named in a claim must be
+#   executed by the run that makes the claim.
 #   Does NOT prove: the `plugin-build` candy's own host build (it is compiled IN,
 #   so it is never host-built — it owns the mechanism, it is not a consumer of
 #   it), nor the package-delivery path (the plugins the OS package installs under
@@ -2829,16 +2834,19 @@ check-plugin-buildcache-local:
             whose out-of-tree `examplekind` candy triggers the loader's host-build arm:
             a COLD build records exactly one `go build`, a REPEATED build of unchanged
             source records NONE (observed through a PATH shim — the absence of work,
-            never a success exit), and an edited source records exactly one. The cold
-            arm is the PERMANENT POSITIVE CONTROL: it demonstrates in the same run that
-            the path under test DOES build, so a cache that does nothing cannot pass.
+            never a success exit), and an edited source records exactly one; a FOURTH
+            arm sets CHARLY_REPO_OVERRIDE for the plugin's repo so the loader's other
+            changed call site, overridePluginBinary, actually executes, and asserts its
+            LOCAL-OVERRIDE provenance plus a build in its own store. The cold arm is the
+            PERMANENT POSITIVE CONTROL: it demonstrates in the same run that the path
+            under test DOES build, so a cache that does nothing cannot pass.
             The store's payload blob is asserted to exist once and to be the SAME INODE
             as the view that served the build, and the store tree is asserted to carry
             no lock and no `.stamp` (the two things this cutover deletes). The subject
             is out-of-tree and non-welded, and the arms drive `${CHARLY_BIN}`, so the
             binary under review is what is measured.
         plan:
-            - check: the loader's host-build arm serves the store's hardlink view — a cold build records exactly ONE `go build`, a repeated build of unchanged source records NONE, and an edited source records exactly one (measured through a PATH shim that records every go build the cache spawns, plus the store's payload-blob count)
+            - check: BOTH changed build call sites serve the store's hardlink view — the host-build arm records exactly ONE `go build` cold, NONE on a repeated build of unchanged source, and exactly one more after an edit, while the CHARLY_REPO_OVERRIDE arm logs its LOCAL OVERRIDE provenance and builds into its own store (all measured through a PATH shim that records every go build the cache spawns, plus the store's blob and view counts)
               id: buildcache-arms
               exit_status: 0
               stdout:
@@ -2988,7 +2996,51 @@ check-plugin-buildcache-local:
                     exit 1
                   fi
 
-                  echo "BUILDCACHE-ARMS-OK cold_builds=${cold_after} warm_builds=${warm_after} edited_builds=${edited_after} blobs=${blobs} views=${views} linked=${linked}"
+                  # --- ARM 4: CHARLY_REPO_OVERRIDE — the loader's OTHER changed call site ---------
+                  # overridePluginBinary is a changed path in this cutover, and arms 1-3 never
+                  # reach it (no override is set, so resolvePluginBinary never takes the override
+                  # arm). Setting an override for the plugin's REPO is the ONLY thing that routes
+                  # the resolve through it. Two assertions make the arm ATTRIBUTABLE rather than
+                  # assumed: the run log must name the LOCAL OVERRIDE provenance (a run that
+                  # silently took the plain host-build path cannot pass), and the override's build
+                  # must land in its own store's view dir (so it went through buildcache.Build
+                  # too). A FRESH private cache makes it a cold build, so the log line is proven
+                  # by work done rather than by a cached provenance print.
+                  override_cache="${work}/cache-override"
+                  override_proj="${work}/proj-override"
+                  override_root="${work}/override-root"
+                  mkdir -p "${override_proj}/candy" "${override_root}/candy"
+                  cp -a "${fixture}/charly.yml" "${override_proj}/charly.yml"
+                  cp -a "${fixture}/candy/plugin-example-kind" "${override_proj}/candy/"
+                  cp -a "${fixture}/candy/plugin-example-kind" "${override_root}/candy/"
+                  override_before="$(count_builds)"
+                  ( cd "${override_proj}" \
+                      && CHARLY_CACHE_DIR="${override_cache}" \
+                         CHARLY_REPO_OVERRIDE="github.com/opencharly/plugin-example-kind=${override_root}" \
+                         PATH="$shim:$PATH" "${CHARLY_BIN}" box validate >"${work}/arm-override.log" 2>&1 ) || {
+                    echo "FAIL: the CHARLY_REPO_OVERRIDE arm ('box validate') exited non-zero:" >&2
+                    tail -20 "${work}/arm-override.log" >&2
+                    exit 1
+                  }
+                  override_after="$(count_builds)"
+                  if [ "${override_after}" -le "${override_before}" ]; then
+                    echo "FAIL: with CHARLY_REPO_OVERRIDE set for the plugin's repo, NO 'go build' ran (${override_before} -> ${override_after}) — overridePluginBinary was not exercised" >&2
+                    tail -20 "${work}/arm-override.log" >&2
+                    exit 1
+                  fi
+                  if ! grep -q 'using LOCAL OVERRIDE' "${work}/arm-override.log"; then
+                    echo "FAIL: the override arm logged no LOCAL OVERRIDE provenance — it fell back to a plain host build, so overridePluginBinary is still unproven" >&2
+                    tail -20 "${work}/arm-override.log" >&2
+                    exit 1
+                  fi
+                  override_store="${override_cache}/plugin-build"
+                  override_views="$(find "${override_store}/views" -type f 2>/dev/null | wc -l | tr -d ' ')"
+                  if [ "${override_views}" -lt 1 ]; then
+                    echo "FAIL: the override arm built nothing into its store's view dir (${override_store}/views) — it did not go through buildcache.Build" >&2
+                    exit 1
+                  fi
+
+                  echo "BUILDCACHE-ARMS-OK cold_builds=${cold_after} warm_builds=${warm_after} edited_builds=${edited_after} override_builds=$((override_after - override_before)) blobs=${blobs} views=${views} linked=${linked} override_views=${override_views}"
                 in_container: false
 # =================================================================
 # check-preflight-local — R10 witness for the RELOCATED check-run image
