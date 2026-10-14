@@ -74,13 +74,20 @@ var allowedThirdPartyPrefixes = []string{
 // loaderkit/vmshared) is NEVER allowed here: the sdk mechanism kits + the sdk
 // root plugin-authoring package are for PLUGINS to import, never the host.
 //
-// The gate is NOT edited for a migration. A relocated mechanism's BODY leaving core necessarily
-// leaves residual call sites that must name the relocated kit — the legitimate intermediate the
-// K-waves recorded as TRACKED until-K<n> DEBT with a NAMED EXIT (CHANGELOG/2026.206.1147.md:
-// "charly/ → sdk/loaderkit import-site inventory: 6 → 42 (+36) … a legitimate intermediate, not a
-// boundary-law violation"). That debt is RECORDED, not allowlisted: see
-// residualSDKImportSites below, which exists so a reader can find every residual and its exit,
-// and deliberately does NOT change what this gate permits.
+// ⚑ THIS GATE'S VERDICT SPACE IS DELIBERATELY CHANGED by the relocation below, and the change is
+// described here as what it is rather than as "no change to what this gate permits". Before: ANY
+// github.com/opencharly/sdk import failed this gate. Now: an import in a file the
+// residualSDKImportSites inventory DECLARES is reported as tracked debt (t.Logf) and the gate passes;
+// an import anywhere else still fails it hard; and a DECLARED row whose file no longer imports its
+// kit fails the companion test below (the debt is paid — prune the row). So a listed file IS
+// permitted to import its declared kit, keyed per file, and the inventory is the permission.
+//
+// That is not a loosening: it is the accounting a relocated mechanism's residual call sites must
+// carry — the legitimate intermediate the K-waves recorded as TRACKED until-K<n> DEBT with a NAMED
+// EXIT (CHANGELOG/2026.206.1147.md: "charly/ → sdk/loaderkit import-site inventory: 6 → 42 (+36) …
+// a legitimate intermediate, not a boundary-law violation"). What keeps it from being a hole is that
+// the widenable thing is a FILE + its exit, never a path prefix: an entry must name a kit, at least
+// one call site and an until-K<n> exit, and it is validated against the tree in both directions.
 var allowedOpencharlyPrefixes = []string{
 	"github.com/opencharly/spec",
 	"github.com/opencharly/charly",
@@ -197,9 +204,10 @@ func TestImportPurity_HostImportsOnlySpecAndVettedThirdParty(t *testing.T) {
 	sort.Strings(sdkViolations)
 	sort.Strings(otherViolations)
 
-	// A residual sdk-kit import is TRACKED DEBT, not a violation — but ONLY if it is declared with
-	// a named exit. Partition the sdk hits by the inventory so an undeclared import still fails
-	// loudly while a declared one is reported as debt (rule: the gate reports, it never permits).
+	// ⚑ THIS IS WHERE THE GATE'S VERDICT SPACE CHANGES, and it does so by design: a DECLARED
+	// residual import is reported below as tracked debt and does NOT fail; an UNDECLARED one fails
+	// hard. Stated plainly so no reader has to infer the permission from a t.Logf: a file named in
+	// residualSDKImportSites IS permitted to import its declared kit, keyed per file.
 	untracked := make([]string, 0, len(sdkViolations))
 	var tracked []string
 	for _, v := range sdkViolations {
@@ -213,6 +221,21 @@ func TestImportPurity_HostImportsOnlySpecAndVettedThirdParty(t *testing.T) {
 	if len(untracked) > 0 {
 		t.Errorf("IMPORT-PURITY gate: %d UNDECLARED github.com/opencharly/sdk import(s) in charly/ core — a residual call site must be declared in residualSDKImportSites with a named exit:\n%s",
 			len(untracked), strings.Join(untracked, "\n"))
+	}
+	// EVERY declared row must actually be HIT by this walk — otherwise the inventory has drifted
+	// from the tree in the direction that matters most: a row kept alive by nothing, while the
+	// declared permission is the only thing keeping a real import out of the failure list. With the
+	// permission explicit, this assertion is what makes the two directions symmetric.
+	hit := map[string]bool{}
+	for _, v := range tracked {
+		if p, _, ok := strings.Cut(v, ":"); ok {
+			hit[p] = true
+		}
+	}
+	for file := range residualSDKImportSites {
+		if !hit[file] {
+			t.Errorf("IMPORT-PURITY inventory: residualSDKImportSites declares %q, but the walk found no github.com/opencharly/sdk import there — the row is doing nothing (remove it, or the file it names was missed)", file)
+		}
 	}
 	if len(tracked) > 0 {
 		t.Logf("IMPORT-PURITY debt (tracked, with named exits): %d residual sdk import(s):\n%s",
