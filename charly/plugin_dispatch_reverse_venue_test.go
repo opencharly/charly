@@ -45,10 +45,7 @@ func buildAndConnectExampleDispatchPlugin(t *testing.T) *grpcProvider {
 	if _, err := os.Stat(filepath.Join(srcA, "go.mod")); err != nil {
 		t.Fatalf("dispatch plugin module not found at %s: %v", srcA, err)
 	}
-	bin, err := buildPluginBinary(ctx, srcA, "plugin-example-dispatch-venue-test")
-	if err != nil {
-		t.Fatalf("buildPluginBinary: %v", err)
-	}
+	bin := hostBuildPluginForTest(t, ctx, srcA, "plugin-example-dispatch-venue-test")
 	unit, closer, err := (&LocalTransport{BinPath: bin}).Connect(ctx)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -332,10 +329,11 @@ func TestInvokeProvider_LazyConnectFallback(t *testing.T) {
 	}
 	// Chdir to a MINIMAL synthetic project (only plugin-example-dispatch + deps) so the
 	// lazy-connect's pass-1 project-closure scan is tiny — a cwd at the repo root (50+ remote
-	// candies) made the scan take minutes. The plugin binary build is content-stamp-cached
-	// (pluginBuildCacheDir), so the second run reuses it. t.Chdir restores the ORIGINAL cwd
-	// on cleanup (the framework-managed restore — a manual os.Chdir + t.Cleanup would leak the
-	// repo-root cwd into later tests).
+	// candies) made the scan take minutes. The plugin binary build is served from the
+	// content-addressed store, so a second build of the same source is a store HIT (the
+	// pre-cutover path-keyed cache and its content stamp are deleted). t.Chdir restores the
+	// ORIGINAL cwd on cleanup (the framework-managed restore — a manual os.Chdir + t.Cleanup
+	// would leak the repo-root cwd into later tests).
 	dispatchDir := seedDispatchProject(t, repoRoot)
 	t.Cleanup(func() { _ = os.RemoveAll(dispatchDir) })
 	t.Chdir(dispatchDir)

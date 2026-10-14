@@ -6,18 +6,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
-	"testing"
 
 	"github.com/opencharly/spec/spec"
 
 	"cuelang.org/go/cue"
 
-	"github.com/opencharly/spec/lock"
+	"github.com/opencharly/sdk/buildcache"
 	sdkschema "github.com/opencharly/spec/schema"
 	"github.com/opencharly/spec/schemaconcat"
 )
@@ -172,6 +170,11 @@ func builtinUnitName(u *PluginUnit) string {
 
 // safePluginBinName flattens a candy key (which may be an @github ref with
 // slashes/colons) to a single filesystem-safe filename for the built binary.
+//
+// It stays HERE regardless of where the plugin BUILD lives, because it is not a build concern: it
+// is the core-local naming rule for a BAKED binary's filename (bakedPluginFileName), and it must
+// agree with whatever the bake side uses (buildcache.SafePluginBinName performs the same
+// flattening) or a baked binary would not be found under the name the bake wrote.
 func safePluginBinName(name string) string {
 	return strings.Map(func(r rune) rune {
 		switch {
@@ -183,202 +186,31 @@ func safePluginBinName(name string) string {
 	}, name)
 }
 
-// pluginBuildCacheDir is where built out-of-tree plugin binaries land.
-func pluginBuildCacheDir() string {
-	base, err := os.UserCacheDir()
-	if err != nil || base == "" {
-		base = os.TempDir()
-	}
-	return filepath.Join(base, "charly", "plugins")
-}
-
-// pluginSourceTag returns a short, filesystem-safe digest of the plugin candy's resolved source
-// directory, so the built binary's cache path is SCOPED BY SOURCE — the #76 root fix. The plugin
-// build cache (~/.cache/charly/plugins/) was word-keyed shared-mutable state: two worktrees (or a
-// bed/dev pair) building the SAME plugin word from DIFFERENT source raced the one `go build -o <bin>`
-// output file (the #75 shared-image-tag collision class). Keying the path by source dir makes each
-// worktree's build land its OWN file — same source reuses the path (the per-binary lock serializes
-// the build), different source (a different worktree, or a remote @github ref fetched to a different
-// cache dir) lands a distinct path, so the cross-worktree overwrite race is gone. The digest is of the
-// ABSOLUTE srcDir (worktree-distinct by path), not the source CONTENT — go-build correctness depends
-// on the full dependency graph (local replace targets, the proxy-resolved contract modules at their
-// pinned require versions), so a content hash would
-// cache-hit a STALE binary after a dependency bump; always-rebuild (no cache-hit skip) keeps it fresh.
-func pluginSourceTag(srcDir string) string {
-	sum := sha256.Sum256([]byte(filepath.Clean(srcDir)))
-	return hex.EncodeToString(sum[:8]) // 16 hex chars — collision-safe for a cache filename
-}
-
-// buildPluginBinary go-builds an out-of-tree plugin's provider binary on the HOST
-// (never in a venue — the host owns the toolchain; the built binary is delivered
-// into a venue by the in-venue transport). srcDir is the plugin candy's resolved
-// dir, which is its own Go module (go.mod + a main serving via plugin/sdk).
-func buildPluginBinary(ctx context.Context, srcDir, name string) (string, error) {
-	cacheDir := pluginBuildCacheDir()
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		return "", fmt.Errorf("plugin %q: build cache: %w", name, err)
-	}
-	// The candy key may be an @github ref ("github.com/org/repo/candy/<name>") with slashes; flatten
-	// it to ONE safe filename so `go build -o` lands a regular file in cacheDir (a slash would imply
-	// non-existent nested dirs). SUFFIX it with the source-dir digest (#76) so the cache path is
-	// scoped by source — two worktrees building the same plugin word land distinct files, never
-	// racing the one shared output path.
-	bin := filepath.Join(cacheDir, safePluginBinName(name)+"-"+pluginSourceTag(srcDir))
-	// Serialize concurrent builds of the SAME plugin binary (same source → same path). Multiple check
-	// beds (or a roster fan-out) can call buildPluginBinary for one plugin at once, racing the shared
-	// `go build -o <bin>` output file — the observed failure mode was a plugin whose provider "did not
-	// connect" mid-fan-out because its binary was momentarily half-written. A blocking per-binary file
-	// lock makes the second builder wait for the first, never collide (R4: a synchronization primitive,
-	// not a retry).
-	//
-	// The wait itself is spec/lock's bounded-but-REPORTED one (opencharly/spec #132; the pin is the
-	// `github.com/opencharly/spec` require in charly/go.mod, not anything "below" in this file): a
-	// peer mid-build is a SLOW holder, not a stuck one, so the second builder QUEUES — reporting who
-	// holds the lock while it waits, and only giving up after the bound, naming the holder pid +
-	// command. Two lanes needing the same plugin therefore both succeed; failing hard the instant a
-	// peer is building is exactly the class that spec PR removed.
-	release, lockErr := lock.AcquireFileLock(bin+".lock", true)
-	if lockErr != nil {
-		return "", fmt.Errorf("plugin %q: acquire build lock %s: %w — another charly process is building this plugin binary; wait for that build to finish and re-run (the kernel releases the lock when that process exits, so there is nothing to clean up)", name, bin+".lock", lockErr)
-	}
-	defer func() { _ = release() }()
-	// Publish ATOMICALLY: build to a sibling temp file, then os.Rename onto `bin` (a same-directory
-	// rename is atomic on POSIX). A reader (the LocalTransport.Connect that spawns the built binary)
-	// then sees either the OLD complete binary or the NEW one — never a half-written file. This
-	// closes the post-build read/write race: without it, a second worktree's rebuild could overwrite
-	// `bin` in the window between this build's completion and the consumer's exec, handing the reader
-	// a truncated binary (#76). The temp path lives under the per-binary lock, so two same-source
-	// builders never race the temp file either.
-	binTmp := bin + ".build"
-	// An OUT-OF-PROCESS plugin binary builds STANDALONE in the candy's own module
-	// (its go.mod + `replace …/charly => ../../charly`), NEVER in the repo
-	// workspace: set GOWORK=off so a repo-root go.work — which lists only the
-	// COMPILED-IN plugin candies (the `compiled_plugins:` selection) — cannot
-	// reject a non-member candy dir ("current directory is contained in a module
-	// that is not one of the workspace modules listed in go.work"). The dual
-	// placement (compiled-in vs out-of-process) is exactly why the out-of-process
-	// build must ignore the workspace.
-	//
-	// The serve shim lives conventionally at ./cmd/serve (the importable provider
-	// package sits at the candy root for the in-proc placement; the shim wraps it
-	// for the out-of-process one). Fall back to the candy root for a candy that has
-	// not yet adopted the shim layout.
-	target := "."
-	if st, statErr := os.Stat(filepath.Join(srcDir, "cmd", "serve")); statErr == nil && st.IsDir() {
-		target = "./cmd/serve"
-	}
-	buildEnv := pluginBuildEnv(os.Environ(), srcDir)
-	buildVCS := pluginBuildVCSFlag(srcDir, buildEnv)
-	// CONTENT-STAMPED REUSE. The cache path above is keyed by the source PATH (#76), which cannot
-	// answer "is this binary still current"; the stamp answers that by digesting the candy's source
-	// tree plus every module it reaches through a local `replace` (transitively: sdk, and sdk's
-	// spec) together with the toolchain and build-relevant env. A match means a rebuild would
-	// produce the same bytes, so it is skipped — the fix for the relink storm the roster measured
-	// (36 relinks of ~30MB binaries in one window; 96GB / 6,791 files in the plugin cache).
-	//
-	// This does NOT weaken the #76 staleness rule it was written to protect: that rule forbids
-	// keying freshness on the PATH, because a submodule bump leaves the path unchanged. A content
-	// stamp changes on any bump — and on any uncommitted edit inside those trees, which a VCS-state
-	// stamp would miss. The check runs INSIDE the per-binary lock, so a concurrent builder of the
-	// same source cannot observe a half-published binary/stamp pair.
-	//
-	// A stamping error is never fatal: stamp stays empty, pluginBinaryIsFresh answers false, and
-	// the build proceeds exactly as it did before — correct, just not reused.
-	stamp, stampErr := pluginBuildStamp(srcDir, target, buildVCS, buildEnv)
-	if stampErr != nil {
-		stamp = ""
-	}
-	if pluginBinaryIsFresh(bin, stamp) {
-		return bin, nil
-	}
-	cmd := exec.CommandContext(ctx, "go", "build", buildVCS, "-o", binTmp, target)
-	cmd.Dir = srcDir
-	// Multiple source builds may run concurrently; their read-only Git status
-	// probes (when buildVCS selects -buildvcs=auto) never refresh or write a
-	// shared index.
-	cmd.Env = buildEnv
-	if out, err := cmd.CombinedOutput(); err != nil {
-		_ = os.Remove(binTmp) // never leave a half-written temp binary behind
-		return "", fmt.Errorf("plugin %q: go build in %s: %w\n%s", name, srcDir, err, out)
-	}
-	if err := os.Rename(binTmp, bin); err != nil {
-		_ = os.Remove(binTmp)
-		return "", fmt.Errorf("plugin %q: publish build (rename %s -> %s): %w", name, binTmp, bin, err)
-	}
-	// Stamp AFTER the binary is published, so a crash between the two leaves a binary with no (or
-	// an older) stamp — which reads as stale and rebuilds. The reverse order could claim a binary
-	// that was never published.
-	writePluginStamp(bin, stamp)
-	return bin, nil
-}
-
-// pluginBuildVCSFlag picks the `go build -buildvcs=…` value for an out-of-process
-// plugin binary build. It defers to pluginBuildVCSFlagForContext with the REAL
-// test-binary state (testing.Testing(), Go stdlib — true only inside a "go
-// test"-built binary, never in a real `charly` build); both contexts now resolve
-// to the same safe, non-racing value. See pluginBuildVCSFlagForContext for the
-// full rationale (charly#178 — the production `-buildvcs=auto` Go worktree bug
-// was removed: all plugin builds use `-buildvcs=false`).
-func pluginBuildVCSFlag(srcDir string, env []string) string {
-	return pluginBuildVCSFlagForContext(srcDir, env, testing.Testing())
-}
-
-// pluginBuildVCSFlagForContext is the pure decision pluginBuildVCSFlag wraps,
-// parameterized on whether the caller is a test binary so both branches are
-// independently unit-testable (testing.Testing() is always true inside `go
-// test`, so a test cannot otherwise observe the production branch). Both
-// branches now resolve to the same value.
+// The out-of-tree plugin BUILD lives in sdk/buildcache, and this file owns no cache path.
 //
-// ALL plugin builds (test AND production) use `-buildvcs=false`. Go's
-// `-buildvcs=auto` walks `git status` on srcDir's repository to embed a VCS
-// revision stamp; for a subdirectory target (./cmd/serve — the layout charly's
-// out-of-process plugin builds use) this is a DETERMINISTIC Go bug, NOT a
-// concurrency race: a SINGLE `go build -buildvcs=auto ./cmd/serve` fails with
-// "error obtaining VCS status: exit status 128" (FATAL in Go 1.26, exit 1) in
-// a linked worktree OUTSIDE the main repo path (e.g. /tmp/...), while it
-// succeeds in the main checkout and in linked worktrees UNDER the main repo
-// path. The plugin fails to load → "no provider registered for builder:…" →
-// the check-pod canary FAILS at [image-build]. (The prior charly#178 comment
-// framed this as a concurrent-race; the single-invocation reproduction refutes
-// that — a race framing cannot explain one build failing alone.) An explicit
-// `-buildvcs=false` argv flag always wins over GOFLAGS, so an env-var override
-// could never have worked; skipping the git-status walk entirely removes the
-// bug at its source (R4 — root-cause, NOT a worktree-location workaround: every
-// teammate using a /tmp worktree re-hits it otherwise; a mutex in charly cannot
-// serialize Go's internal walk).
+// The cluster that used to sit here is DELETED (R5): pluginBuildCacheDir (a second
+// os.UserCacheDir() root that ignored CHARLY_CACHE_DIR), pluginSourceTag (a digest of the
+// ABSOLUTE source PATH — the #76 fix for the cross-worktree output-file race, which could not
+// answer "is this binary still current"), buildPluginBinary (the `go build -o <bin>` plus its
+// atomic rename), the `bin+".lock"` per-binary lock that sat INSIDE the cache tree, and the
+// pluginBuildStamp / .stamp content-stamp sidecar (all of plugin_build_stamp.go) that patched
+// the path key's freshness hole. The build cache is now the content-addressed store, keyed by
+// D-STORE-4's inputs, so the stamp dies BY CONSTRUCTION — freshness IS the key — and the per-key
+// lock lives in buildcache under the runtime root, not in the cache (the homes rule).
 //
-// The stamp is NEVER read back out of a plugin binary — grep for
-// debug.ReadBuildInfo / vcs.revision / vcs.modified / vcs.time / ReadBuildInfo
-// across . + spec + sdk + plugins finds ZERO consumers (only this comment).
-// Plugin binaries are transient provider processes (forked per Invoke, reaped
-// on disconnect), not distributed artifacts; their VCS stamp is unobservable,
-// so dropping it is safe. The previous charly#178 cutover fixed the test-binary
-// path but left production as `-buildvcs=auto` "for a future consumer" — a
-// consumer that does not and may never exist (YAGNI), and whose hypothetical
-// need cannot outweigh the real, reproduced, bed-blocking Go worktree bug.
-// Standing rule forward: all plugin builds use `-buildvcs=false`; no "future
-// consumer" carve-out.
-func pluginBuildVCSFlagForContext(srcDir string, env []string, isTestBinary bool) string {
-	_ = srcDir
-	_ = env
-	_ = isTestBinary // historically branched; both contexts now use the safe value (charly#178).
-	return "-buildvcs=false"
-}
-
-func pluginBuildEnv(base []string, srcDir string) []string {
-	env := make([]string, 0, len(base)+4)
-	for _, entry := range base {
-		if strings.HasPrefix(entry, "GOWORK=") || strings.HasPrefix(entry, "GIT_") || strings.HasPrefix(entry, "PWD=") {
-			continue
-		}
-		env = append(env, entry)
-	}
-	if absolute, err := filepath.Abs(srcDir); err == nil {
-		srcDir = absolute
-	}
-	env = append(env, "GOWORK=off", "GIT_OPTIONAL_LOCKS=0", "PWD="+srcDir)
-	return env
-}
+// The `-buildvcs=false` decision that used to live in pluginBuildVCSFlag is now unconditional
+// inside buildcache.Build, for the same reason it was made here (charly#178): `-buildvcs=auto`
+// walks `git status` on a subdirectory target and fails DETERMINISTICALLY in a linked worktree
+// outside the main repo path — a single `go build` reproduces it, so it is a Go worktree bug and
+// not a concurrency race. Every plugin build, test AND production, stays `-buildvcs=false`; there
+// is no "future consumer" carve-out (zero readers of the VCS stamp were ever found). The build
+// environment's `GOWORK=off` — an out-of-process plugin builds STANDALONE in its own module, since
+// a repo-root go.work lists only the compiled-in candies and would reject a non-member dir — is
+// applied by buildcache for the same reason, and it joins the cache key's platform axis so the key
+// and the build cannot disagree about the environment that produced the bytes.
+//
+// What does NOT move is the PRECEDENCE decision, which stays in this file (resolvePluginBinary):
+// LOCAL OVERRIDE > baked binary > host build. Only the build-and-cache step is delegated.
 
 // bakedPluginDir is the FHS system path the DISTRO PACKAGE owns and lays its baked provider
 // binaries into, and where a DEPLOYED container's in-container charly (which has neither the
@@ -713,23 +545,40 @@ func connectPluginByWordRef(class ProviderClass, word, parent, extraRef string) 
 	return providerRegistry.resolveIdentity(class, word, parent)
 }
 
-// pluginArtifactID renders the identity of the bytes at bin: the CONTENT stamp recorded beside
-// a host-built plugin (plugin_build_stamp.go) when one exists, else the file size and mtime — a
-// baked binary carries no stamp. Empty when bin cannot be stat'd.
-func pluginArtifactID(bin string) string {
+// pluginArtifactID renders the identity of the bytes at bin. A HOST-BUILT plugin is identified by
+// its CONTENT ADDRESS — the `sha256:<hex>` the build cache published it under (buildcache's
+// Result.Digest), which is the same string the store addresses the payload blob by, so the line
+// names an identity a reader can look up rather than a file that a later build may overwrite. A
+// baked binary carries no store entry, so it falls back to size + mtime. Empty when bin cannot be
+// stat'd.
+//
+// The content address replaces the old `.stamp` sidecar (plugin_build_stamp.go, deleted with this
+// cutover): freshness IS the cache key now, so there is no stamp file to read and nothing to keep
+// in step. Deriving the digest here — rather than threading buildcache.Result through every
+// provenance caller — is deliberate: the digest is a pure function of the bytes, so a host-built
+// view and a baked file are identified by the same rule, and the two call shapes that reach this
+// line (the loader and the external COMMAND dispatch) need no shared build result to be correct.
+func pluginArtifactID(bin, digest string) string {
 	st, err := os.Stat(bin)
 	if err != nil || st.IsDir() {
 		return ""
 	}
-	if data, rerr := os.ReadFile(pluginStampPath(bin)); rerr == nil {
-		if sum := strings.TrimSpace(string(data)); sum != "" {
-			if len(sum) > 16 {
-				sum = sum[:16]
-			}
-			return "stamp " + sum
-		}
+	if digest != "" {
+		return digest
 	}
 	return fmt.Sprintf("%dB mtime %s", st.Size(), st.ModTime().UTC().Format("2006-01-02T15:04:05Z"))
+}
+
+// contentDigestOf returns the store's content address for the bytes at path: "sha256:<hex>", the
+// same form storekit hands out. Empty on any read error, so a caller degrades to size + mtime
+// rather than failing a run over a provenance line.
+func contentDigestOf(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 // pluginServedLine is THE one place a plugin's SERVED-ARTIFACT identity is rendered — the
@@ -753,7 +602,7 @@ func pluginArtifactID(bin string) string {
 // to this wave. The seam is the clean replacement, and the override is asked about the plugin's
 // REPO (pluginRepoPath) rather than inferred from a directory-path prefix.
 func pluginServedLine(ref, srcDir, bin, overrideRoot string, baked bool) string {
-	id := pluginArtifactID(bin)
+	id := pluginArtifactID(bin, contentDigestOf(bin))
 	if id == "" {
 		id = "unknown"
 	}
@@ -844,7 +693,11 @@ func overridePluginBinary(ctx context.Context, name, srcDir, repoPath, overrideR
 	if srcDir == "" {
 		return "", fmt.Errorf("CHARLY_REPO_OVERRIDE root %s is authoritative for %s and no source dir is available to build from", overrideRoot, repoPath)
 	}
-	return buildPluginBinary(ctx, srcDir, name)
+	res, err := buildcache.Build(ctx, buildcache.Request{SrcDir: srcDir, Name: name})
+	if err != nil {
+		return "", err
+	}
+	return res.ViewPath, nil
 }
 
 // resolvePluginBinary returns a plugin's provider binary AND the CHARLY_REPO_OVERRIDE root that
@@ -882,11 +735,11 @@ func resolvePluginBinary(ctx context.Context, srcDir, name, repoPath string) (st
 	if srcDir == "" {
 		return "", "", fmt.Errorf("no baked binary (%s) and no source dir to build from", filepath.Join(bakedPluginDir, safePluginBinName(name)))
 	}
-	built, err := buildPluginBinary(ctx, srcDir, name)
+	res, err := buildcache.Build(ctx, buildcache.Request{SrcDir: srcDir, Name: name})
 	if err != nil {
 		return "", "", err
 	}
-	return built, "", nil
+	return res.ViewPath, "", nil
 }
 
 // loadPluginUnit loads ONE out-of-tree plugin: resolve its provider binary (baked-in or

@@ -34,11 +34,9 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 		t.Fatalf("external appium plugin module not found at %s: %v", srcDir, err)
 	}
 
-	// 1. Host-build the provider binary (the loader's buildPluginBinary step).
-	bin, err := buildPluginBinary(ctx, srcDir, "plugin-appium-test")
-	if err != nil {
-		t.Fatalf("buildPluginBinary: %v", err)
-	}
+	// 1. Host-build the provider binary through the production build cache
+	//    (buildcache.Build — the entry point the loader's host-build arm uses).
+	bin := hostBuildPluginForTest(t, ctx, srcDir, "plugin-appium-test")
 
 	// 2. Connect OUT-OF-PROCESS via LocalTransport — providers AND schema arrive on the
 	//    unit, both lifted from the Describe channel (the served schema travels the wire,

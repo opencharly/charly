@@ -35,10 +35,7 @@ func TestExternalStepKind_EndToEnd(t *testing.T) {
 		t.Fatalf("example step-kind plugin module not found at %s: %v", srcDir, err)
 	}
 
-	bin, err := buildPluginBinary(ctx, srcDir, "plugin-example-stepkind-test")
-	if err != nil {
-		t.Fatalf("buildPluginBinary: %v", err)
-	}
+	bin := hostBuildPluginForTest(t, ctx, srcDir, "plugin-example-stepkind-test")
 	unit, closer, err := (&LocalTransport{BinPath: bin}).Connect(ctx)
 	if err != nil {
 		t.Fatalf("LocalTransport.Connect: %v", err)

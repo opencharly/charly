@@ -73,10 +73,26 @@ var allowedThirdPartyPrefixes = []string{
 // github.com/opencharly/sdk (root OR any subpackage — kit/buildkit/deploykit/
 // loaderkit/vmshared) is NEVER allowed here: the sdk mechanism kits + the sdk
 // root plugin-authoring package are for PLUGINS to import, never the host.
+//
+// ONE NARROW EXCEPTION: github.com/opencharly/sdk/buildcache, allowlisted below on the spec's own
+// authority — DESIGN.md D-CORE-1 defines core as including "the store instance (built on the sdk
+// store, §17)" and D-SDK-1 puts the store and its roots among the sdk's shared mechanisms, so the
+// loader's store-backed plugin build (the loader is core) is core's work done with the sdk's
+// mechanism, and the blanket ban was broader than the spec states. The exception is honest rather
+// than a hole: buildcache imports stdlib + sdk/storekit, and storekit imports stdlib +
+// spec/lock ONLY — no plugin-authoring or serve surface is reachable through it. Every other sdk
+// path stays banned, and allowlistedSDKPaths is what keeps this exception from swallowing them.
 var allowedOpencharlyPrefixes = []string{
 	"github.com/opencharly/spec",
 	"github.com/opencharly/charly",
 	"github.com/opencharly/plugin-",
+}
+
+// allowlistedSDKPaths are the EXACT, reviewed sdk import paths core may reach, each with the spec
+// citation that puts it on core's side of the line. Exact paths, never prefixes: an entry here
+// cannot admit a sibling package, so the exception is one package wide by construction.
+var allowlistedSDKPaths = map[string]string{
+	"github.com/opencharly/sdk/buildcache": "DESIGN.md D-CORE-1 (\"the store instance (built on the sdk store, §17)\") + D-SDK-1 (the store and its roots are sdk shared mechanisms): the loader's store-backed out-of-tree plugin build is core's work; closure measured as stdlib + sdk/storekit + spec/lock",
 }
 
 // forbiddenSDKPrefix names the ONE forbidden opencharly module — checked
@@ -119,6 +135,9 @@ func TestImportPurity_HostImportsOnlySpecAndVettedThirdParty(t *testing.T) {
 			line := fset.Position(imp.Pos()).Line
 
 			if isStdlibImport(importPath) {
+				continue
+			}
+			if _, ok := allowlistedSDKPaths[importPath]; ok {
 				continue
 			}
 			if importPath == forbiddenSDKPrefix || strings.HasPrefix(importPath, forbiddenSDKPrefix+"/") {
