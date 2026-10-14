@@ -594,12 +594,14 @@ check-k3s-vm:
               kube:
                 method: nodes
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
               context: [runtime]
             - check: kubernetes=wait-nodes
               id: kv-kubernetes-wait-nodes
               kube:
                 method: "wait-nodes"
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 kube_count: 1
               timeout: "300s"
               context: [runtime]
@@ -608,6 +610,7 @@ check-k3s-vm:
               kube:
                 method: pods
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 namespace: kube-system
               context: [runtime]
             - check: kubernetes=wait-ready
@@ -615,6 +618,7 @@ check-k3s-vm:
               kube:
                 method: "wait-ready"
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 kube_kind: Deployment
                 namespace: kube-system
                 name: coredns
@@ -625,12 +629,14 @@ check-k3s-vm:
               kube:
                 method: addons
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
               context: [runtime]
             - check: kubernetes=ingressclass
               id: kv-kubernetes-ingressclass-traefik
               kube:
                 method: ingressclass
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
               stdout: {contains: "traefik"}
               context: [runtime]
             - check: kubernetes=storageclass
@@ -638,6 +644,7 @@ check-k3s-vm:
               kube:
                 method: storageclass
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
               stdout: {contains: "local-path"}
               context: [runtime]
             - check: kubernetes=raw — the raw escape hatch lists an arbitrary resource (namespaces)
@@ -645,6 +652,7 @@ check-k3s-vm:
               kube:
                 method: raw
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 kube_resource: namespaces
               context: [runtime]
               stdout:
@@ -654,6 +662,7 @@ check-k3s-vm:
               kube:
                 method: service
                 cluster: "check-k3s-vm-ctx"
+                kube_context: vm-check-k3s-vm
                 namespace: default
                 name: kubernetes
               context: [runtime]
@@ -4645,3 +4654,132 @@ check-kind-host-vm:
                             test -x /usr/local/bin/kind-engine-prepare
                             test -f /etc/charly/kind-node-image
                             echo KIND-HOST-PROFILE-OK
+
+# =====================================================================
+# check-wave-pins — the R10 gate for the wave's COMMITTED pin story.
+#
+# WHY THIS BED EXISTS, and why it is not `check-k3s-vm`: the change class here is a Go module
+# dependency-pin adoption whose runtime effect is the COMPILED-IN plugins charly loads in-process
+# (`charly/go.mod` requires plugin-build + plugin-vm, so the adopted versions are linked into the
+# binary and registered as providers in charly's own process). The gate that exercises THAT path
+# therefore has to dispatch the adopted providers — and this bed does it on a `disposable: true`
+# target, in-process, in seconds, instead of through a guest-VM bed whose red is owned by three
+# other walls (charly#880, charly#882, plugin-kube#22).
+#
+# WHAT IT PROVES, step by step (named per step, because "the bed passed" is not evidence):
+#   wp-pins            the module graph the binary was built from carries the ADOPTED versions —
+#                      read from `go list -m`, i.e. from the lockstep modules themselves, not from
+#                      a hand-copied string.
+#   wp-build-generate  the adopted plugin-build ANSWERS: `charly box generate` dispatches the
+#                      compiled-in build-generate provider and renders a Containerfile.
+#   wp-vm-list         the adopted plugin-vm ANSWERS: `charly vm list` dispatches the compiled-in
+#                      command:vm provider and lists the host's libvirt domains.
+#
+# WHAT IT DOES NOT PROVE, said here rather than left to be inferred: a guest-VM DEPLOY, and with
+# it plugin-vm's ssh-stanza behaviour end to end. That needs a booted guest and is the evidence of
+# the VM beds (`check-k3s-vm`, whose three walls are named above; the kubevirt beds; and the
+# plugin's OWN bed in its own repo). This bed proves the adopted pins BUILD, LINK and DISPATCH —
+# which is the failure mode a pin adoption actually has: an incompatible pin does not compile or
+# does not register, and neither of those can hide here.
+check-wave-pins-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-wave-pins bed: composes nothing
+            (`candy: []` is required on a kind:local template) because the pinned plugins this bed
+            exercises are COMPILED IN — the subject is the module graph the binary was built from,
+            not a candy composed at deploy time.
+        candy: []
+
+check-wave-pins:
+    local:
+        from: check-wave-pins-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        plan:
+            - check: the module graph the binary was built from carries the adopted pins (plugin-build v0.2026286.1121, plugin-vm v0.2026286.856, and the sdk the three tools modules are aligned to)
+              id: wp-pins
+              context:
+                - runtime
+              timeout: 300s
+              exit_status: 0
+              stdout:
+                - contains: WAVE-PINS-OK
+              command:
+                command: |
+                    set -eu
+                    ROOT="$PWD"; mkdir -p "$ROOT/.check"; EV="$ROOT/.check/wave-pins.log"
+                    cd charly
+                    {
+                      echo "binary under test: ${CHARLY_BIN}"
+                      ${CHARLY_BIN} version 2>/dev/null | tail -1
+                      go list -m github.com/opencharly/plugin-build/candy/plugin-build github.com/opencharly/plugin-vm/candy/plugin-vm github.com/opencharly/sdk
+                    } > "$EV" 2>&1 || { cat "$EV"; exit 1; }
+                    # Assert the versions from the graph itself — a hand-copied string would pass a
+                    # diff that never moved the pin.
+                    grep -q 'plugin-build/candy/plugin-build v0.2026286.1121' "$EV" || { cat "$EV"; exit 1; }
+                    grep -q 'plugin-vm/candy/plugin-vm v0.2026286.856' "$EV" || { cat "$EV"; exit 1; }
+                    grep -q '^github.com/opencharly/sdk v' "$EV" || { cat "$EV"; exit 1; }
+                    cat "$EV"
+                    echo WAVE-PINS-OK
+                in_container: false
+            - check: the adopted plugin-build ANSWERS in-process — `charly box generate` dispatches the compiled-in build-generate provider and renders a box Containerfile
+              id: wp-build-generate
+              context:
+                - runtime
+              timeout: 600s
+              exit_status: 0
+              stdout:
+                - contains: WAVE-BUILD-GENERATE-OK
+              command:
+                command: |
+                    set -eu
+                    ROOT="$PWD"; EV="$ROOT/.check/wave-pins-build-generate.log"
+                    P=/tmp/charly-wave-pins-boxbed
+                    rm -rf "$P"
+                    {
+                      echo "binary under test: ${CHARLY_BIN}"
+                      ${CHARLY_BIN} box new project "$P"
+                      ${CHARLY_BIN} -C "$P" box new candy my-candy
+                      ${CHARLY_BIN} -C "$P" candy add-rpm my-candy curl
+                      ${CHARLY_BIN} -C "$P" box new box my-box --base quay.io/fedora/fedora:43 --candy my-candy
+                      ${CHARLY_BIN} -C "$P" box validate
+                      ${CHARLY_BIN} -C "$P" box generate my-box
+                      test -f "$P/.build/my-box/Containerfile"
+                      echo "rendered: $P/.build/my-box/Containerfile"
+                      echo "--- Containerfile head (evidence only) ---"
+                      head -3 "$P/.build/my-box/Containerfile"
+                    } > "$EV" 2>&1 || { cat "$EV"; exit 1; }
+                    grep -q 'rendered:' "$EV" || { cat "$EV"; exit 1; }
+                    # Assert the FILE, never an excerpt of the log. Measured: this generated
+                    # Containerfile OPENS with its own banner comment, so asserting '^FROM ' over a
+                    # `head -2` window tested the wrong bytes and failed a step whose real work
+                    # (generate → Containerfile) had succeeded. The property belongs to the file.
+                    grep -q '^FROM ' "$P/.build/my-box/Containerfile" || { cat "$EV"; exit 1; }
+                    cat "$EV"
+                    echo WAVE-BUILD-GENERATE-OK
+                in_container: false
+            - check: the adopted plugin-vm ANSWERS in-process — `charly vm list` dispatches the compiled-in command:vm provider and lists the host's libvirt domains
+              id: wp-vm-list
+              context:
+                - runtime
+              timeout: 300s
+              exit_status: 0
+              stdout:
+                - contains: WAVE-VM-LIST-OK
+              command:
+                command: |
+                    set -eu
+                    ROOT="$PWD"; EV="$ROOT/.check/wave-pins-vm-list.log"
+                    {
+                      echo "binary under test: ${CHARLY_BIN}"
+                      ${CHARLY_BIN} vm list
+                    } > "$EV" 2>&1 || { cat "$EV"; exit 1; }
+                    # The vm command's own table header: it proves the provider RENDERED a listing
+                    # rather than exiting 0 having done nothing.
+                    grep -q 'NAME' "$EV" || { cat "$EV"; exit 1; }
+                    grep -q 'BACKEND' "$EV" || { cat "$EV"; exit 1; }
+                    grep -q 'STATE' "$EV" || { cat "$EV"; exit 1; }
+                    cat "$EV"
+                    echo WAVE-VM-LIST-OK
+                in_container: false
