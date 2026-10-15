@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/opencharly/sdk/buildcache"
 	specexec "github.com/opencharly/spec/exec"
 	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
@@ -427,17 +428,17 @@ type pluginBinarySpec struct {
 }
 
 // hostBuildPluginBinary is the "plugin-binary" host-builder (F10): build a candy's plugin provider
-// binary on the host (buildPluginBinary — go build on the host toolchain), returning {"path": …}.
+// binary on the host (buildcache.Build — the ONE store-backed build cache), returning {"path": …}.
 // The concrete host-build proving the HostBuild capability.
 func hostBuildPluginBinary(ctx context.Context, spec pluginBinarySpec, _ buildEngineContext) (map[string]string, error) {
 	if spec.CandyDir == "" || spec.Name == "" {
 		return nil, fmt.Errorf("plugin-binary host-build: spec requires candy_dir + name")
 	}
-	bin, err := buildPluginBinary(ctx, spec.CandyDir, spec.Name)
+	res, err := buildcache.Build(ctx, buildcache.Request{SrcDir: spec.CandyDir, Name: spec.Name})
 	if err != nil {
 		return nil, err
 	}
-	return map[string]string{"path": bin}, nil
+	return map[string]string{"path": res.ViewPath}, nil
 }
 
 // Register the plugin-binary host-builder at package-var init (before any init()), like the

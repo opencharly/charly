@@ -203,7 +203,7 @@ func (s *executorReverseServer) runHostStep(ctx context.Context, req *pb.HostSte
 			return resolveImageRefForEnsure(img, s.build.Cfg, s.build.ProjectDir)
 		}
 		ensureImage := func(ctx context.Context, img string) error {
-			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "", "")
+			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "")
 		}
 		deps := &specexec.HostStepDeps{Exec: s.exec, ResolveImage: resolveImage, EnsureImage: ensureImage, DistroCfg: s.build.DistroCfg, Opts: opts}
 		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, spec.PluginEmitStepWords[spec.StepKindBuilder], req.GetStepJson())
@@ -240,7 +240,7 @@ func (s *executorReverseServer) runHostStep(ctx context.Context, req *pb.HostSte
 			return resolveImageRefForEnsure(img, s.build.Cfg, s.build.ProjectDir)
 		}
 		ensureImage := func(ctx context.Context, img string) error {
-			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "", "")
+			return dispatchBuildEnsure(ctx, img, s.build.ProjectDir, "")
 		}
 		deps := &specexec.HostStepDeps{Exec: s.exec, ResolveImage: resolveImage, EnsureImage: ensureImage, DistroCfg: s.build.DistroCfg, Opts: opts}
 		reply, rerr := s.invokeExternalStep(specexec.ContextWithHostStepDeps(ctx, deps), ClassStep, spec.PluginEmitStepWords[spec.StepKindExtract], req.GetStepJson())
