@@ -75,9 +75,6 @@ func TestResolveRuntime_Defaults(t *testing.T) {
 	if rt.RunEngine != "podman" && rt.RunEngine != "docker" {
 		t.Errorf("RunEngine = %q, want \"podman\" or \"docker\"", rt.RunEngine)
 	}
-	if rt.RunEngine != "podman" && rt.RunEngine != "docker" {
-		t.Errorf("RunEngine = %q, want \"podman\" or \"docker\"", rt.RunEngine)
-	}
 	// With auto-detection, run mode is "quadlet" when podman+systemctl present, else "direct"
 	if rt.RunMode != "direct" && rt.RunMode != "quadlet" {
 		t.Errorf("RunMode = %q, want \"direct\" or \"quadlet\"", rt.RunMode)
