@@ -89,7 +89,6 @@ var pluginProviderRefs = map[string]string{
 	"deploy:android":            "github.com/opencharly/plugin-adb/candy/plugin-adb",
 	"deploy:exampledeploy":      "github.com/opencharly/plugin-example-deploy/candy/plugin-example-deploy",
 	"deploy:examplelifecycle":   "github.com/opencharly/plugin-example-lifecycle/candy/plugin-example-lifecycle",
-	"deploy:firecracker":        "github.com/opencharly/plugin-firecracker/candy/plugin-firecracker",
 	"deploy:kindcluster":        "github.com/opencharly/plugin-kube/candy/plugin-kube",
 	"deploy:kubernetes":         "github.com/opencharly/plugin-kube/candy/plugin-kube",
 	"deploy:kubevirt":           "github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt",
