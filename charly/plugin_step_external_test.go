@@ -113,11 +113,9 @@ func TestExternalPluginStep_ReverseChannelEndToEnd(t *testing.T) {
 		t.Fatalf("external step plugin module not found at %s: %v", srcDir, err)
 	}
 
-	// 1. Host-build the provider binary (the loader's buildPluginBinary step).
-	bin, err := buildPluginBinary(ctx, srcDir, "plugin-example-step-test")
-	if err != nil {
-		t.Fatalf("buildPluginBinary: %v", err)
-	}
+	// 1. Host-build the provider binary through the production build cache
+	//    (buildcache.Build — the entry point the loader's host-build arm uses).
+	bin := hostBuildPluginForTest(t, ctx, srcDir, "plugin-example-step-test")
 	// 2. Connect OUT-OF-PROCESS via LocalTransport — the connection carries the broker.
 	unit, closer, err := (&LocalTransport{BinPath: bin}).Connect(ctx)
 	if err != nil {

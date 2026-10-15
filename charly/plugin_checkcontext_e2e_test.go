@@ -36,10 +36,7 @@ func TestKitVerbOutOfProcess_HTTPDoEndToEnd(t *testing.T) {
 	}
 
 	// 1. Host-build the kit verb's OUT-OF-PROCESS serve binary (./cmd/serve, via sdk.ServeCheckVerb).
-	bin, err := buildPluginBinary(ctx, srcDir, "plugin-http-test")
-	if err != nil {
-		t.Fatalf("buildPluginBinary: %v", err)
-	}
+	bin := hostBuildPluginForTest(t, ctx, srcDir, "plugin-http-test")
 	// 2. Connect OUT-OF-PROCESS via LocalTransport — the connection carries the broker.
 	unit, closer, err := (&LocalTransport{BinPath: bin}).Connect(ctx)
 	if err != nil {

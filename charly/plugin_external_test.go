@@ -31,11 +31,9 @@ func TestExternalPluginEndToEnd(t *testing.T) {
 		t.Fatalf("external plugin module not found at %s: %v", srcDir, err)
 	}
 
-	// 1. Host-build the provider binary (the loader's buildPluginBinary step).
-	bin, err := buildPluginBinary(ctx, srcDir, "plugin-example-external-test")
-	if err != nil {
-		t.Fatalf("buildPluginBinary: %v", err)
-	}
+	// 1. Host-build the provider binary through the production build cache
+	//    (buildcache.Build — the entry point the loader's host-build arm uses).
+	bin := hostBuildPluginForTest(t, ctx, srcDir, "plugin-example-external-test")
 
 	// 2. Connect OUT-OF-PROCESS via LocalTransport — providers AND schema arrive on
 	//    the unit, both lifted from the Describe channel.

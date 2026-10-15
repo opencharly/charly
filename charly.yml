@@ -2751,6 +2751,309 @@ check-loader-flat-import-local:
                 command: "${CHARLY_BIN} box validate -C charly/testdata/flat-import-project"
                 in_container: false
 # =================================================================
+# check-plugin-buildcache-local — R10 witness for PHASE 1 of the one-store
+# cache wave (charly#896): the plugin build cache is the ONE OCI-Image-Layout
+# store, keyed by D-STORE-4's inputs (module source, go.sum, toolchain,
+# platform) rather than by the absolute source PATH.
+#
+# WHAT THIS BED PROVES, AND WHAT IT DOES NOT.
+#   Proves: the LOADER's two changed build call sites go through
+#   buildcache.Build. (The THIRD changed site — the F10 `plugin-binary` HostBuild
+#   leg hostBuildPluginBinary — is NOT driven here: it is a plugin→host leg whose
+#   caller is an out-of-process plugin, and it is witnessed by
+#   TestPluginDispatch_InvokeProviderAndHostBuild, which drives HostBuild with
+#   kind "plugin-binary" + build_candy_dir and asserts the returned path exists.)
+#   Arms 1-3 drive resolvePluginBinary's host-build leg — a
+#   REPEATED build of an unchanged plugin performs NO `go build`, an edited source
+#   performs exactly one, and the result is served as the store's hardlink view
+#   with the binary published once as a content-addressed payload blob. ARM 4
+#   drives overridePluginBinary — the LOCAL-OVERRIDE arm, which no other arm
+#   reaches because it needs CHARLY_REPO_OVERRIDE set for the plugin's repo — and
+#   asserts both its provenance tell ("using LOCAL OVERRIDE") and that its build
+#   lands in its own store's view dir. A changed call site named in a claim must be
+#   executed by the run that makes the claim.
+#   Does NOT DRIVE: the F10 `plugin-binary` HostBuild leg (named above — witnessed
+#   by TestPluginDispatch_InvokeProviderAndHostBuild, not by this bed).
+#   Does NOT prove: the `plugin-build` candy's own host build (it is compiled IN,
+#   so it is never host-built — it owns the mechanism, it is not a consumer of
+#   it), nor the package-delivery path (the plugins the OS package installs under
+#   /usr/lib/charly/plugins, exercised by packaging/CI). Saying so keeps a reader
+#   from inflating this bed's coverage.
+#
+# THE INSTRUMENT IS THE ABSENCE OF WORK, never a success exit: a PATH shim
+# records every `go build`, and the store's payload-blob count corroborates.
+# A success exit alone would pass on a cache that does nothing at all.
+#
+# THE SUBJECT AND ITS TRIGGER ARE MEASURED, NOT ASSUMED:
+#   * The subject is `examplekind` from candy/plugin-example-kind, vendored as the
+#     fixture charly/testdata/plugin-buildcache-project. It is OUT-OF-TREE (absent
+#     from the 48 compiled_plugins) and NOT one of the 17 welded words (measured:
+#     `cat /usr/lib/charly/plugins/*.providers | wc -l` → 17), so a host build is
+#     genuinely what serves it.
+#   * The trigger is a REFERENCED WORD belonging to that out-of-tree plugin, in a
+#     project whose candy scan finds its candy: loadProjectPlugins perf-scopes on
+#     exactly that (pluginProvidesReferencedWord). Measured under a PATH shim on
+#     this host: the positive arm produced exactly ONE
+#     `go build -buildvcs=false -o …/plugins/<name>.build ./cmd/serve`, and two
+#     negative arms — no such candy in the scan (rc=2, "no provider registered for
+#     plugin word"), and an unvendored `@github` pin — produced ZERO. That
+#     measurement corrects a stale ledger note claiming `box validate` never builds
+#     a plugin: true for a `command:`-class plugin, false for a kind/verb-prescan
+#     word.
+#   * The ARM steps drive `${CHARLY_BIN}` (the active binary, stamped by the
+#     runtime check-var resolver) rather than a PATH `charly`, so the binary under
+#     review is the one measured.
+#
+# REQUIRED PRECONDITIONS, DECLARED so the next author does not have to rediscover
+# them: an out-of-tree plugin is HOST-BUILT on first use, so the host needs a Go
+# TOOLCHAIN plus HOME (and thus GOMODCACHE/GOPATH) in the step's environment — the
+# plugin module resolves its sdk dependency from the module proxy. This bed is
+# host-rooted (host: local), so the step runs on the operator's host with the
+# runner's environment; do NOT run its arm step under `env -i` (that fails at
+# `go: module cache not found`, which is the precondition, not the defect).
+# ISOLATION (D-STORE-8): step 1 sets its own private CHARLY_CACHE_DIR for every
+# arm and asserts the store tree has no lock and no `.stamp` sidecar (the homes
+# rule: a lock is not a cache item, and the stamp dies with the cutover). Nothing
+# is written outside the step's own temp dir. NOTE the deliberate limit of that
+# claim: the BED'S OWN load-time build follows the runner's cache root (any
+# plugin-loading bed does the same), so the isolation asserted here is the ARM
+# measurement's, and the bed's own load is not claimed to be isolated.
+#
+# disposable: true authorizes destroy + rebuild.
+# =================================================================
+check-plugin-buildcache-app:
+    local:
+        description: |-
+            Minimal kind:local template for check-plugin-buildcache-local — no candies: the
+            plugin build cache is a HOST-side mechanism (the host owns the Go toolchain),
+            so the bed exists to give the arms a venue whose plan can drive the binary
+            under test on the host.
+        candy: []
+check-plugin-buildcache-local:
+    local:
+        from: check-plugin-buildcache-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 witness for PHASE 1 of the one-store cache wave (charly#896): the plugin
+            build cache is the ONE OCI-Image-Layout store, keyed by D-STORE-4's inputs
+            (module source, go.sum, toolchain, platform) rather than by the absolute
+            source PATH, so the `.stamp` content-stamp sidecar dies by construction and
+            the per-binary lock leaves the cache tree for the runtime root. Three arms
+            against the committed fixture charly/testdata/plugin-buildcache-project,
+            whose out-of-tree `examplekind` candy triggers the loader's host-build arm:
+            a COLD build records exactly one `go build`, a REPEATED build of unchanged
+            source records NONE (observed through a PATH shim — the absence of work,
+            never a success exit), and an edited source records exactly one; a FOURTH
+            arm sets CHARLY_REPO_OVERRIDE for the plugin's repo so the loader's other
+            changed call site, overridePluginBinary, actually executes, and asserts its
+            LOCAL-OVERRIDE provenance plus a build in its own store. The cold arm is the
+            PERMANENT POSITIVE CONTROL: it demonstrates in the same run that the path
+            under test DOES build, so a cache that does nothing cannot pass.
+            The store's payload blob is asserted to exist once and to be the SAME INODE
+            as the view that served the build, and the store tree is asserted to carry
+            no lock and no `.stamp` (the two things this cutover deletes). The subject
+            is out-of-tree and non-welded, and the arms drive `${CHARLY_BIN}`, so the
+            binary under review is what is measured.
+        plan:
+            - check: the LOADER's two changed build call sites serve the store's hardlink view — the host-build arm records exactly ONE `go build` cold, NONE on a repeated build of unchanged source, and exactly one more after an edit, while the CHARLY_REPO_OVERRIDE arm logs its LOCAL OVERRIDE provenance and builds into its own store (all measured through a PATH shim that records every go build the cache spawns, plus the store's blob and view counts)
+              id: buildcache-arms
+              exit_status: 0
+              stdout:
+                - contains: BUILDCACHE-ARMS-OK
+              context:
+                - runtime
+              timeout: 1800s
+              command:
+                command: |
+                  set -eu
+                  # The bed's own scratch space. Every arm's cache root is private and inside it.
+                  work="$(mktemp -d)"
+                  cache_dir="${work}/cache"
+                  trap 'rm -rf "${work}"' EXIT
+
+                  # AN OBSERVATION SHIM, first on PATH: every `go build` the cache issues is
+                  # RECORDED, then delegated to the real go. This is the instrument — the bed
+                  # counts WORK, never exit codes.
+                  shim="${work}/shim"
+                  mkdir -p "${shim}"
+                  real_go="$(command -v go)"
+                  build_log="${work}/gobuilds.log"
+                  : > "${build_log}"
+                  cat > "${shim}/go" <<SHIM
+                  #!/bin/sh
+                  for a in "\$@"; do
+                    if [ "\$a" = "build" ]; then
+                      echo "go build" >> "${build_log}"
+                      break
+                    fi
+                  done
+                  exec "${real_go}" "\$@"
+                  SHIM
+                  chmod 0755 "${shim}/go"
+                  count_builds() { wc -l < "${build_log}" | tr -d ' '; }
+
+                  # THE SCRATCH PROJECT, AND WHY ITS PATH IS STABLE ACROSS ARMS.
+                  #
+                  # The arms drive ONE copy of the fixture at a FIXED path and run it three times.
+                  # That stability is the measurement, not a convenience: the pre-cutover cache
+                  # keyed its output filename by the ABSOLUTE source path
+                  # (`<safeName>-<sha256(abs srcDir)[:8]>`), so a per-arm temp path would give every
+                  # arm a DIFFERENT filename, force a rebuild every time, and make a "second build
+                  # hits" assertion unprovable-and-unfalsifiable — it would fail on the old code for
+                  # the wrong reason and pass on new code that was still path-keyed. Holding the path
+                  # fixed tests what the cutover actually claims: the key is over the source CONTENT.
+                  #
+                  # The fixture is resolved from the repo tree the bed ships in (the runner's cwd is
+                  # the project root), exactly as check-loader-flat-import-local does.
+                  fixture="charly/testdata/plugin-buildcache-project"
+                  test -d "${fixture}" || { echo "FAIL: fixture ${fixture} not found from $(pwd)" >&2; exit 1; }
+                  proj="${work}/proj"
+                  mkdir -p "${proj}/candy"
+                  cp -a "${fixture}/charly.yml" "${proj}/charly.yml"
+                  cp -a "${fixture}/candy/plugin-example-kind" "${proj}/candy/"
+
+                  # A PRIVATE cache root for the run — nothing outside the step's temp dir is written
+                  # by the arms (D-STORE-8).
+                  export CHARLY_CACHE_DIR="${cache_dir}"
+
+                  # run_arm <arm-name> — drive `box validate` on the scratch project. This reaches
+                  # the plugin prescan and therefore the loader's host-build arm for a REFERENCED
+                  # out-of-tree word. ${CHARLY_BIN} is the binary under review (the runtime check-var
+                  # resolver stamps the active binary), and the shim is first on PATH so every
+                  # `go build` it spawns is RECORDED.
+                  run_arm() {
+                    ( cd "${proj}" && PATH="$shim:$PATH" "${CHARLY_BIN}" box validate >"${work}/arm-$1.log" 2>&1 ) || {
+                      echo "FAIL: arm $1 ('box validate' on the fixture) exited non-zero:" >&2
+                      tail -20 "${work}/arm-$1.log" >&2
+                      exit 1
+                    }
+                  }
+
+                  # --- ARM 1: COLD. Must MISS and build: the PERMANENT POSITIVE CONTROL ---
+                  # This arm is what makes the two assertions below meaningful: it proves, in this
+                  # very run, that the chosen path DOES build. A cache that does nothing cannot
+                  # produce it.
+                  run_arm cold
+                  cold_after="$(count_builds)"
+                  if [ "${cold_after}" -lt 1 ]; then
+                    echo "FAIL: the COLD arm issued no 'go build' (${cold_after}) — the path under test does not build, so neither the hit nor the miss assertion below would mean anything" >&2
+                    exit 1
+                  fi
+
+                  # --- ARM 2: SAME source, SAME path. Must HIT: zero further builds ---------
+                  run_arm warm
+                  warm_after="$(count_builds)"
+                  if [ "${warm_after}" != "${cold_after}" ]; then
+                    echo "FAIL: the second build of UNCHANGED source re-ran 'go build' (${cold_after} -> ${warm_after}) — the store did not hit" >&2
+                    exit 1
+                  fi
+
+                  # --- ARM 3: EDITED source, SAME path. Must MISS: exactly one further build ---
+                  # The edit lands on the project the NEXT arm validates; editing any other copy
+                  # would leave the measured source unchanged and let a content-blind key pass.
+                  printf '\n// cache-invalidating edit (plugin-buildcache bed)\n' >> "${proj}/candy/plugin-example-kind/plugin.go"
+                  run_arm edited
+                  edited_after="$(count_builds)"
+                  if [ "${edited_after}" -le "${warm_after}" ]; then
+                    echo "FAIL: an EDITED source did not invalidate the store (${warm_after} -> ${edited_after}) — a key that ignores content is not a content-addressed cache" >&2
+                    exit 1
+                  fi
+
+                  # --- CORROBORATION: the store really holds content-addressed bytes ---
+                  # This is the assertion that FAILS on the pre-cutover code, and it is the one that
+                  # makes the bed coverage of THIS change rather than of plugin building in general:
+                  # the old cluster wrote `~/.cache/charly/plugins/<safeName>-<sourceTag>` with a
+                  # `.lock` and a `.stamp` BESIDE the binary, so it produced no store tree at all.
+                  store="${cache_dir}/plugin-build"
+                  blobs="$(find "${store}/blobs" -type f 2>/dev/null | wc -l | tr -d ' ')"
+                  if [ "${blobs}" -lt 2 ]; then
+                    echo "FAIL: the store at ${store} holds ${blobs} blob file(s) — too few for a payload plus an entry manifest (the build did not go through the content-addressed store)" >&2
+                    find "${cache_dir}" -maxdepth 2 >&2 || true
+                    exit 1
+                  fi
+                  views="$(find "${store}/views" -type f 2>/dev/null | wc -l | tr -d ' ')"
+                  if [ "${views}" -lt 1 ]; then
+                    echo "FAIL: the store at ${store} holds no view — the build produced no servable binary" >&2
+                    exit 1
+                  fi
+
+                  # --- THE DELETIONS, asserted POSITIVELY in the store tree ---------
+                  # The cutover removes the per-binary lock from the cache and the `.stamp` sidecar
+                  # entirely (freshness IS the key now). Assert their absence HERE, in the store the
+                  # run just wrote, so the claim is about bytes on disk.
+                  if find "${store}" \( -name '*.lock' -o -name 'locks' \) -print -quit | grep -q .; then
+                    echo "FAIL: the store tree ${store} carries a lock — locks are not cache items (homes rule)" >&2
+                    find "${store}" \( -name '*.lock' -o -name 'locks' \) >&2
+                    exit 1
+                  fi
+                  if find "${store}" -name '*.stamp' -print -quit | grep -q .; then
+                    echo "FAIL: the store tree ${store} carries a .stamp sidecar — it dies with this cutover (freshness IS the key)" >&2
+                    exit 1
+                  fi
+
+                  # --- THE VIEW SHARES THE PAYLOAD'S INODE (the bytes exist ONCE) -----
+                  # `nlink >= 2` is the observable of a hardlink view: the caller execs the view, and
+                  # the same bytes are the store's blob — never a copy.
+                  linked=0
+                  for v in "${store}/views"/*; do
+                    [ -e "${v}" ] || continue
+                    nl="$(stat -c %h "${v}" 2>/dev/null || echo 1)"
+                    if [ "${nl}" -ge 2 ]; then linked=$((linked + 1)); fi
+                  done
+                  if [ "${linked}" -lt 1 ]; then
+                    echo "FAIL: no view under ${store}/views has a second hardlink — the bytes were copied, not linked, so they do not exist once" >&2
+                    exit 1
+                  fi
+
+                  # --- ARM 4: CHARLY_REPO_OVERRIDE — the loader's OTHER changed call site ---------
+                  # overridePluginBinary is a changed path in this cutover, and arms 1-3 never
+                  # reach it (no override is set, so resolvePluginBinary never takes the override
+                  # arm). Setting an override for the plugin's REPO is the ONLY thing that routes
+                  # the resolve through it. Two assertions make the arm ATTRIBUTABLE rather than
+                  # assumed: the run log must name the LOCAL OVERRIDE provenance (a run that
+                  # silently took the plain host-build path cannot pass), and the override's build
+                  # must land in its own store's view dir (so it went through buildcache.Build
+                  # too). A FRESH private cache makes it a cold build, so the log line is proven
+                  # by work done rather than by a cached provenance print.
+                  override_cache="${work}/cache-override"
+                  override_proj="${work}/proj-override"
+                  override_root="${work}/override-root"
+                  mkdir -p "${override_proj}/candy" "${override_root}/candy"
+                  cp -a "${fixture}/charly.yml" "${override_proj}/charly.yml"
+                  cp -a "${fixture}/candy/plugin-example-kind" "${override_proj}/candy/"
+                  cp -a "${fixture}/candy/plugin-example-kind" "${override_root}/candy/"
+                  override_before="$(count_builds)"
+                  ( cd "${override_proj}" \
+                      && CHARLY_CACHE_DIR="${override_cache}" \
+                         CHARLY_REPO_OVERRIDE="github.com/opencharly/plugin-example-kind=${override_root}" \
+                         PATH="$shim:$PATH" "${CHARLY_BIN}" box validate >"${work}/arm-override.log" 2>&1 ) || {
+                    echo "FAIL: the CHARLY_REPO_OVERRIDE arm ('box validate') exited non-zero:" >&2
+                    tail -20 "${work}/arm-override.log" >&2
+                    exit 1
+                  }
+                  override_after="$(count_builds)"
+                  if [ "${override_after}" -le "${override_before}" ]; then
+                    echo "FAIL: with CHARLY_REPO_OVERRIDE set for the plugin's repo, NO 'go build' ran (${override_before} -> ${override_after}) — overridePluginBinary was not exercised" >&2
+                    tail -20 "${work}/arm-override.log" >&2
+                    exit 1
+                  fi
+                  if ! grep -q 'using LOCAL OVERRIDE' "${work}/arm-override.log"; then
+                    echo "FAIL: the override arm logged no LOCAL OVERRIDE provenance — it fell back to a plain host build, so overridePluginBinary is still unproven" >&2
+                    tail -20 "${work}/arm-override.log" >&2
+                    exit 1
+                  fi
+                  override_store="${override_cache}/plugin-build"
+                  override_views="$(find "${override_store}/views" -type f 2>/dev/null | wc -l | tr -d ' ')"
+                  if [ "${override_views}" -lt 1 ]; then
+                    echo "FAIL: the override arm built nothing into its store's view dir (${override_store}/views) — it did not go through buildcache.Build" >&2
+                    exit 1
+                  fi
+
+                  echo "BUILDCACHE-ARMS-OK cold_builds=${cold_after} warm_builds=${warm_after} edited_builds=${edited_after} override_builds=$((override_after - override_before)) blobs=${blobs} views=${views} linked=${linked} override_views=${override_views}"
+                in_container: false
+# =================================================================
 # check-preflight-local — R10 witness for the RELOCATED check-run image
 # PREFLIGHT (K-wave 2 cone R4: the "check-run" HostBuild kind's last arm
 # "preflight" moved to candy/plugin-check's pluginCheckRunPreflight).

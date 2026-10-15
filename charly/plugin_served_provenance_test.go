@@ -42,13 +42,22 @@ func captureStderr(t *testing.T, fn func()) string {
 	return <-done
 }
 
-// isolatePluginSearch makes the baked-plugin search path OWNED by the test: the build cache
-// lands under a temp XDG_CACHE_HOME, $CHARLY_PLUGIN_DIR points at bakedDir (or an empty temp dir
-// when the test needs NO baked hit), and the FHS baked dir is off the search because the running
-// binary is faked to a dev/worktree path (packagedInstall() == false — issue #328).
+// isolatePluginSearch makes the baked-plugin search path AND the plugin-build store OWNED by the
+// test: $CHARLY_PLUGIN_DIR points at bakedDir (or an empty temp dir when the test needs NO baked
+// hit), the FHS baked dir is off the search because the running binary is faked to a dev/worktree
+// path (packagedInstall() == false — issue #328), and the build cache is rooted at a temp
+// CHARLY_CACHE_DIR.
+//
+// BOTH cache roots are set deliberately: the phase-1 cutover moved the plugin binary build onto the
+// sdk store, whose cache root is $XDG_CACHE_HOME/charly with $CHARLY_CACHE_DIR as the ONE override
+// (storekit.CacheDir) — XDG_CACHE_HOME alone would no longer contain it. XDG_RUNTIME_DIR is not
+// pinned here, so the store's per-key build lock lands under the state root; HOME is redirected with
+// the rest so a test never writes into the operator's real roots.
 func isolatePluginSearch(t *testing.T, bakedDir string) {
 	t.Helper()
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	cacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+	t.Setenv("CHARLY_CACHE_DIR", filepath.Join(cacheHome, "charly"))
 	if bakedDir == "" {
 		bakedDir = t.TempDir()
 	}
@@ -78,22 +87,42 @@ func writeMinimalPluginModule(t *testing.T, root, name string) string {
 	return srcDir
 }
 
-func TestPluginArtifactID_StampBeatsMtime(t *testing.T) {
+func TestPluginArtifactID_ContentAddressBeatsMtime(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "plugin-h4")
 	if err := os.WriteFile(bin, []byte("binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got := pluginArtifactID(bin); !strings.Contains(got, "mtime") {
-		t.Fatalf("a binary with no stamp sidecar must identify by size+mtime, got %q", got)
+	if got := pluginArtifactID(bin, ""); !strings.Contains(got, "mtime") {
+		t.Fatalf("a binary with no store entry must identify by size+mtime, got %q", got)
 	}
-	const stamp = "0123456789abcdef0123456789abcdef"
-	if err := os.WriteFile(pluginStampPath(bin), []byte(stamp+"\n"), 0o644); err != nil {
+	// The content address (what a host-built plugin gets, and what the store addresses its payload
+	// blob by) outranks mtime.
+	digest := contentDigestOf(bin)
+	if !strings.HasPrefix(digest, "sha256:") || len(digest) != len("sha256:")+64 {
+		t.Fatalf("contentDigestOf must render the store's sha256 content address, got %q", digest)
+	}
+	if got := pluginArtifactID(bin, digest); got != digest {
+		t.Fatalf("pluginArtifactID with a content address = %q, want %q", got, digest)
+	}
+	// The digest is the CONTENT's, not the path's: identical bytes under a different name agree,
+	// different bytes do not.
+	other := filepath.Join(t.TempDir(), "plugin-h4-copy")
+	if err := os.WriteFile(other, []byte("binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got := pluginArtifactID(bin); got != "stamp "+stamp[:16] {
-		t.Fatalf("pluginArtifactID with a stamp = %q, want %q", got, "stamp "+stamp[:16])
+	if contentDigestOf(other) != digest {
+		t.Fatalf("identical bytes must render one content address, got %q vs %q", contentDigestOf(other), digest)
 	}
-	if got := pluginArtifactID(filepath.Join(t.TempDir(), "missing")); got != "" {
+	if err := os.WriteFile(other, []byte("different"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if contentDigestOf(other) == digest {
+		t.Fatal("different bytes rendered the SAME content address")
+	}
+	if got := contentDigestOf(filepath.Join(t.TempDir(), "missing")); got != "" {
+		t.Fatalf("an unreadable binary must render no content address, got %q", got)
+	}
+	if got := pluginArtifactID(filepath.Join(t.TempDir(), "missing"), ""); got != "" {
 		t.Fatalf("an unreadable binary must identify as empty, got %q", got)
 	}
 }
@@ -105,20 +134,19 @@ func TestPluginServedLine_DistinguishesEveryServedArtifact(t *testing.T) {
 	if err := os.WriteFile(bin, []byte("binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(pluginStampPath(bin), []byte("0123456789abcdef0123456789abcdef\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	const ref = "plugin-h4"
 
 	built := pluginServedLine(ref, "/src/plugin-h4", bin, "", false)
-	for _, want := range []string{"plugin " + ref + ":", "served from " + bin, "build stamp 0123456789abcdef", "source /src/plugin-h4"} {
+	// The identity is the CONTENT ADDRESS now (the .stamp sidecar is deleted with this cutover),
+	// so the line names a string the store can be asked about.
+	for _, want := range []string{"plugin " + ref + ":", "served from " + bin, "build " + contentDigestOf(bin), "source /src/plugin-h4"} {
 		if !strings.Contains(built, want) {
 			t.Errorf("built-plugin line %q is missing %q", built, want)
 		}
 	}
 
 	baked := pluginServedLine(ref, "", bin, "", true)
-	if !strings.Contains(baked, "served from baked binary "+bin) || !strings.Contains(baked, "build stamp ") {
+	if !strings.Contains(baked, "served from baked binary "+bin) || !strings.Contains(baked, "build sha256:") {
 		t.Errorf("baked-plugin line = %q, want the baked binary path + a build id", baked)
 	}
 
@@ -188,9 +216,8 @@ func TestResolvePluginBinary_HostBuildsFromTheCandySource(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the host-build proof runs a real go build")
 	}
-	cache := t.TempDir()
 	isolatePluginSearch(t, "")
-	t.Setenv("XDG_CACHE_HOME", cache)
+	cacheRoot := os.Getenv("CHARLY_CACHE_DIR")
 
 	srcDir := writeMinimalPluginModule(t, t.TempDir(), "plugin-h4")
 
@@ -198,8 +225,12 @@ func TestResolvePluginBinary_HostBuildsFromTheCandySource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the host build of a real candy module must SUCCEED: %v", err)
 	}
-	if wantDir := filepath.Join(cache, "charly", "plugins"); filepath.Dir(bin) != wantDir {
-		t.Fatalf("the built binary must land in the plugin build cache %s; got %s", wantDir, bin)
+	// The build cache is the ONE content-addressed STORE now: the served path is the store's
+	// hardlink VIEW (buildcache viewPathFor), under <cache>/plugin-build/views, and the payload it
+	// links lives in that store's blobs/ — NOT the deleted <cache>/charly/plugins/<name>-<tag>.
+	storeDir := filepath.Join(cacheRoot, "plugin-build")
+	if filepath.Dir(bin) != filepath.Join(storeDir, "views") {
+		t.Fatalf("the built binary must be the store's VIEW under %s; got %s", filepath.Join(storeDir, "views"), bin)
 	}
 	st, statErr := os.Stat(bin)
 	if statErr != nil || st.IsDir() {
@@ -208,11 +239,28 @@ func TestResolvePluginBinary_HostBuildsFromTheCandySource(t *testing.T) {
 	if st.Size() == 0 {
 		t.Fatalf("the served binary %s is empty — the build produced no bytes", bin)
 	}
-	if _, err := os.Stat(pluginStampPath(bin)); err != nil {
-		t.Errorf("a host-built binary must carry its content stamp beside it: %v", err)
+	// The view is a HARDLINK of the published payload blob: same inode, so the bytes exist ONCE.
+	viewInfo, ierr := os.Stat(filepath.Join(storeDir, "views", filepath.Base(bin)))
+	if ierr != nil {
+		t.Fatalf("stat the view: %v", ierr)
 	}
-	if id := pluginArtifactID(bin); !strings.HasPrefix(id, "stamp ") {
-		t.Errorf("the served artifact id must be the CONTENT stamp, got %q", id)
+	blobs, gerr := filepath.Glob(filepath.Join(storeDir, "blobs", "sha256", "*"))
+	if gerr != nil || len(blobs) == 0 {
+		t.Fatalf("the store must hold the payload blob (glob err=%v, n=%d)", gerr, len(blobs))
+	}
+	shared := false
+	for _, b := range blobs {
+		if bi, berr := os.Stat(b); berr == nil && os.SameFile(viewInfo, bi) {
+			shared = true
+			break
+		}
+	}
+	if !shared {
+		t.Errorf("the view %s does not share an inode with any payload blob under %s — the bytes were copied, not linked", bin, filepath.Join(storeDir, "blobs", "sha256"))
+	}
+	// The served artifact's identity is its CONTENT ADDRESS (the deleted .stamp is gone).
+	if id := pluginArtifactID(bin, contentDigestOf(bin)); !strings.HasPrefix(id, "sha256:") {
+		t.Errorf("the served artifact id must be the content address, got %q", id)
 	}
 	// The built artifact is REAL, not a placeholder: it executes.
 	if out, err := exec.Command(bin).CombinedOutput(); err != nil {
@@ -220,7 +268,7 @@ func TestResolvePluginBinary_HostBuildsFromTheCandySource(t *testing.T) {
 	}
 	// And the run log says exactly which bytes executed and which tree they came from.
 	line := captureStderr(t, func() { reportPluginServed("plugin-h4", srcDir, bin, "") })
-	for _, want := range []string{"plugin plugin-h4: served from " + bin, "build stamp ", "source " + srcDir} {
+	for _, want := range []string{"plugin plugin-h4: served from " + bin, "build sha256:", "source " + srcDir} {
 		if !strings.Contains(line, want) {
 			t.Errorf("provenance line %q is missing %q", line, want)
 		}

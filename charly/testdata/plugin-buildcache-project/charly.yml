@@ -1,0 +1,25 @@
+# A fixture project for the plugin-BUILD-CACHE R10 bed (check-plugin-buildcache-local, charly#896).
+#
+# It exists to TRIGGER the loader's host-build arm, which is the thing under test. The trigger was
+# MEASURED, not assumed, because the shape is subtle:
+#
+#   * The loader host-builds a plugin only when a REFERENCED WORD belongs to an OUT-OF-TREE
+#     (non-compiled-in) plugin, and the project's candy scan can find that plugin's candy.
+#     `loadProjectPlugins` PERF-SCOPES on exactly that (pluginProvidesReferencedWord).
+#   * `charly box validate` IS enough for this trigger — MEASURED, and it corrects a stale ledger
+#     note that said validate never builds. The note is true for a `command:`-class plugin (lazily
+#     dispatched, never built by validate) and FALSE for a kind/verb-prescan word, which the
+#     prescan resolves at parse time. Two negative arms confirm the reading: no candy in the scan
+#     → 0 builds; an unvendored `@github` pin → 0 builds.
+#
+# `examplekind` is the subject: `plugin-example-kind` is OUT-OF-TREE (absent from the 48
+# compiled_plugins) and `kind:examplekind` is NOT one of the 17 welded words (measured:
+# `cat /usr/lib/charly/plugins/*.providers | wc -l` → 17), so the word is genuinely servable by a
+# host build. Its candy is vendored here as a fixture (candy/plugin-example-kind) so the bed is
+# self-contained and the build source is a stable, committed tree rather than a network fetch.
+discover:
+    - path: candy
+      recursive: true
+probe-kind:
+    examplekind:
+        marker: plugin-buildcache-bed
