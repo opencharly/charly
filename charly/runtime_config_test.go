@@ -21,7 +21,7 @@ func TestLoadRuntimeConfig_Missing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected nil error for missing config, got: %v", err)
 	}
-	if cfg.Engine.Build != "" || cfg.Engine.Run != "" || cfg.RunMode != "" {
+	if cfg.Engine.Run != "" || cfg.Engine.Rootful != "" || cfg.RunMode != "" {
 		t.Errorf("expected zero-value config, got %+v", cfg)
 	}
 }
@@ -35,7 +35,7 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	cfg := &hostenv.RuntimeConfig{
-		Engine:  hostenv.EngineConfig{Build: "podman", Run: "docker"},
+		Engine:  hostenv.EngineConfig{Run: "docker"},
 		RunMode: "quadlet",
 	}
 	if err := hostenv.SaveRuntimeConfig(cfg); err != nil {
@@ -45,9 +45,6 @@ func TestSaveAndLoadRuntimeConfig(t *testing.T) {
 	loaded, err := hostenv.LoadRuntimeConfig()
 	if err != nil {
 		t.Fatalf("LoadRuntimeConfig() error: %v", err)
-	}
-	if loaded.Engine.Build != "podman" {
-		t.Errorf("Engine.Build = %q, want %q", loaded.Engine.Build, "podman")
 	}
 	if loaded.Engine.Run != "docker" {
 		t.Errorf("Engine.Run = %q, want %q", loaded.Engine.Run, "docker")
@@ -65,7 +62,7 @@ func TestResolveRuntime_Defaults(t *testing.T) {
 	}
 
 	// Ensure env vars are clear
-	for _, key := range []string{"CHARLY_BUILD_ENGINE", "CHARLY_RUN_ENGINE", "CHARLY_RUN_MODE", "CHARLY_AUTO_ENABLE", "CHARLY_BIND_ADDRESS"} {
+	for _, key := range []string{"CHARLY_RUN_ENGINE", "CHARLY_RUN_MODE", "CHARLY_ENGINE_ROOTFUL", "CHARLY_AUTO_ENABLE", "CHARLY_BIND_ADDRESS"} {
 		_ = os.Unsetenv(key)
 	}
 
@@ -75,8 +72,8 @@ func TestResolveRuntime_Defaults(t *testing.T) {
 	}
 	// With auto-detection, the resolved engine should be "podman" or "docker"
 	// depending on what's available on the system (not "auto")
-	if rt.BuildEngine != "podman" && rt.BuildEngine != "docker" {
-		t.Errorf("BuildEngine = %q, want \"podman\" or \"docker\"", rt.BuildEngine)
+	if rt.RunEngine != "podman" && rt.RunEngine != "docker" {
+		t.Errorf("RunEngine = %q, want \"podman\" or \"docker\"", rt.RunEngine)
 	}
 	if rt.RunEngine != "podman" && rt.RunEngine != "docker" {
 		t.Errorf("RunEngine = %q, want \"podman\" or \"docker\"", rt.RunEngine)
@@ -102,50 +99,12 @@ func TestResolveRuntime_EnvOverridesConfig(t *testing.T) {
 	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
 	// Write config with podman
-	cfg := &hostenv.RuntimeConfig{Engine: hostenv.EngineConfig{Build: "podman"}}
+	cfg := &hostenv.RuntimeConfig{Engine: hostenv.EngineConfig{Run: "podman"}}
 	if err := hostenv.SaveRuntimeConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
 
 	// Set env to override
-	_ = os.Setenv("CHARLY_BUILD_ENGINE", "docker")
-	defer os.Unsetenv("CHARLY_BUILD_ENGINE") //nolint:errcheck
-	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
-	_ = os.Unsetenv("CHARLY_RUN_MODE")
-	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
-
-	rt, err := hostenv.ResolveRuntime()
-	if err != nil {
-		t.Fatalf("ResolveRuntime() error: %v", err)
-	}
-	if rt.BuildEngine != "docker" {
-		t.Errorf("BuildEngine = %q, want %q (env should override config)", rt.BuildEngine, "docker")
-	}
-}
-
-// TestResolveRuntime_MixedEngines pins the build and run engines to DIFFERENT engines and asserts
-// ResolveRuntime keeps them apart.
-//
-// The two are independent by construction — separate env vars, separate config fields, separate
-// auto-detect branches — and the documentation says so: opencharly.ai and the README both tell a
-// reader that building with Podman and running under Docker is a supported combination. Until this
-// test existed, nothing asserted it end to end. TestSaveAndLoadRuntimeConfig names the same pair,
-// but it round-trips the config FILE; it never calls ResolveRuntime, so it proves the pair can be
-// written down rather than that it survives resolution. A reviewer reading the docs claim and
-// grepping for its proof would have found that test and stopped one layer short.
-//
-// It fails if resolution ever collapses the two onto one engine — the single way the documented
-// claim could quietly stop being true.
-func TestResolveRuntime_MixedEngines(t *testing.T) {
-	tmpDir := t.TempDir()
-	orig := hostenv.RuntimeConfigPath
-	defer func() { hostenv.RuntimeConfigPath = orig }()
-	hostenv.RuntimeConfigPath = func() (string, error) {
-		return filepath.Join(tmpDir, "config.yml"), nil
-	}
-
-	_ = os.Setenv("CHARLY_BUILD_ENGINE", "podman")
-	defer os.Unsetenv("CHARLY_BUILD_ENGINE") //nolint:errcheck
 	_ = os.Setenv("CHARLY_RUN_ENGINE", "docker")
 	defer os.Unsetenv("CHARLY_RUN_ENGINE") //nolint:errcheck
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
@@ -155,15 +114,46 @@ func TestResolveRuntime_MixedEngines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
-	if rt.BuildEngine != "podman" {
-		t.Errorf("BuildEngine = %q, want %q", rt.BuildEngine, "podman")
+	if rt.RunEngine != "docker" {
+		t.Errorf("RunEngine = %q, want %q (env should override config)", rt.RunEngine, "docker")
+	}
+}
+
+// TestResolveRuntime_DockerRunEngineResolvesDirect pins the RUN-engine → run-mode coupling: a
+// non-podman run engine must resolve RunMode to `direct`, because quadlet requires RunEngine to
+// be podman.
+//
+// It REPLACES TestResolveRuntime_MixedEngines, whose claim this change RETIRES rather than
+// contradicts: that test asserted the build and run engines are independently selectable, and
+// "it fails if resolution ever collapses the two onto one engine". The image builder is BuildKit,
+// which is not a container engine and can never be a member of the closed #EngineName vocabulary
+// — so the contract carries no builder selector at all (`engine.build` / CHARLY_BUILD_ENGINE /
+// ResolvedRuntime.BuildEngine are gone) and every consumer reads the RUN engine. The removal is
+// pinned in the contract itself (spec/hostenv/retired_build_selector_test.go), so this file must
+// not re-assert the retired pair. What survives, and is asserted here, is the half that was never
+// about the pair: the run engine decides the run mode.
+func TestResolveRuntime_DockerRunEngineResolvesDirect(t *testing.T) {
+	tmpDir := t.TempDir()
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) {
+		return filepath.Join(tmpDir, "config.yml"), nil
+	}
+
+	_ = os.Setenv("CHARLY_RUN_ENGINE", "docker")
+	defer os.Unsetenv("CHARLY_RUN_ENGINE") //nolint:errcheck
+	_ = os.Unsetenv("CHARLY_RUN_MODE")
+	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
+
+	rt, err := hostenv.ResolveRuntime()
+	if err != nil {
+		t.Fatalf("ResolveRuntime() error: %v", err)
 	}
 	if rt.RunEngine != "docker" {
 		t.Errorf("RunEngine = %q, want %q", rt.RunEngine, "docker")
 	}
 
-	// The mixed pair also decides the run mode: quadlet requires RunEngine==podman, so a
-	// docker RUN engine must resolve to direct however the build engine is set.
+	// quadlet requires RunEngine==podman, so a docker RUN engine must resolve to direct.
 	if rt.RunMode != "direct" {
 		t.Errorf("RunMode = %q, want %q (quadlet requires a podman run engine)", rt.RunMode, "direct")
 	}
@@ -176,9 +166,8 @@ func TestResolveRuntime_InvalidEngine(t *testing.T) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
-	_ = os.Setenv("CHARLY_BUILD_ENGINE", "containerd")
-	defer os.Unsetenv("CHARLY_BUILD_ENGINE") //nolint:errcheck
-	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
+	_ = os.Setenv("CHARLY_RUN_ENGINE", "containerd")
+	defer os.Unsetenv("CHARLY_RUN_ENGINE") //nolint:errcheck
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
 	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
 
@@ -195,7 +184,7 @@ func TestResolveRuntime_InvalidRunMode(t *testing.T) {
 		return filepath.Join(t.TempDir(), "config.yml"), nil
 	}
 
-	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
+	_ = os.Unsetenv("CHARLY_ENGINE_ROOTFUL")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
 	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
 	_ = os.Setenv("CHARLY_RUN_MODE", "swarm")
@@ -231,7 +220,7 @@ func TestAutoEnable_EnvValue1(t *testing.T) {
 	defer func() { hostenv.RuntimeConfigPath = orig }()
 	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
-	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
+	_ = os.Unsetenv("CHARLY_ENGINE_ROOTFUL")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
 	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
@@ -255,7 +244,7 @@ func TestBindAddress_InvalidEnv(t *testing.T) {
 	defer func() { hostenv.RuntimeConfigPath = orig }()
 	hostenv.RuntimeConfigPath = func() (string, error) { return configPath, nil }
 
-	_ = os.Unsetenv("CHARLY_BUILD_ENGINE")
+	_ = os.Unsetenv("CHARLY_ENGINE_ROOTFUL")
 	_ = os.Unsetenv("CHARLY_RUN_ENGINE")
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
 	_ = os.Unsetenv("CHARLY_AUTO_ENABLE")

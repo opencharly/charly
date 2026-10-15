@@ -12,14 +12,14 @@ require (
 	github.com/opencharly/plugin-agentteams/candy/plugin-agentteams v0.2026271.2238
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244
-	github.com/opencharly/plugin-box/candy/plugin-box v0.2026272.2039
-	github.com/opencharly/plugin-build/candy/plugin-build v0.2026286.1121
+	github.com/opencharly/plugin-box/candy/plugin-box v0.2026288.503
+	github.com/opencharly/plugin-build/candy/plugin-build v0.2026287.2220
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026271.2248
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948
 	github.com/opencharly/plugin-check/candy/plugin-check v0.2026287.1745
-	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026271.2313
+	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026287.2341
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026277.738
 	github.com/opencharly/plugin-distro/candy/plugin-distro v0.2026276.1457
@@ -58,7 +58,7 @@ require (
 	github.com/opencharly/plugin-refs/candy/plugin-refs v0.2026272.432
 	github.com/opencharly/plugin-resource/candy/plugin-resource v0.2026272.445
 	github.com/opencharly/plugin-service/candy/plugin-service v0.2026272.417
-	github.com/opencharly/plugin-settings/candy/plugin-settings v0.2026272.410
+	github.com/opencharly/plugin-settings/candy/plugin-settings v0.2026287.2353
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026272.438
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026272.430
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026272.442
@@ -67,8 +67,8 @@ require (
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026272.423
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424
-	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026286.856
-	github.com/opencharly/sdk v0.2026287.1747
+	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356
+	github.com/opencharly/sdk v0.2026287.2235
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.61.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -136,7 +136,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026283.105
-	github.com/opencharly/spec v0.2026287.1529
+	github.com/opencharly/spec v0.2026287.1848
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
