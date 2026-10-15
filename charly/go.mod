@@ -37,7 +37,7 @@ require (
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142
 	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026286.700
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959
-	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026279.629
+	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026288.1214
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235
 	github.com/opencharly/plugin-init/candy/plugin-init v0.2026272.301
 	github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026276.1353

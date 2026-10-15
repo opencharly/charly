@@ -195,6 +195,8 @@ github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959 h1:JS8EX0lGEq9G
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959/go.mod h1:UEARhUMGngvey1RFumqMwia2WUspmlKlXORZGId+8Kc=
 github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026279.629 h1:RHVJ/EQAF0xorj6Y9Bb6yNy7VCPXF2Q9W63bc4gI0z8=
 github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026279.629/go.mod h1:fV1jbXdkX0g1kuss+6pqm0zco2l/yW8ht1x+k1em4B0=
+github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026288.1214 h1:o17GMgkXjYQMQAA6NZjTct4jrO2nvRU630JTZ92EdLY=
+github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026288.1214/go.mod h1:fV1jbXdkX0g1kuss+6pqm0zco2l/yW8ht1x+k1em4B0=
 github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235 h1:a7BZZ4lKwHBfxLUO7FmOV0scELeUJKqWLR8Xpt3U61c=
 github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235/go.mod h1:6UI9BIsUbVt4P9cXnQUN2R/XH84HFnjLGpLcB5AmSZw=
 github.com/opencharly/plugin-init/candy/plugin-init v0.2026272.301 h1:e0xPW6vnle8i+ON4hIQhJcWPNpb3kveSds/5xM+cGWA=
