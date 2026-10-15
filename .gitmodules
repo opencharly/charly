@@ -5,15 +5,20 @@
 [submodule "box/cachyos"]
 	path = box/cachyos
 	url = https://github.com/opencharly/distro-cachyos.git
+	branch = main
 [submodule "box/debian"]
 	path = box/debian
 	url = https://github.com/opencharly/distro-debian.git
+	branch = main
 [submodule "box/fedora"]
 	path = box/fedora
 	url = https://github.com/opencharly/distro-fedora.git
+	branch = main
 [submodule "box/ubuntu"]
 	path = box/ubuntu
 	url = https://github.com/opencharly/distro-ubuntu.git
+	branch = main
 [submodule "box/omarchy"]
 	path = box/omarchy
 	url = https://github.com/opencharly/distro-omarchy.git
+	branch = main
