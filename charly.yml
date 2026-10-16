@@ -3885,6 +3885,54 @@ push:
         context: [deploy]
 
 # =============================================================================
+# pins — the pin operation over THIS repo's own box/* gitlinks.
+#
+# WHY THIS EXISTS, and why it is not the umbrella's task: the umbrella pins each
+# `distro-*` FROM this repo's nested `box/*` gitlinks (`pinned_from: charly` +
+# `pin_map`), so the value the consumer records IS the gitlink recorded here — and
+# until now nothing in this repo owned advancing them. The consumer had a verb, a
+# hook, a full gate and a documented procedure; the producer had none, so the five
+# `distro-*` consumer pins could not be advanced by any command in either repo
+# (opencharly/charly#936, #942). This task is that missing owner.
+#
+# The six `box/*` are LEAVES: each declares `branch = main` in `.gitmodules`
+# (landed as d72c0063), so its intent is `upstream:main`, judged against the REMOTE.
+# There is deliberately no `pin_map` here — this repo declares no derived edge of
+# its own, so every `box/*` rolls to its own default-branch HEAD.
+#
+# `MODE=currency` is the question that decides whether this repo is current ("is
+# every pin at the ref its intent names" — its Message IS the answer). `verify`
+# cannot answer it: that mode asserts each checkout matches the gitlink the index
+# records, which is a consistency claim, and it passes on a tree that is behind.
+# =============================================================================
+pins:
+  task:
+    description: The pin operation over this repo's own box/* gitlinks (mode via param) — MODE=currency asks whether every pin is at the ref its intent names, and its Message IS the answer
+    dir: .
+    params:
+      MODE:
+        description: status|bump|verify|currency (the git-submodules mode)
+        default: verify
+    plan:
+      - run: run git-submodules in the selected mode
+        git-submodules:
+          mode: "${MODE}"
+        context: [runtime]
+
+# sync — the named entry point for the advance half: a thin wrapper that SELECTS
+# the mode of the ONE definition above, so the pin operation exists exactly once.
+sync:
+  task:
+    description: Advance this repo's own box/* gitlinks to each distro's default-branch HEAD (preview only; does not commit)
+    dir: .
+    plan:
+      - run: advance the box/* pins to the refs their intent names
+        task:
+          task: pins
+          param: [MODE=bump]
+        context: [runtime]
+
+# =============================================================================
 # check-task-app + check-task — the R10 witness for the compiled-in `charly task`
 # surface (candy/plugin-task: kind:task / command:task / verb:task).
 #
@@ -3973,6 +4021,11 @@ check-task:
         stdout:
           - contains: check-task-smoke
           - contains: mods-tidy
+          # The pin surface this change adds must be DECLARED and loadable: each
+          # string below can only be printed by the task entity that carries it, so
+          # the bed goes RED if the surface is missing (opencharly/charly#936).
+          - contains: MODE=currency asks whether every pin is at the ref its intent names
+          - contains: Advance this repo's own box/* gitlinks
         context:
           - runtime
         command:
@@ -3982,6 +4035,13 @@ check-task:
         id: task-verb-runs
         task:
           task: check-task-smoke
+        context:
+          - runtime
+      - check: the declared PIN task's own plan walks end to end through verb:task (kind:task load + the git-submodules status walk) — the new surface this change adds, witnessed by its own execution rather than by its declaration
+        id: task-pins-verb-runs
+        task:
+          task: pins
+          param: [MODE=status]
         context:
           - runtime
       # --- the workflow-wave additions to candy/plugin-task (B5) ---------------------
