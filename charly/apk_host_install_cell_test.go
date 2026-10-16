@@ -23,7 +23,7 @@ import (
 // the network. A control that hangs CI cannot report anything, which is a worse failure than the one it
 // catches (R3: no test reaches for infrastructure; R8: a boundary runs live or skips visibly, never hangs).
 func TestEveryPackageFormatWithContainerInstallAlsoDeclaresHost(t *testing.T) {
-	path := "charly.yml" // the committed manifest sits beside this test (cwd is charly/charly/)
+	path := "charly.yml" // the committed manifest sits beside this test (cwd is <repo>/charly/)
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Skipf("cannot read the committed manifest %s: %v", path, err)
@@ -65,7 +65,7 @@ func TestEveryPackageFormatWithContainerInstallAlsoDeclaresHost(t *testing.T) {
 			}
 			// A `secondary: true` format is an adjunct to a primary one (aur rides alongside pac).
 			// Whether a host venue supports it is a separate contract question — recorded on
-			// opencharly/charly#772 rather than decided here, which would otherwise force an invented
+			// opencharly/charly#963 rather than decided here, which would otherwise force an invented
 			// host-side AUR build path just to turn this assertion green.
 			if f.Secondary != nil && *f.Secondary {
 				skipped = append(skipped, dname+"/"+fname)
