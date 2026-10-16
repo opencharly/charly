@@ -119,8 +119,8 @@ github.com/muesli/cancelreader v0.2.2 h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELU
 github.com/muesli/cancelreader v0.2.2/go.mod h1:3XuTXfFS2VjM+HTLZY9Ak0l6eUKfijIfMUZ4EgX0QYo=
 github.com/oklog/run v1.1.0 h1:GEenZ1cK0+q0+wsJew9qUg/DyD8k3JzYsZAi5gYi2mA=
 github.com/oklog/run v1.1.0/go.mod h1:sVPdnTZT1zYwAJeCMu2Th4T21pA3FPOQRfWjQlk7DVU=
-github.com/ollama/ollama v0.32.14 h1:UAIdqMEnS0jd8Ux5eydtEqEo2ShIad2LNr/qwIkuqIc=
-github.com/ollama/ollama v0.32.14/go.mod h1:Kekx/+OtFZHmqbkVH/QUUDVcMQS+1pg1dcz4Qy7TGn4=
+github.com/ollama/ollama v0.40.5 h1:xyfA1n7FDrtpm7DvyDS1qxr/fm1fmYibpQJ4gE/dPbs=
+github.com/ollama/ollama v0.40.5/go.mod h1:JlAIwKBa3JVGO3SoXihDyGTbZboyw0MSwDoM+gjmxeA=
 github.com/opencharly/plugin-addr/candy/plugin-addr v0.2026271.2242 h1:VRfOsBHbuk/FU6TwjPZ6bfpSWxUiqDevLZyE034aiKg=
 github.com/opencharly/plugin-addr/candy/plugin-addr v0.2026271.2242/go.mod h1:XnzuLbpn0ummZT3m6N/y1cVAGov4OR1prOi3D0TBPCw=
 github.com/opencharly/plugin-agent-pi/candy/plugin-agent-pi v0.2026274.808 h1:fRChc5ldNpPg/rSdqvHXkgGHPuHiNbeTWqiXKC3Vaow=
@@ -207,8 +207,8 @@ github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338 h1:UemA8nqj
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338/go.mod h1:UZPYGJffJW8DR/v/eThFSpXYNLPyv+Bdze+9JyNer0c=
 github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026280.2122 h1:CJsP72bzAxkihLEOyL3xrSJnzVcbLwck4xqVXze91sI=
 github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026280.2122/go.mod h1:OfvY8g7IY6pft6Fy8xgC8NENbPkzWeiYo33Goo31Wns=
-github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026272.330 h1:bFsT7O6yUrxuNi+upmgG4c7jW7stV7I4dFl6V3rji/Y=
-github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026272.330/go.mod h1:htnsXfzfgs8hRiQf05Odujm0muaFkp7SqtXoOULjzIM=
+github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026289.14 h1:wp5k3lyrD1DLPQuV61HrukT7IX4jz5v/472Jiq81rUQ=
+github.com/opencharly/plugin-ollama/candy/plugin-ollama v0.2026289.14/go.mod h1:ywPiyXAa7jHeOmxoAm/doGoxL5qmBMc1kzeusuFEnXk=
 github.com/opencharly/plugin-package/candy/plugin-package v0.2026272.339 h1:Qq7KEKF570QUzT99rzFLcxf56ac35PP3rAi6e5LVhMw=
 github.com/opencharly/plugin-package/candy/plugin-package v0.2026272.339/go.mod h1:8r85Ma7mwLsfZBee7Qo8pgZ5ZRz59hkZQWqeKiBcD8A=
 github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026274.652 h1:wAmn6Un9QhvRfYYqPZYU7z1S5ucrc33Pc6Xfc/jnWDg=
