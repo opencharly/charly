@@ -464,6 +464,21 @@ alpine:
                     apk del{{range .Packages}} {{pkgName .}}{{end}}
                 phase:
                     install:
+                        # A host venue (target: local) runs the package install on the machine itself, so it needs its own
+                        # cell. Without one this format installed NOTHING on a host venue while `deploy del` still recorded
+                        # a package-remove op -- a silent no-op behind a false record. Mirrors deb/rpm: setup, then install.
+                        host: |
+                            set -eu
+                            {{- range .Repos}}
+                            {{- if .key}}
+                            mkdir -p /etc/apk/keys
+                            curl -fsSL {{quote .key}} -o "/etc/apk/keys/$(basename {{quote .key}})"
+                            {{- end}}
+                            {{- if .url}}
+                            echo {{quote .url}} >> /etc/apk/repositories
+                            {{- end}}
+                            {{- end}}
+                            apk add --no-cache{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
                         container: |
                             RUN {{cacheMounts .CacheMounts}} \
                             {{- range .Repos}}
