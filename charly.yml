@@ -28,9 +28,10 @@ import:
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
-    # candy/ is GONE: every candy this repo used to vendor now lives in its own
-    # kind-prefixed repo and is referenced by @github pin. What remains discoverable is
-    # tools/ — the generate-packages shim, which is not a deployable candy but the
+    # Runtime candies live in their own kind-prefixed repos and are referenced by
+    # @github pin. candy/docs-sources is documentation-only wiring, read by the
+    # documentation walk rather than runtime discovery. Discover tools/ — the
+    # generate-packages shim, which is not a deployable candy but the
     # dev-path re-export that makes `charly generate-packages` resolvable from a
     # CHECKOUT. It has to be discovered because the project fall-through
     # (ScanAllCandy -> findCommandPluginCandy) is the only resolution path it serves.
@@ -3734,9 +3735,9 @@ check-r10-stage-race:
 # #Node spine — a non-directive top-level key (NO spec.DocDirectives entry,
 # asserted by the spec round-trip tests), surfaced by the candywalk projection
 # exactly like skill:/hook:/marketplace: entities and decoded into the generated
-# spec.DocsConfig type. The compiled corpus (compiled_plugins:) and its go.mod
-# require: pins resolve the release_repos; the output.hand_authored roots are
-# the trees the generated reference pages splice into.
+# spec.DocsConfig type. The compiled corpus resolves from its go.mod pins;
+# candy/docs-sources supplies explicitly pinned additional documentation sources.
+# The output.hand_authored roots are the trees the generated reference pages splice into.
 docs:
     docs:
         # sources — where the reference documentation is GENERATED from.
@@ -3747,12 +3748,11 @@ docs:
                 enabled: true
                 compiled_plugins_path: charly/charly.yml
                 go_mod_path: charly/go.mod
-            # release_repos — candies documented from the compiled corpus' go.mod
-            # require pins (resolve via ITS require, else the latest CalVer tag).
-            release_repos: [plugin-review, plugin-pipeline]
-            # extra_repos — additional repos fetched + documented outside the
-            # corpus, same require-else-tag resolution.
-            extra_repos: [plugin-gh, plugin-docs]
+            # Bare names resolve newest tags independently of walked candy pins.
+            # Keep these empty: additional sources have one pin of record in
+            # candy/docs-sources/charly.yml, discovered by the documentation walk.
+            release_repos: []
+            extra_repos: []
         # marketplace — the marketplace repo layout the reference pages link to
         # (default path).
         marketplace:
@@ -3771,6 +3771,44 @@ docs:
         # into (the generator leaves non-owned trees untouched).
         output:
             hand_authored: [start, concepts, guides]
+
+# This bed exercises documentation discovery, not host installation. Its only
+# writes are retained generation inputs, caches and output below .check/.
+check-docs-sources-app:
+    local:
+        description: Documentation-generation acceptance venue with no host installation.
+        candy: []
+check-docs-sources:
+    local:
+        from: check-docs-sources-app
+        host: local
+        disposable: true
+        description: Prove explicit additional documentation sources survive real generation and two fresh caches produce identical content.
+        plan:
+            - check: generate the committed source with the consumer corpus and verify pinned membership, fresh-cache determinism and no-op regeneration
+              id: docs-sources-deterministic
+              context: [runtime]
+              timeout: 7200s
+              exit_status: 0
+              task: docs-source-proof
+docs-source-proof:
+    task:
+        description: Generate the committed documentation sources with the consumer corpus and compare complete fresh-cache outputs.
+        plan:
+            - check: pinned membership and byte-identical output from independent fresh caches
+              context: [runtime]
+              timeout: 7200s
+              exit_status: 0
+              stdout:
+                  - contains: DOCS-SOURCES-PASS
+              command:
+                  command: |
+                      set -eu
+                      test -n "${DOCS_GENERATOR_BIN:?set the pinned standalone plugin-docs binary}"
+                      test -n "${DOCS_SITE_SOURCE:?set the docs consumer checkout}"
+                      test -n "${DOCS_NARRATIVE_SOURCE:?set the pinned umbrella narrative checkout}"
+                      go run ./check/docs-sources/main.go --root "$PWD" --generator "$DOCS_GENERATOR_BIN" --site "$DOCS_SITE_SOURCE" --narrative "$DOCS_NARRATIVE_SOURCE"
+                  in_container: false
 
 # =============================================================================
 # kind:task entities — the repository's own maintenance surface, run via
