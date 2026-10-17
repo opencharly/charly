@@ -98,6 +98,21 @@ func overlayBuildInputsFrom(ctx context.Context) *overlayBuildInputs {
 // (overlayBuildInputs, set host-side by PrepareVenue's own dispatch, never serialized) — plus a
 // minimal buildEngineContext for the "oci-emit-step" step-emitter (see this file's header for the
 // exact fields it still needs and why). A build FAILURE rides OverlayBuildReply.Error.
+// isQualifiedRef reports whether an image reference is already fully qualified — it names
+// a registry or repository path, and/or carries a tag — as opposed to a bare box/short
+// name. It is a PURE shape test: it looks nothing up and fetches nothing, so it is safe
+// to ask before any resolution has been attempted.
+//
+// The distinction it draws is the one charly#867 turned on: a qualified ref can be tagged
+// as-is (a registry/repo/tag ref needs no local CalVer resolution), while a bare name
+// cannot — the local CalVer build is the only ref that names a real image for it.
+func isQualifiedRef(ref string) bool {
+	if ref == "" {
+		return false
+	}
+	return strings.ContainsAny(ref, "/:.")
+}
+
 func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ buildEngineContext) (spec.OverlayBuildReply, error) {
 	dir := req.Dir
 	if dir == "" {
@@ -149,8 +164,17 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	default:
 		if resolved, rerr := container.ResolveNewestLocalCalVer(hostEngineBinary(), base); rerr == nil && resolved != "" {
 			baseRef = resolved
-		} else {
+		} else if isQualifiedRef(base) {
+			// A fully-qualified ref needs no local CalVer resolution: the refusal above is the
+			// expected answer for a registry/repo/tag ref, and `base` is already a ref this path
+			// can tag. Fall through to it deliberately.
 			baseRef = base
+		} else {
+			// `base` is a bare name (a short box name), so the ONLY usable ref is the one
+			// ResolveNewestLocalCalVer elects. Discarding its refusal here is what let an
+			// untaggable bare name reach the deploy-name alias tag, where it surfaced to the
+			// operator as `command exited 125` instead of naming the resolution failure (charly#867).
+			return spec.OverlayBuildReply{}, rerr
 		}
 	}
 
