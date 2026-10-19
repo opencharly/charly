@@ -642,3 +642,27 @@ func pluginInvokeErr(ctx context.Context, what string, err error) error {
 	}
 	return err
 }
+
+// init lifts the two host→plugin call bounds out of the binary so a LONG-RUNNING operation
+// (an image build, whose work happens in buildkitd's process tree rather than the plugin's
+// descendants) is not killed for being slow or for looking idle.
+//
+// Measured: `charly box build strata` (3 GB retrieval + 6.7 GB install) died every time at
+// the 10-minute leaf cap with `context canceled` in buildkitd, and later at the no-progress
+// window while package installation ran inside the daemon. Both bounds are per-VENUE
+// operational limits, not product constants, so they are operator-settable:
+//
+//	CHARLY_PLUGIN_LEAF_CAP     total-duration bound for one host→plugin call (default 10m)
+//	CHARLY_PLUGIN_NO_PROGRESS  no-host-visible-progress window (default: readiness config)
+func init() {
+	if v := os.Getenv("CHARLY_PLUGIN_LEAF_CAP"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			pluginLeafCapOverride = d
+		}
+	}
+	if v := os.Getenv("CHARLY_PLUGIN_NO_PROGRESS"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			pluginInvokeNoProgressOverride = d
+		}
+	}
+}
