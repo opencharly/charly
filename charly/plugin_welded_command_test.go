@@ -11,6 +11,7 @@ package main
 
 import (
 	"maps"
+	"os"
 	"strings"
 	"testing"
 )
@@ -80,9 +81,14 @@ func TestWeldedCommandWordsReachGrammar(t *testing.T) {
 // TestWeldedCommandRefsArePinnedCommandRefs proves the welded index is a projection of the
 // welded set's OWN pins and of the plugin manifests' own declarations — never a hand-written
 // map: each ref is the "@github.com/opencharly/<name>/candy/<name>:<pin>" form, its pin is
-// the one scripts/host-command-plugins.txt carries, and the word it is filed under is the
-// command capability that same candy declares in the generated provider-ref index.
+// THE ONE THE SINGLE-SOURCE FILE CARRIES (scripts/host-command-plugins.txt, parsed here — not
+// merely "some non-empty tag"), and the word it is filed under is the command capability that
+// same candy declares in the generated provider-ref index.
 func TestWeldedCommandRefsArePinnedCommandRefs(t *testing.T) {
+	// The single source, read for real. Without this the assertion below would pass a stale or
+	// hand-edited tag, which is the exact class of untested claim this test exists to prevent.
+	pins := weldedSetPins(t)
+
 	for word, ref := range weldedCommandRefs {
 		bare, tag, cut := strings.Cut(strings.TrimPrefix(ref, "@"), ":")
 		if !strings.HasPrefix(ref, "@github.com/opencharly/") || !cut || tag == "" {
@@ -95,5 +101,43 @@ func TestWeldedCommandRefsArePinnedCommandRefs(t *testing.T) {
 		if !strings.Contains(bare, "/candy/plugin-") {
 			t.Errorf("welded word %q: ref %q is not a candy/plugin-* module path", word, bare)
 		}
+		// The pin must be the ONE the welded set carries — the source of record.
+		name := bare[strings.LastIndex(bare, "/")+1:]
+		want, ok := pins[name]
+		if !ok {
+			t.Errorf("welded word %q: %q is not in scripts/host-command-plugins.txt (the welded set is the source of record)", word, name)
+			continue
+		}
+		if tag != want {
+			t.Errorf("welded word %q: ref pin %q, but scripts/host-command-plugins.txt pins %s@%s — regenerate (scripts/bootstrap-charly.sh)", word, tag, name, want)
+		}
 	}
+}
+
+// weldedSetPins parses scripts/host-command-plugins.txt — the SINGLE SOURCE (R3) for the baked
+// plugin set — into <plugin name> -> <pinned version>. Comments and blank lines are skipped;
+// the file's own header documents the `<name>@<tag>` line format.
+func weldedSetPins(t *testing.T) map[string]string {
+	t.Helper()
+	const path = "../scripts/host-command-plugins.txt"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the welded set %s: %v", path, err)
+	}
+	pins := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, version, ok := strings.Cut(line, "@")
+		if !ok {
+			continue
+		}
+		pins[strings.TrimSpace(name)] = strings.TrimSpace(version)
+	}
+	if len(pins) == 0 {
+		t.Fatalf("%s parsed to zero pins — has the line format changed?", path)
+	}
+	return pins
 }
