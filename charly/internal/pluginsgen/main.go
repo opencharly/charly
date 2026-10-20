@@ -157,8 +157,13 @@ func writeDevWork(root, rel string, body []byte) error {
 // alongside its OWN deploy/verb/command words. The compiled-in provider WINS the word; only
 // TWO EXTERNAL providers for one word is a hard error (one canonical external provider per
 // word).
-func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[string]string, error) {
+//
+// The second return value names the repos that WERE indexed: the welded index below needs to
+// tell "this repo declares no command word" (a config defect, hard error) from "this repo
+// could not be fetched" (an unavailable corpus repo, which the contract above tolerates).
+func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[string]string, map[string]bool, error) {
 	wordRefs := map[string]string{}
+	indexed := map[string]bool{}
 	for _, repo := range repoList {
 		name, compiled := repoSetCompiled(names, repo)
 		// A -dev-plugin override applies to the repo it names whether or not this build COMPILES
@@ -177,7 +182,7 @@ func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[
 			fetched, ferr := refs.DownloadRepo(repo, "HEAD")
 			if ferr != nil {
 				if compiled {
-					return nil, fmt.Errorf("index plugin %s: %w", repo, ferr)
+					return nil, nil, fmt.Errorf("index plugin %s: %w", repo, ferr)
 				}
 				continue
 			}
@@ -186,17 +191,18 @@ func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[
 		refsForRepo, err := indexRepoPluginRefs(repoRoot)
 		if err != nil {
 			if compiled {
-				return nil, fmt.Errorf("index plugin %s: %w", repo, err)
+				return nil, nil, fmt.Errorf("index plugin %s: %w", repo, err)
 			}
 			continue
 		}
+		indexed[repo] = true
 		for word, ref := range refsForRepo {
 			prev, dup := wordRefs[word]
 			if dup && prev != ref {
 				_, prevCompiled := repoSetCompiled(names, prev)
 				_, thisCompiled := repoSetCompiled(names, ref)
 				if prevCompiled == thisCompiled {
-					return nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
+					return nil, nil, fmt.Errorf("provider word %s is served by two plugin refs (%s and %s) — a word has one canonical provider", word, prev, ref)
 				}
 				if thisCompiled {
 					// The compiled-in provider owns the word; the external re-declaration
@@ -208,7 +214,105 @@ func collectWordRefs(names, repoList []string, devRoots map[string]string) (map[
 			wordRefs[word] = ref
 		}
 	}
-	return wordRefs, nil
+	return wordRefs, indexed, nil
+}
+
+// buildWeldedCommandRefs maps every WELDED command word to the PINNED candy ref that serves
+// it ("@github.com/opencharly/<name>/candy/<name>:<tag>").
+//
+// The welded set itself is scripts/host-command-plugins.txt — the SINGLE SOURCE (R3) the
+// release workflow builds and every native package bakes beside the binary. The WORD is read
+// from the plugin's OWN manifest (already indexed in wordRefs), never derived from the repo
+// name: only the manifest is authoritative about which capability a plugin serves.
+//
+// A welded plugin that declares no top-level command in the corpus is a hard error. Silently
+// emitting nothing would re-create the exact gap this index closes — a welded word with no
+// grammar entry and no resolver on a build that has no baked plugins.
+func buildWeldedCommandRefs(root string, repoList []string, wordRefs map[string]string, indexedRepos map[string]bool) (map[string]string, error) {
+	inCorpus := make(map[string]bool, len(repoList))
+	for _, repo := range repoList {
+		inCorpus[repo] = true
+	}
+	path := filepath.Join(root, "scripts", "host-command-plugins.txt")
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		// A root that carries no welded-plugin set is not the charly packaging tree (a test
+		// fixture, a consumer's own charly.yml). It emits NO welded words rather than failing:
+		// the emitted index is a projection of a source this root does not have. The real repo
+		// always carries the file, and packaging_test.go fails if it is deleted.
+		return map[string]string{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read the welded plugin set: %w", err)
+	}
+	lines := 0
+	out := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, tag, ok := strings.Cut(line, "@")
+		name, tag = strings.TrimSpace(name), strings.TrimSpace(tag)
+		if !ok || name == "" || tag == "" {
+			return nil, fmt.Errorf("%s: %q is not <name>@<tag>", path, line)
+		}
+		lines++
+		ref := "github.com/opencharly/" + name + "/candy/" + name
+		repo := "github.com/opencharly/" + name
+		if !inCorpus[repo] {
+			// host-command-plugins.txt names a plugin the plugin corpus does not index: the two
+			// single sources disagree, which is a config defect — NOT the tolerated
+			// "unavailable corpus repo" case below.
+			return nil, fmt.Errorf("welded plugin %s is not in the plugin corpus (charly/plugin_corpus.txt)", name)
+		}
+		if !indexedRepos[repo] {
+			// The repo could not be fetched (offline, or a transient fetch failure). The corpus
+			// contract tolerates that — an unavailable out-of-tree repo contributes no words —
+			// so the welded word is absent from THIS build rather than failing it. A package
+			// install still serves it from the baked binary.
+			fmt.Fprintf(os.Stderr, "pluginsgen: welded plugin %s not indexed (unavailable); no derived command word this build\n", name)
+			continue
+		}
+		refWithTag := "@" + ref + ":" + tag
+		words := 0
+		for identity, wordRef := range wordRefs {
+			if wordRef != ref {
+				continue
+			}
+			class, word, parent, ok := splitRefIdentity(identity)
+			if !ok || class != "command" || parent != "" {
+				continue
+			}
+			if prev, dup := out[word]; dup && prev != refWithTag {
+				return nil, fmt.Errorf("welded command word %q is served by two refs (%s and %s)", word, prev, refWithTag)
+			}
+			out[word] = refWithTag
+			words++
+		}
+		if words == 0 {
+			return nil, fmt.Errorf("welded plugin %s declares no top-level command word in the plugin corpus (is its repo in charly/plugin_corpus.txt?)", name)
+		}
+	}
+	if lines == 0 {
+		return nil, fmt.Errorf("%s: the welded plugin set is empty", path)
+	}
+	return out, nil
+}
+
+// splitRefIdentity splits a provider-ref identity "<class>:<word>[:<parent>]" — the
+// key grammar pluginProviderRefs is written in. It is the generator's ONE parser of that
+// shape (the core has splitCapability; the generator runs without the core).
+func splitRefIdentity(identity string) (class, word, parent string, ok bool) {
+	parts := strings.Split(identity, ":")
+	switch len(parts) {
+	case 2:
+		return parts[0], parts[1], "", parts[0] != "" && parts[1] != ""
+	case 3:
+		return parts[0], parts[1], parts[2], parts[0] != "" && parts[1] != ""
+	default:
+		return "", "", "", false
+	}
 }
 
 // writeDevOverrideSibling writes (or removes) charly/plugins_dev_generated.go — the UNTRACKED
@@ -261,7 +365,18 @@ func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, g
 	// wordRefs is the generated provider-ref INDEX ("<class>:<word>" -> canonical candy
 	// ref), a pure PROJECTION of the plugin repos (boundary-law clause D): the core keeps
 	// NO per-kind word->ref map of its own.
-	wordRefs, err := collectWordRefs(names, repoList, devRoots)
+	wordRefs, indexedRepos, err := collectWordRefs(names, repoList, devRoots)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	// weldedRefs is the WELDED-command index: "word" -> the PINNED candy ref of the plugin
+	// every native package bakes beside the binary. The welded set is
+	// scripts/host-command-plugins.txt — the ONE source the release workflow builds and the
+	// per-distro packages bake (they are NOT in compiled_plugins:). Without this index a
+	// dev/worktree build (which has no baked .providers manifest) cannot even PARSE
+	// `charly <welded word>`: the word enters no grammar, so it dies as an unknown verb.
+	weldedRefs, err := buildWeldedCommandRefs(root, repoList, wordRefs, indexedRepos)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -403,6 +518,29 @@ func generate(root, cfg, corpusFile string, devs []devPlugin) (genGo, genWork, g
 	sort.Strings(words)
 	for _, w := range words {
 		fmt.Fprintf(&r, "\t%q: %q,\n", w, wordRefs[w])
+	}
+	r.WriteString("}\n")
+	// weldedCommandRefs — the WELDED subset of the same word->ref fact, carrying its PIN.
+	// The welded plugins are NOT compiled in (they are the ones a native package bakes
+	// beside the binary), so on a build with no baked .providers manifest their words had
+	// no grammar entry and no resolver. This map is what makes them parseable and
+	// buildable-from-source there; the pins come from the welded set's own single source.
+	r.WriteString("\n")
+	r.WriteString("// weldedCommandRefs maps a WELDED top-level command word -> the PINNED candy ref of the\n")
+	r.WriteString("// plugin that serves it. The welded set is scripts/host-command-plugins.txt — the plugins\n")
+	r.WriteString("// every native package bakes beside the binary at /usr/lib/charly/plugins. A package\n")
+	r.WriteString("// install serves these words from those baked binaries; a dev/worktree build has none, so\n")
+	r.WriteString("// the word still enters the CLI grammar and the plugin is host-built from this ref on first\n")
+	r.WriteString("// use. A word a COMPILED-IN provider already serves is listed too — the registered\n")
+	r.WriteString("// provider wins it, so the source fallback is never reached for those.\n")
+	r.WriteString("var weldedCommandRefs = map[string]string{\n")
+	weldedWords := make([]string, 0, len(weldedRefs))
+	for w := range weldedRefs {
+		weldedWords = append(weldedWords, w)
+	}
+	sort.Strings(weldedWords)
+	for _, w := range weldedWords {
+		fmt.Fprintf(&r, "\t%q: %q,\n", w, weldedRefs[w])
 	}
 	r.WriteString("}\n")
 	formattedRefs, err := format.Source(r.Bytes())

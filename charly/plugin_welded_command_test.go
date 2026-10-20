@@ -1,0 +1,143 @@
+package main
+
+// plugin_welded_command_test.go — the dev/worktree half of the WELDED command contract.
+//
+// A welded command word (scripts/host-command-plugins.txt) is served by a plugin every
+// native package bakes beside the binary. A package install therefore has the word in its
+// CLI grammar; a dev/worktree build has no baked .providers manifest at all, so before
+// registerWeldedCommandWords the word entered NO grammar and `charly secrets` died as an
+// unknown verb. These tests hold the two halves that make the fix real: the word reaches the
+// grammar, and the ref it resolves from is the pinned org candy ref the welded set names.
+
+import (
+	"maps"
+	"os"
+	"strings"
+	"testing"
+)
+
+// TestWeldedCommandWordsReachGrammar proves every welded word the corpus serves becomes a
+// parseable command, and that the seed cannot double-register a word a COMPILED-IN provider
+// already owns (which would make Kong reject the grammar outright).
+func TestWeldedCommandWordsReachGrammar(t *testing.T) {
+	if len(weldedCommandRefs) == 0 {
+		t.Fatal("weldedCommandRefs is empty — the welded index was not generated (regenerate with scripts/bootstrap-charly.sh)")
+	}
+
+	// Snapshot the process-global prescan state so this test cannot leak a grammar word into a
+	// sibling test. The map is reassigned (never mutated in place by the seed) so restoring the
+	// snapshot is enough.
+	declaredDeployMu.Lock()
+	saved := maps.Clone(declaredExternalCommand)
+	declaredDeployMu.Unlock()
+	t.Cleanup(func() {
+		declaredDeployMu.Lock()
+		declaredExternalCommand = saved
+		declaredDeployMu.Unlock()
+	})
+
+	// Which welded words a COMPILED-IN provider already owns, captured BEFORE the seed. The
+	// assertion below is then about the seed not stealing them — and about them still being
+	// registered afterwards.
+	compiledInOwners := map[string]string{}
+	for word := range weldedCommandRefs {
+		if p, ok := providerRegistry.resolveCommand(word, ""); ok {
+			if _, grpc := p.(*grpcProvider); !grpc {
+				compiledInOwners[word] = providerIdentity(p)
+			}
+		}
+	}
+
+	registerWeldedCommandWords()
+	_, _, table := collectExternalCommandPlugins()
+
+	for word := range weldedCommandRefs {
+		d, ok := table[word]
+		if !ok {
+			t.Errorf("welded word %q has no external command dispatch entry — the grammar would reject `charly %s`", word, word)
+			continue
+		}
+		if d.word != word || d.parent != "" {
+			t.Errorf("welded word %q dispatch entry = {%q, parent %q}, want a top-level %q", word, d.word, d.parent, word)
+		}
+		// A welded word a COMPILED-IN provider also serves (clean, vm, doctor, …) keeps its
+		// grammar entry but must still resolve to that SAME provider after the seed: the seed
+		// adds a shadowed entry, never a rival dispatch target. Asserting "still the same
+		// provider" is the property that can actually break — a seeded word that stole the
+		// resolution, or a compiled-in owner that vanished, both fail here.
+		if want, ok := compiledInOwners[word]; ok {
+			p, inProc := providerRegistry.resolveCommand(word, "")
+			if !inProc {
+				t.Errorf("welded word %q: compiled-in owner is no longer registered after the seed", word)
+				continue
+			}
+			if got := providerIdentity(p); got != want {
+				t.Errorf("welded word %q: dispatch now resolves to %q, want the compiled-in owner %q", word, got, want)
+			}
+		}
+	}
+}
+
+// TestWeldedCommandRefsArePinnedCommandRefs proves the welded index is a projection of the
+// welded set's OWN pins and of the plugin manifests' own declarations — never a hand-written
+// map: each ref is the "@github.com/opencharly/<name>/candy/<name>:<pin>" form, its pin is
+// THE ONE THE SINGLE-SOURCE FILE CARRIES (scripts/host-command-plugins.txt, parsed here — not
+// merely "some non-empty tag"), and the word it is filed under is the command capability that
+// same candy declares in the generated provider-ref index.
+func TestWeldedCommandRefsArePinnedCommandRefs(t *testing.T) {
+	// The single source, read for real. Without this the assertion below would pass a stale or
+	// hand-edited tag, which is the exact class of untested claim this test exists to prevent.
+	pins := weldedSetPins(t)
+
+	for word, ref := range weldedCommandRefs {
+		bare, tag, cut := strings.Cut(strings.TrimPrefix(ref, "@"), ":")
+		if !strings.HasPrefix(ref, "@github.com/opencharly/") || !cut || tag == "" {
+			t.Errorf("welded word %q: ref %q is not an @github org candy ref with a pin", word, ref)
+			continue
+		}
+		if got, want := pluginProviderRefs["command:"+word], bare; got != want {
+			t.Errorf("welded word %q: ref repo = %q, but the provider index files command:%s under %q", word, want, word, got)
+		}
+		if !strings.Contains(bare, "/candy/plugin-") {
+			t.Errorf("welded word %q: ref %q is not a candy/plugin-* module path", word, bare)
+		}
+		// The pin must be the ONE the welded set carries — the source of record.
+		name := bare[strings.LastIndex(bare, "/")+1:]
+		want, ok := pins[name]
+		if !ok {
+			t.Errorf("welded word %q: %q is not in scripts/host-command-plugins.txt (the welded set is the source of record)", word, name)
+			continue
+		}
+		if tag != want {
+			t.Errorf("welded word %q: ref pin %q, but scripts/host-command-plugins.txt pins %s@%s — regenerate (scripts/bootstrap-charly.sh)", word, tag, name, want)
+		}
+	}
+}
+
+// weldedSetPins parses scripts/host-command-plugins.txt — the SINGLE SOURCE (R3) for the baked
+// plugin set — into <plugin name> -> <pinned version>. Comments and blank lines are skipped;
+// the file's own header documents the `<name>@<tag>` line format.
+func weldedSetPins(t *testing.T) map[string]string {
+	t.Helper()
+	const path = "../scripts/host-command-plugins.txt"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the welded set %s: %v", path, err)
+	}
+	pins := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, version, ok := strings.Cut(line, "@")
+		if !ok {
+			continue
+		}
+		pins[strings.TrimSpace(name)] = strings.TrimSpace(version)
+	}
+	if len(pins) == 0 {
+		t.Fatalf("%s parsed to zero pins — has the line format changed?", path)
+	}
+	return pins
+}
