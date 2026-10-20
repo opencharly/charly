@@ -655,15 +655,25 @@ func pluginInvokeErr(ctx context.Context, what string, err error) error {
 //	CHARLY_PLUGIN_LEAF_CAP     total-duration bound for one host→plugin call (default 10m)
 //	CHARLY_PLUGIN_NO_PROGRESS  no-host-visible-progress window (default: readiness config)
 func applyCallBoundEnv(getenv func(string) string) {
-	if v := getenv("CHARLY_PLUGIN_LEAF_CAP"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			pluginLeafCapOverride = d
+	for _, knob := range []struct {
+		env string
+		dst *time.Duration
+	}{
+		{"CHARLY_PLUGIN_LEAF_CAP", &pluginLeafCapOverride},
+		{"CHARLY_PLUGIN_NO_PROGRESS", &pluginInvokeNoProgressOverride},
+	} {
+		v := getenv(knob.env)
+		if v == "" {
+			continue
 		}
-	}
-	if v := getenv("CHARLY_PLUGIN_NO_PROGRESS"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			pluginInvokeNoProgressOverride = d
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			// A malformed non-empty value is a typo'd deployment, not an absence: say so
+			// and keep the default rather than silently running with a bound nobody chose.
+			fmt.Fprintf(os.Stderr, "charly: ignoring %s=%q (not a duration: %v); keeping the default\n", knob.env, v, err)
+			continue
 		}
+		*knob.dst = d
 	}
 }
 
