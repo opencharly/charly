@@ -654,15 +654,17 @@ func pluginInvokeErr(ctx context.Context, what string, err error) error {
 //
 //	CHARLY_PLUGIN_LEAF_CAP     total-duration bound for one host→plugin call (default 10m)
 //	CHARLY_PLUGIN_NO_PROGRESS  no-host-visible-progress window (default: readiness config)
-func init() {
-	if v := os.Getenv("CHARLY_PLUGIN_LEAF_CAP"); v != "" {
+func applyCallBoundEnv(getenv func(string) string) {
+	if v := getenv("CHARLY_PLUGIN_LEAF_CAP"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			pluginLeafCapOverride = d
 		}
 	}
-	if v := os.Getenv("CHARLY_PLUGIN_NO_PROGRESS"); v != "" {
+	if v := getenv("CHARLY_PLUGIN_NO_PROGRESS"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			pluginInvokeNoProgressOverride = d
 		}
 	}
 }
+
+func init() { applyCallBoundEnv(os.Getenv) }
