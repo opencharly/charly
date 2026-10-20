@@ -35,6 +35,18 @@ func TestWeldedCommandWordsReachGrammar(t *testing.T) {
 		declaredDeployMu.Unlock()
 	})
 
+	// Which welded words a COMPILED-IN provider already owns, captured BEFORE the seed. The
+	// assertion below is then about the seed not stealing them — and about them still being
+	// registered afterwards.
+	compiledInOwners := map[string]string{}
+	for word := range weldedCommandRefs {
+		if p, ok := providerRegistry.resolveCommand(word, ""); ok {
+			if _, grpc := p.(*grpcProvider); !grpc {
+				compiledInOwners[word] = providerIdentity(p)
+			}
+		}
+	}
+
 	registerWeldedCommandWords()
 	_, _, table := collectExternalCommandPlugins()
 
@@ -47,12 +59,19 @@ func TestWeldedCommandWordsReachGrammar(t *testing.T) {
 		if d.word != word || d.parent != "" {
 			t.Errorf("welded word %q dispatch entry = {%q, parent %q}, want a top-level %q", word, d.word, d.parent, word)
 		}
-		// A welded word a compiled-in provider also serves (clean, vm, doctor, …) must stay
-		// owned by that provider: dispatchCommand picks it from the registry first, so the
-		// welded source fallback is never reached for it.
-		if p, inProc := providerRegistry.resolveCommand(word, ""); inProc {
-			if _, grpc := p.(*grpcProvider); !grpc && d.word != word {
-				t.Errorf("welded word %q: compiled-in provider does not own the word it dispatches", word)
+		// A welded word a COMPILED-IN provider also serves (clean, vm, doctor, …) keeps its
+		// grammar entry but must still resolve to that SAME provider after the seed: the seed
+		// adds a shadowed entry, never a rival dispatch target. Asserting "still the same
+		// provider" is the property that can actually break — a seeded word that stole the
+		// resolution, or a compiled-in owner that vanished, both fail here.
+		if want, ok := compiledInOwners[word]; ok {
+			p, inProc := providerRegistry.resolveCommand(word, "")
+			if !inProc {
+				t.Errorf("welded word %q: compiled-in owner is no longer registered after the seed", word)
+				continue
+			}
+			if got := providerIdentity(p); got != want {
+				t.Errorf("welded word %q: dispatch now resolves to %q, want the compiled-in owner %q", word, got, want)
 			}
 		}
 	}

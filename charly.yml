@@ -1707,6 +1707,20 @@ check-charly-vm:
                 test "$(command -v charly)" -ef /usr/bin/charly &&
                 charly version &&
                 echo CHARLY-BINARY-OK
+            # The in-development binary is NOT a package install: nothing bakes the WELDED
+            # command plugins beside it here, so `charly secrets` was a usage error until the
+            # grammar seed landed. This asserts the CLI contract a package install serves is
+            # present on a source build, which is the whole point of the welded seed.
+            - check: the in-development binary serves the WELDED command words a package install bakes, so `charly secrets` is a real command and not a usage error
+              id: charly-welded-command-words
+              description: "charly --help lists the welded command words on a dev-installed binary"
+              stdout:
+                - contains: secrets
+              exit_status: 0
+              context:
+                - runtime
+              command: |
+                charly --help | grep -E '^  secrets '
 charly-cli:
     pod:
         agent_provisioned: true

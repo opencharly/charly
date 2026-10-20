@@ -139,9 +139,11 @@ func scanDirFlag(args []string) string {
 // resolveCommandPluginBinary's welded leg host-builds the plugin from the pinned ref on first
 // use, so this only puts the word in the grammar.
 //
-// A welded word that a COMPILED-IN provider also serves (clean, vm, doctor, …) is skipped by
-// collectExternalCommandPlugins — the registered provider wins the word — so the seed can
-// never double-register a command.
+// A welded word that a COMPILED-IN provider also serves (clean, vm, doctor, …) still gets its
+// grammar entry — the word has to parse either way — but that provider WINS dispatch: the
+// registry resolves it before this binary ever reaches the welded source fallback in
+// resolveCommandPluginBinary. So the seed adds a SHADOWED entry, never a rival: the word is
+// never served twice, and what a compiled-in command does is unchanged.
 func registerWeldedCommandWords() {
 	for word := range weldedCommandRefs {
 		registerDeclaredExternalCommand(word, "")
