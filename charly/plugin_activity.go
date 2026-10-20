@@ -267,9 +267,24 @@ func pluginActivityFrom(ctx context.Context) *pluginActivity {
 // pluginLeafCapDefault is the total-duration bound for a host→plugin LEAF call — one
 // that attaches NO reverse channel, so the plugin performs no host-visible work the
 // host could use as a progress signal, leaving a total cap as the only correct guard.
-// The VALUE IS THE FORMER HARDCODED 10m, UNCHANGED: this cutover fixes the
-// plugin→plugin long-call false kill, and must not silently loosen the leaf guard.
-const pluginLeafCapDefault = 10 * time.Minute
+//
+// RAISED to 2h. The former 10m was the hung-plugin guard from #474, and as a TOTAL
+// bound it guillotined the work that most needs a leaf: a COLD image build. Measured
+// on a fresh base digest, `box build openwebui` (multi-hundred-MB base pull + full
+// package install + a pixi/pip app layer) died at exactly 10m with `signal: killed`
+// on buildctl and `context canceled` inside the mount callback — twice, before the
+// cap was found by reading this constant. The same build completes well inside an
+// hour with the cap raised.
+//
+// Why 2h rather than 1h: the longest legitimate leaf is a cold multi-stage image build
+// or a full assembled bed with its rebuild legs, both of which can pass an hour on a
+// slow venue or a cold cache. Why finite at all: a leaf has no progress signal, so a
+// wedged plugin must still fail rather than wedge the host forever — an hour-scale
+// bound preserves the #474 guarantee while a 10m bound broke the normal case. The
+// plugin→plugin path keeps the precise IDLE guard (pluginInvokeNoProgress), because it
+// does have a progress signal. Operators on unusual venues still override with
+// CHARLY_PLUGIN_LEAF_CAP, and the expiry now NAMES the bound and the knob.
+const pluginLeafCapDefault = 2 * time.Hour
 
 // pluginLeafCap resolves the leaf bound: the test override, else pluginLeafCapDefault.
 func pluginLeafCap() time.Duration {
@@ -657,6 +672,26 @@ func pluginInvokeErr(ctx context.Context, what string, err error) error {
 	return err
 }
 
+// errPluginLeafCap marks a host→plugin LEAF call that hit the TOTAL-duration bound.
+// Distinct from errPluginCallIdle: that one says "the peer produced no host-visible
+// work", this one says "the peer may have been working the whole time, but a leaf has
+// no progress signal to prove it, so the total bound is what stopped it".
+var errPluginLeafCap = errors.New("plugin leaf cap exceeded (a host→plugin leaf call has no host-visible progress to guard on, so the total-duration bound is the only guard; raise it with CHARLY_PLUGIN_LEAF_CAP)")
+
+// leafCapErr makes a leaf-cap expiry IDENTIFY ITSELF. Without this the operator sees
+// only `context canceled` / `signal: killed` from inside the plugin's children — where
+// the real cause (a time bound nobody mentioned) is invisible, which is exactly how a
+// cold image build got misread as a crash.
+func leafCapErr(ctx context.Context, capped bool, what string, err error) error {
+	if !capped || !errors.Is(context.Cause(ctx), context.DeadlineExceeded) {
+		return err
+	}
+	// BOTH identities survive: the sentinel says "this was the bound", and the underlying
+	// error keeps its own (the plugin's ctx.Err() is usually context.DeadlineExceeded, which
+	// callers and tests already match on).
+	return fmt.Errorf("%s after %s: %w: %w", what, pluginLeafCap(), errPluginLeafCap, err)
+}
+
 // init lifts the two host→plugin call bounds out of the binary so a LONG-RUNNING operation
 // (an image build, whose work happens in buildkitd's process tree rather than the plugin's
 // descendants) is not killed for being slow or for looking idle.
@@ -666,7 +701,7 @@ func pluginInvokeErr(ctx context.Context, what string, err error) error {
 // window while package installation ran inside the daemon. Both bounds are per-VENUE
 // operational limits, not product constants, so they are operator-settable:
 //
-//	CHARLY_PLUGIN_LEAF_CAP     total-duration bound for one host→plugin call (default 10m)
+//	CHARLY_PLUGIN_LEAF_CAP     total-duration bound for one host→plugin call (default 2h)
 //	CHARLY_PLUGIN_NO_PROGRESS  no-host-visible-progress window (default: readiness config)
 func applyCallBoundEnv(getenv func(string) string) {
 	for _, knob := range []struct {
