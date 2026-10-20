@@ -126,3 +126,24 @@ func scanDirFlag(args []string) string {
 	}
 	return ""
 }
+
+// registerWeldedCommandWords seeds the CLI grammar with every WELDED command word — the
+// plugins each native package bakes beside the binary at /usr/lib/charly/plugins, generated
+// into weldedCommandRefs from their ONE source, scripts/host-command-plugins.txt.
+//
+// It is the PROJECT-INDEPENDENT counterpart of prescanProjectCommandWords and the
+// no-baked-manifest counterpart of discoverBakedPluginWords. A package install serves these
+// words from baked binaries, so they are part of the CLI contract; a dev/worktree build has
+// no baked plugins at all, which used to make every one of them an unknown verb even though
+// the binary itself is what the operator just built. Dispatch stays deferred and lazy:
+// resolveCommandPluginBinary's welded leg host-builds the plugin from the pinned ref on first
+// use, so this only puts the word in the grammar.
+//
+// A welded word that a COMPILED-IN provider also serves (clean, vm, doctor, …) is skipped by
+// collectExternalCommandPlugins — the registered provider wins the word — so the seed can
+// never double-register a command.
+func registerWeldedCommandWords() {
+	for word := range weldedCommandRefs {
+		registerDeclaredExternalCommand(word, "")
+	}
+}

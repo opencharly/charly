@@ -200,6 +200,13 @@ func main() {
 	// grammar with NO project to scan, so the in-container charly-mcp service's `charly mcp serve`
 	// resolves the external `mcp` command (a no-op on a dev host with no baked plugins).
 	discoverBakedPluginWords()
+	// THEN the WELDED command words — the plugins every native package bakes beside the binary,
+	// generated into weldedCommandRefs from scripts/host-command-plugins.txt. A dev/worktree
+	// build has no baked .providers manifest, and a welded word is not declared by most
+	// projects, so without this seed `charly secrets`/`mcp`/`udev`/… were unknown verbs even
+	// though a package install serves them. The plugin is host-built from the pinned ref only
+	// when the word is actually dispatched (resolveCommandPluginBinary).
+	registerWeldedCommandWords()
 	prescanProjectCommandWords()
 	// 6th seam: subcommands contributed by command providers — builtin (static KongCommand)
 	// PLUS out-of-process command plugins (dynamic reflect.StructOf commands dispatched

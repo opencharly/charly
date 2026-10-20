@@ -392,6 +392,22 @@ func resolveCommandPluginBinary(ctx context.Context, word, parent string) (strin
 	if baked != "" {
 		return baked, nil
 	}
+	// WELDED fallback — the word's plugin is one every native package bakes beside the binary
+	// (scripts/host-command-plugins.txt → weldedCommandRefs), but THIS build has no baked
+	// .providers manifest: a dev/worktree binary skips the FHS path, and a host may have no
+	// package plugin set installed. The project does not have to declare such a word either —
+	// on a package install it is served with no project at all — so the pinned ref in the
+	// generated welded index is the resolver. It is taken BEFORE the project-scan error arm: a
+	// project this binary cannot load must not take a welded command away.
+	// keyed by the WORD: the welded set is top-level-only by construction (a nested welded
+	// command would need its parent in the key, and none exists today).
+	if ref, ok := weldedCommandRefs[word]; ok {
+		bin, werr := buildWeldedCommandPlugin(ctx, identity, word, parent, ref)
+		if werr != nil {
+			return "", fmt.Errorf("command %q: %w", identity, werr)
+		}
+		return bin, nil
+	}
 	if scanErr != nil {
 		return "", fmt.Errorf("command %q: %w", identity, scanErr)
 	}
@@ -401,6 +417,49 @@ func resolveCommandPluginBinary(ctx context.Context, word, parent string) (strin
 	bin, _, err := resolvePluginBinary(ctx, srcDir, name, repoPath)
 	if err != nil {
 		return "", fmt.Errorf("command %q: %w", identity, err)
+	}
+	return bin, nil
+}
+
+// buildWeldedCommandPlugin host-builds the plugin serving a WELDED command word when this
+// build has no baked binary for it. `ref` is the PINNED candy ref from the generated welded
+// index (scripts/host-command-plugins.txt → weldedCommandRefs).
+//
+// The mechanism is deliberately the SAME one a project-declared plugin word uses: the ref is
+// handed to the project scan as an ExtraCandyRef (so the scan vendors the repo at its pin and
+// builds the candy model), the candy that declares the word is found by the SAME
+// findCommandPluginCandy predicate, and the binary comes from the SAME resolvePluginBinary
+// (build cache / CHARLY_REPO_OVERRIDE / baked probe included). Nothing here is a second
+// resolution path — only the source of the ref differs (the welded set rather than the
+// project's own candy declarations).
+//
+// A project is still needed to run the scan (it carries the project's config + local candies),
+// so a project-less directory reports the load error and nothing else: on a package install the
+// same word is served by the baked binary and never reaches this leg.
+func buildWeldedCommandPlugin(ctx context.Context, identity, word, parent, ref string) (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve cwd: %w", err)
+	}
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		return "", fmt.Errorf("welded plugin %s: %w", ref, err)
+	}
+	opts := spec.ResolveOpts{ExtraCandyRefs: []spec.ExtraCandyRef{{Ref: ref}}}
+	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, opts)
+	if err != nil {
+		return "", fmt.Errorf("welded plugin %s: scan candies: %w", ref, err)
+	}
+	if candyMap == nil {
+		return "", fmt.Errorf("welded plugin %s: no candy map for %s", ref, dir)
+	}
+	name, candy := findCommandPluginCandy(candyMap, word, parent)
+	if candy == nil {
+		return "", fmt.Errorf("welded plugin %s declares no %s", ref, identity)
+	}
+	bin, _, err := resolvePluginBinary(ctx, candy.GetSourceDir(), name, pluginRepoPath(candy.GetPluginSource()))
+	if err != nil {
+		return "", fmt.Errorf("welded plugin %s: %w", ref, err)
 	}
 	return bin, nil
 }
