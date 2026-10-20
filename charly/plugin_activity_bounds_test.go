@@ -71,7 +71,7 @@ func TestPluginLeafCapDefault_IsTheShippedTwoHours(t *testing.T) {
 func TestLeafCapExpiryNamesTheBound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
 	defer cancel()
-	time.Sleep(time.Millisecond) // let the deadline actually fire
+	<-ctx.Done() // wait on the signal, never a sleep — the deadline has fired by definition here
 
 	err := leafCapErr(ctx, true, "host->plugin build", errors.New("rpc error: code = Canceled"))
 	if !errors.Is(err, errPluginLeafCap) {
