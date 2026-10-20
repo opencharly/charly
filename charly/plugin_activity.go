@@ -300,6 +300,20 @@ func pluginInvokeNoProgress() time.Duration {
 	return loadedReadiness().NoProgress
 }
 
+// pluginInvokeNoProgressFor returns the idle window for one dispatch class. The
+// STEP providers run installs (pacman/apt/buildah/system-packages) that go minutes
+// between host-visible legs — the same sparseness the build steps have — so they
+// get the heavy per-attempt window instead of the probe no_progress. Measured: the
+// CachyOS VM bed's deploy tripped the 90s probe window on step:system-packages after
+// a single reverse leg while pacman was upgrading packages (no cpu advance from the
+// peer tree, no host leg). A genuine hang still trips at the heavy window.
+func pluginInvokeNoProgressFor(class ProviderClass) time.Duration {
+	if class == ClassStep {
+		return loadedReadiness().PerAttemptHeavy
+	}
+	return pluginInvokeNoProgress()
+}
+
 // idleBoundedContext returns a context cancelled with errPluginCallIdle when the
 // call makes no progress for noProgress, plus a stop func. Progress is EITHER a host
 // reverse leg (a.touch) OR CPU advancing anywhere in the peer's LIVE process tree
