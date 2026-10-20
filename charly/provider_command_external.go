@@ -397,8 +397,14 @@ func resolveCommandPluginBinary(ctx context.Context, word, parent string) (strin
 	// .providers manifest: a dev/worktree binary skips the FHS path, and a host may have no
 	// package plugin set installed. The project does not have to declare such a word either —
 	// on a package install it is served with no project at all — so the pinned ref in the
-	// generated welded index is the resolver. It is taken BEFORE the project-scan error arm: a
-	// project this binary cannot load must not take a welded command away.
+	// generated welded index is the resolver.
+	//
+	// It is taken BEFORE the project-scan error arm so a project whose CANDY SCAN fails cannot
+	// preempt a welded word. It is NOT project-independent end to end: buildWeldedCommandPlugin
+	// still needs a loadable project for its config (the scan that vendors the ref runs over
+	// it), so a project-less or unloadable directory reports that load error instead. That is
+	// the case a package install covers differently — the baked binary answers there and this
+	// leg is never reached.
 	// keyed by the WORD: the welded set is top-level-only by construction (a nested welded
 	// command would need its parent in the key, and none exists today).
 	if ref, ok := weldedCommandRefs[word]; ok {
