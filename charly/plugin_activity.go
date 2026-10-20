@@ -642,3 +642,39 @@ func pluginInvokeErr(ctx context.Context, what string, err error) error {
 	}
 	return err
 }
+
+// init lifts the two host→plugin call bounds out of the binary so a LONG-RUNNING operation
+// (an image build, whose work happens in buildkitd's process tree rather than the plugin's
+// descendants) is not killed for being slow or for looking idle.
+//
+// Measured: `charly box build strata` (3 GB retrieval + 6.7 GB install) died every time at
+// the 10-minute leaf cap with `context canceled` in buildkitd, and later at the no-progress
+// window while package installation ran inside the daemon. Both bounds are per-VENUE
+// operational limits, not product constants, so they are operator-settable:
+//
+//	CHARLY_PLUGIN_LEAF_CAP     total-duration bound for one host→plugin call (default 10m)
+//	CHARLY_PLUGIN_NO_PROGRESS  no-host-visible-progress window (default: readiness config)
+func applyCallBoundEnv(getenv func(string) string) {
+	for _, knob := range []struct {
+		env string
+		dst *time.Duration
+	}{
+		{"CHARLY_PLUGIN_LEAF_CAP", &pluginLeafCapOverride},
+		{"CHARLY_PLUGIN_NO_PROGRESS", &pluginInvokeNoProgressOverride},
+	} {
+		v := getenv(knob.env)
+		if v == "" {
+			continue
+		}
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			// A malformed non-empty value is a typo'd deployment, not an absence: say so
+			// and keep the default rather than silently running with a bound nobody chose.
+			fmt.Fprintf(os.Stderr, "charly: ignoring %s=%q (not a duration: %v); keeping the default\n", knob.env, v, err)
+			continue
+		}
+		*knob.dst = d
+	}
+}
+
+func init() { applyCallBoundEnv(os.Getenv) }
