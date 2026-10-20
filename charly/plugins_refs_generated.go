@@ -217,3 +217,25 @@ var pluginProviderRefs = map[string]string{
 	"verb:vnc":                  "github.com/opencharly/plugin-vnc/candy/plugin-vnc",
 	"verb:wl":                   "github.com/opencharly/plugin-wl/candy/plugin-wl",
 }
+
+// weldedCommandRefs maps a WELDED top-level command word -> the PINNED candy ref of the
+// plugin that serves it. The welded set is scripts/host-command-plugins.txt — the plugins
+// every native package bakes beside the binary at /usr/lib/charly/plugins. A package
+// install serves these words from those baked binaries; a dev/worktree build has none, so
+// the word still enters the CLI grammar and the plugin is host-built from this ref on first
+// use. A word a COMPILED-IN provider already serves is listed too — the registered
+// provider wins it, so the source fallback is never reached for those.
+var weldedCommandRefs = map[string]string{
+	"candy":    "@github.com/opencharly/plugin-candy/candy/plugin-candy:v2026.242.0526",
+	"clean":    "@github.com/opencharly/plugin-clean/candy/plugin-clean:v2026.261.0029",
+	"doctor":   "@github.com/opencharly/plugin-doctor/candy/plugin-doctor:v2026.261.0030",
+	"feature":  "@github.com/opencharly/plugin-feature/candy/plugin-feature:v2026.261.0008",
+	"mcp":      "@github.com/opencharly/plugin-mcp/candy/plugin-mcp:v2026.250.0721",
+	"pipeline": "@github.com/opencharly/plugin-pipeline/candy/plugin-pipeline:v2026.251.2226",
+	"preempt":  "@github.com/opencharly/plugin-preempt/candy/plugin-preempt:v2026.261.0030",
+	"review":   "@github.com/opencharly/plugin-review/candy/plugin-review:v2026.271.0909",
+	"secrets":  "@github.com/opencharly/plugin-secrets/candy/plugin-secrets:v2026.242.0530",
+	"settings": "@github.com/opencharly/plugin-settings/candy/plugin-settings:v2026.242.0532",
+	"udev":     "@github.com/opencharly/plugin-udev/candy/plugin-udev:v2026.242.0532",
+	"vm":       "@github.com/opencharly/plugin-vm/candy/plugin-vm:v2026.261.0009",
+}

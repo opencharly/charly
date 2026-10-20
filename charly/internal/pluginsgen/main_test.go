@@ -108,7 +108,7 @@ func TestPluginsRefsIndexSound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readCompiledPlugins: %v", err)
 	}
-	live, err := collectWordRefs(names, corpusRepoList(root, filepath.Join("charly", "plugin_corpus.txt"), names), nil)
+	live, _, err := collectWordRefs(names, corpusRepoList(root, filepath.Join("charly", "plugin_corpus.txt"), names), nil)
 	if err != nil {
 		t.Fatalf("collectWordRefs: %v", err)
 	}
