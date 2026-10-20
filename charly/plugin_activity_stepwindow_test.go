@@ -25,7 +25,7 @@ func TestStepDispatchUsesTheHeavyIdleWindow(t *testing.T) {
 			t.Fatalf("pluginInvokeNoProgressFor(%s) = %s, want the probe window %s", class, got, pluginInvokeNoProgress())
 		}
 	}
-	if time.Duration(stepWindow) < 10*time.Minute {
+	if stepWindow < 10*time.Minute {
 		t.Fatalf("the step window %s is too small for a multi-minute package install", stepWindow)
 	}
 }
