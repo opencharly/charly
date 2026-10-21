@@ -37,6 +37,7 @@ type capMeta struct {
 	subcmds          []climodel.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
 	commandModel     *spec.CLIModel           // set ONLY for class:command; CUE-generated reflected leaf grammar
 	commandModelJSON []byte                   // exact validated transport payload, preserved across relays
+	interactive      bool                     // set ONLY for a class:command capability DECLARING it needs a real terminal (ProvidedCapability.interactive); false → the command dispatches over the broker-backed Invoke(OpRun) lane
 }
 
 func (m capMeta) Reserved() string     { return m.word }
@@ -49,6 +50,12 @@ func (m capMeta) Class() ProviderClass { return m.class }
 // out-of-process alike), never from a plugin-code interface — a nested command and its
 // top-level same-word twin are distinct identities in either placement.
 func (m capMeta) CommandParent() string { return m.cmdParent }
+
+// InteractiveCommand reports whether a class:command capability DECLARED that it needs a real
+// terminal — the ONE data-driven input to the command dispatch-lane decision (dispatchCommand).
+// Both provider twins embed capMeta, so the answer is identical in either placement and comes
+// from the DECLARED wire ProvidedCapability, never from plugin code.
+func (m capMeta) InteractiveCommand() bool { return m.interactive }
 
 // CommandModel returns a defensive copy of the plugin-published generated
 // #CLIModel. It lets the host merge plugin-owned leaves into __cli-model.
@@ -157,6 +164,16 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 		// non-command capability is off-grammar (only commands nest) and rejected here.
 		if p := c.GetCommandParent(); p != "" {
 			m.cmdParent = p
+		}
+		// A command may DECLARE that it needs a real terminal (ProvidedCapability.interactive):
+		// `shell`, `logs -f`, `mcp serve --stdio`. The DECLARATION is what selects the dispatch
+		// lane — a declaring command keeps the process-replacing exec lane (its child becomes the
+		// process and inherits the terminal), and every non-declaring command dispatches over the
+		// broker-backed Invoke(OpRun) lane with the host reverse channel attached, so it behaves
+		// IDENTICALLY compiled-in and runtime-loaded. Data-driven by design: no class-wide
+		// exemption, and no inference from plugin Go (opencharly/charly#1006).
+		if c.GetInteractive() {
+			m.interactive = true
 		}
 		for _, sc := range c.GetSubcommands() {
 			m.subcmds = append(m.subcmds, climodel.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp(), Hidden: sc.GetHidden()})

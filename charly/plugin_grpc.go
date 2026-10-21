@@ -396,8 +396,42 @@ func (g *grpcProvider) OpenChannel(open *pb.ChannelFrame, upstream transport.Pro
 // Falls back to a plain Invoke (broker id 0) when the connection has no broker (an in-proc
 // transport) or no executor is given.
 func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, exec spec.DeployExecutor, build buildEngineContext, rebootable bool, cc *checkContextReverseServer) (*Result, error) {
+	var reverse *executorReverseServer
+	if exec != nil {
+		reverse = &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx), activity: pluginActivityFrom(ctx)}
+	}
+	return g.invokeWithReverse(ctx, op, reverse, cc)
+}
+
+// InvokeWithHostReverse invokes an op WITH the host reverse channel but with NO venue: the
+// dispatch's work needs the host REGISTRY (InvokeProvider / HostBuild / RunHostStep /
+// DescribeProvider) and no shell on any venue. The COMMAND class is the canonical such caller —
+// `charly pipeline run` reaches the workflow engine host-side via
+// InvokeProvider("workflow", <engine>, "workflow-run") and never touches a shell, because the
+// ENGINE owns execution (candy/plugin-lobster executes its own steps).
+//
+// It is the out-of-process twin of hostInProcCtx() (plugin_inproc_reverse.go), which threads the
+// SAME construction into a COMPILED-IN plugin's Invoke: one venue-less reverse channel, two
+// transports, so a command candy's ops.OpRun handler behaves identically in either placement (F8).
+// A venue op asked of this channel is answered by the NAMED venue-less error (errNoVenue), never a
+// nil dereference inside the host process.
+//
+// Its existence is the fix for opencharly/charly#1006: before it, the out-of-process command route
+// had no way to reach the host at all (it syscall.Exec'd the plugin, see dispatchCommand), so every
+// InvokeProvider from a command plugin died "no host executor".
+func (g *grpcProvider) InvokeWithHostReverse(ctx context.Context, op *Operation) (*Result, error) {
+	return g.invokeWithReverse(ctx, op, &executorReverseServer{activity: pluginActivityFrom(ctx)}, nil)
+}
+
+// invokeWithReverse is the ONE broker-standing-up implementation behind both reverse-channel entry
+// points (R2): the caller decides WHICH reverse services to serve (a live-venue ExecutorService, a
+// venue-less one, a CheckContextService, or a combination) and this stands them up on the
+// connection's go-plugin broker, passes the broker id in the request, and stops the server when the
+// (synchronous) Invoke returns. A nil reverse and nil cc mean the dispatch attached nothing, which
+// is the plain-Invoke case (broker id 0) an in-proc transport or a broker-less connection needs.
+func (g *grpcProvider) invokeWithReverse(ctx context.Context, op *Operation, reverse *executorReverseServer, cc *checkContextReverseServer) (*Result, error) {
 	var brokerID uint32
-	if g.conn.Broker != nil && (exec != nil || cc != nil) {
+	if g.conn.Broker != nil && (reverse != nil || cc != nil) {
 		id := g.conn.Broker.NextId()
 		// srv is WRITTEN by the AcceptAndServe callback (which runs on the broker-accept
 		// goroutine below) and READ by the deferred Stop() on THIS goroutine after Invoke
@@ -412,14 +446,12 @@ func (g *grpcProvider) InvokeWithExecutor(ctx context.Context, op *Operation, ex
 			// call (vmPostApply's ~27 MiB charly PutFile) is not rejected (maxReverseChannelMsgBytes).
 			s := grpc.NewServer(append(opts, grpc.MaxRecvMsgSize(maxReverseChannelMsgBytes), grpc.MaxSendMsgSize(maxReverseChannelMsgBytes))...)
 			// Both reverse services share ONE broker id, registered on ONE server: a
-			// deploy/step op supplies exec (ExecutorService); a host-coupled check verb
-			// supplies BOTH exec and cc (ExecutorService for the venue + CheckContextService
-			// for HTTPDo/AddBackground — F2).
-			if exec != nil {
-				// live overlay-build inputs (M4): a lifecycle Invoke attaches them to the ctx
-				// (withOverlayBuildInputs) so the reverse server can re-thread them onto a
-				// HostBuild("overlay") builder ctx; nil for every other Invoke.
-				pb.RegisterExecutorServiceServer(s, &executorReverseServer{exec: exec, build: build, rebootable: rebootable, live: overlayBuildInputsFrom(ctx), activity: pluginActivityFrom(ctx)})
+			// deploy/step op supplies a live-venue reverse server (ExecutorService); a
+			// host-coupled check verb supplies BOTH that and cc (CheckContextService for
+			// HTTPDo/AddBackground — F2); a COMMAND-class dispatch supplies the venue-less
+			// reverse server (ExecutorService only, registry legs only).
+			if reverse != nil {
+				pb.RegisterExecutorServiceServer(s, reverse)
 			}
 			if cc != nil {
 				pb.RegisterCheckContextServiceServer(s, cc)
