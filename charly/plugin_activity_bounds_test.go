@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -51,10 +54,39 @@ func TestApplyCallBoundEnv_IgnoresJunkAndAbsence(t *testing.T) {
 	}
 }
 
-// TestPluginLeafCapDefault_IsTheShippedTenMinutes — the default is deliberately NOT raised by this
-// change: operators opt in, the binary keeps its previous behaviour.
-func TestPluginLeafCapDefault_IsTheShippedTenMinutes(t *testing.T) {
-	if pluginLeafCapDefault != 10*time.Minute {
-		t.Errorf("pluginLeafCapDefault = %v, want the shipped 10m", pluginLeafCapDefault)
+// TestPluginLeafCapDefault_IsTheShippedTwoHours — the default is RAISED to 2h, and this
+// pins the new shipped value so a silent change has to come with a rationale. The former
+// 10m was the #474 hung-plugin guard applied as a TOTAL bound, which killed the work that
+// most needs a leaf: a cold cold-cache image build (measured: `box build openwebui` on a
+// fresh base digest died at exactly 10m, twice, with `signal: killed` on buildctl).
+func TestPluginLeafCapDefault_IsTheShippedTwoHours(t *testing.T) {
+	if pluginLeafCapDefault != 2*time.Hour {
+		t.Errorf("pluginLeafCapDefault = %v, want the shipped 2h", pluginLeafCapDefault)
+	}
+}
+
+// TestLeafCapExpiryNamesTheBound — an expired leaf cap must identify ITSELF. The failure it
+// used to produce is `context canceled` / `signal: killed` from inside the plugin's
+// children, which reads as a crash and names neither the bound nor the knob that raises it.
+func TestLeafCapExpiryNamesTheBound(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	<-ctx.Done() // wait on the signal, never a sleep — the deadline has fired by definition here
+
+	err := leafCapErr(ctx, true, "host->plugin build", errors.New("rpc error: code = Canceled"))
+	if !errors.Is(err, errPluginLeafCap) {
+		t.Fatalf("leaf-cap expiry is not identifiable: %v", err)
+	}
+	msg := err.Error()
+	for _, want := range []string{"plugin leaf cap exceeded", "CHARLY_PLUGIN_LEAF_CAP", "host->plugin build", "2h0m0s"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("leaf-cap error %q does not name %q", msg, want)
+		}
+	}
+
+	// A call that did NOT get the cap must pass through untouched — the wrapper must not
+	// claim a bound nobody applied.
+	if got := leafCapErr(ctx, false, "host->plugin build", errors.New("boom")); got.Error() != "boom" {
+		t.Errorf("uncapped call was rewritten: %v", got)
 	}
 }
