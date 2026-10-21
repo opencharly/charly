@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/opencharly/spec/ops"
 	"os"
@@ -48,19 +49,51 @@ type executorReverseServer struct {
 	activity *pluginActivity
 }
 
+// errNoVenue is the NAMED answer a VENUE-LESS reverse channel gives a venue op.
+var errNoVenue = errors.New("this dispatch carries no venue executor: the host reverse channel serves the REGISTRY legs only (InvokeProvider / HostBuild / DescribeProvider), so a venue op cannot be served here")
+
+// venue returns this server's live executor, or errNoVenue when the dispatch attached none.
+//
+// A reverse server is stood up for two DIFFERENT kinds of dispatch, and only one of them has a
+// venue: a deploy/step/builder/check-verb Invoke carries a live executor (s.exec), while a
+// COMMAND-class Invoke carries none by construction — its handler needs the host REGISTRY
+// (InvokeProvider to reach the workflow engine, HostBuild, DescribeProvider), and it runs no shell
+// on any venue. Before this accessor the second kind carried a NIL executor and the first venue leg
+// dereferenced it, so a command plugin asking for a venue PANICKED inside the charly host process
+// instead of receiving an error it could report. The two placements share the accessor: the
+// in-proc twin (hostInProcCtx) has always built exactly this venue-less shape.
+func (s *executorReverseServer) venue() (spec.DeployExecutor, error) {
+	if s.exec == nil {
+		return nil, errNoVenue
+	}
+	return s.exec, nil
+}
+
 func (s *executorReverseServer) Venue(context.Context, *pb.Empty) (*pb.VenueReply, error) {
-	return &pb.VenueReply{Venue: s.exec.Venue()}, nil
+	exec, err := s.venue()
+	if err != nil {
+		return nil, err
+	}
+	return &pb.VenueReply{Venue: exec.Venue()}, nil
 }
 
 func (s *executorReverseServer) RunSystem(ctx context.Context, req *pb.RunRequest) (*pb.RunReply, error) {
+	exec, err := s.venue()
+	if err != nil {
+		return &pb.RunReply{Error: err.Error()}, nil
+	}
 	return withActivityHeartbeat(s.activity, func() (*pb.RunReply, error) {
-		return runReply(s.exec.RunSystem(ctx, req.GetScript(), decodeReverseEmitOpts(req.GetOptsJson())))
+		return runReply(exec.RunSystem(ctx, req.GetScript(), decodeReverseEmitOpts(req.GetOptsJson())))
 	})
 }
 
 func (s *executorReverseServer) RunUser(ctx context.Context, req *pb.RunRequest) (*pb.RunReply, error) {
+	exec, err := s.venue()
+	if err != nil {
+		return &pb.RunReply{Error: err.Error()}, nil
+	}
 	return withActivityHeartbeat(s.activity, func() (*pb.RunReply, error) {
-		return runReply(s.exec.RunUser(ctx, req.GetScript(), decodeReverseEmitOpts(req.GetOptsJson())))
+		return runReply(exec.RunUser(ctx, req.GetScript(), decodeReverseEmitOpts(req.GetOptsJson())))
 	})
 }
 
@@ -73,6 +106,10 @@ func (s *executorReverseServer) RunUser(ctx context.Context, req *pb.RunRequest)
 // SSHExecutor), preserving the owner_root → root:root semantics. The gRPC call itself
 // succeeds; a placement failure travels in PutFileReply.Error (the runReply convention).
 func (s *executorReverseServer) PutFile(ctx context.Context, req *pb.PutFileRequest) (*pb.PutFileReply, error) {
+	exec, verr := s.venue()
+	if verr != nil {
+		return &pb.PutFileReply{Error: verr.Error()}, nil
+	}
 	tmp, err := os.CreateTemp("", "charly-putfile-*")
 	if err != nil {
 		return &pb.PutFileReply{Error: err.Error()}, nil
@@ -89,7 +126,7 @@ func (s *executorReverseServer) PutFile(ctx context.Context, req *pb.PutFileRequ
 	// The transfer itself may outlive the no-progress window (a large file over ssh);
 	// heartbeat it so the enclosing call is seen as progressing.
 	err = withActivityHeartbeatErr(s.activity, func() error {
-		return s.exec.PutFile(ctx, tmpPath, req.GetPath(), req.GetMode(), req.GetOwnerRoot(), decodeReverseEmitOpts(req.GetOptsJson()))
+		return exec.PutFile(ctx, tmpPath, req.GetPath(), req.GetMode(), req.GetOwnerRoot(), decodeReverseEmitOpts(req.GetOptsJson()))
 	})
 	return &pb.PutFileReply{Error: errString(err)}, nil
 }
@@ -106,7 +143,11 @@ func (s *executorReverseServer) RunCapture(ctx context.Context, req *pb.RunReque
 }
 
 func (s *executorReverseServer) runCapture(ctx context.Context, req *pb.RunRequest) (*pb.CaptureReply, error) {
-	stdout, stderr, exit, err := s.exec.RunCapture(ctx, req.GetScript())
+	exec, verr := s.venue()
+	if verr != nil {
+		return &pb.CaptureReply{Error: verr.Error()}, nil
+	}
+	stdout, stderr, exit, err := exec.RunCapture(ctx, req.GetScript())
 	return &pb.CaptureReply{Stdout: stdout, Stderr: stderr, ExitCode: int32(exit), Error: errString(err)}, nil
 }
 
@@ -116,8 +157,12 @@ func (s *executorReverseServer) runCapture(ctx context.Context, req *pb.RunReque
 // The pod plugin's OpAttach drives it for `charly shell`/`charly cmd`. Not deadlined (the TTY owns
 // its lifetime).
 func (s *executorReverseServer) RunInteractive(ctx context.Context, req *pb.RunRequest) (*pb.LiveReply, error) {
+	exec, verr := s.venue()
+	if verr != nil {
+		return &pb.LiveReply{Error: verr.Error()}, nil
+	}
 	return withActivityHeartbeat(s.activity, func() (*pb.LiveReply, error) {
-		exit, err := s.exec.RunInteractive(ctx, req.GetScript())
+		exit, err := exec.RunInteractive(ctx, req.GetScript())
 		return &pb.LiveReply{ExitCode: int32(exit), Error: errString(err)}, nil
 	})
 }
@@ -128,8 +173,12 @@ func (s *executorReverseServer) RunInteractive(ctx context.Context, req *pb.RunR
 // so it is heartbeated for its whole duration — otherwise the idle guard would kill a
 // perfectly-progressing quiet stream.
 func (s *executorReverseServer) RunStream(ctx context.Context, req *pb.RunRequest) (*pb.LiveReply, error) {
+	exec, verr := s.venue()
+	if verr != nil {
+		return &pb.LiveReply{Error: verr.Error()}, nil
+	}
 	return withActivityHeartbeat(s.activity, func() (*pb.LiveReply, error) {
-		exit, err := s.exec.RunStream(ctx, req.GetScript())
+		exit, err := exec.RunStream(ctx, req.GetScript())
 		return &pb.LiveReply{ExitCode: int32(exit), Error: errString(err)}, nil
 	})
 }
@@ -143,7 +192,11 @@ func (s *executorReverseServer) GetFile(ctx context.Context, req *pb.GetFileRequ
 }
 
 func (s *executorReverseServer) getFile(ctx context.Context, req *pb.GetFileRequest) (*pb.GetFileReply, error) {
-	content, err := s.exec.GetFile(ctx, req.GetPath(), req.GetAsRoot(), decodeReverseEmitOpts(req.GetOptsJson()))
+	exec, verr := s.venue()
+	if verr != nil {
+		return &pb.GetFileReply{Error: verr.Error()}, nil
+	}
+	content, err := exec.GetFile(ctx, req.GetPath(), req.GetAsRoot(), decodeReverseEmitOpts(req.GetOptsJson()))
 	return &pb.GetFileReply{Content: content, Error: errString(err)}, nil
 }
 
@@ -175,6 +228,12 @@ func (s *executorReverseServer) RunHostStep(ctx context.Context, req *pb.HostSte
 }
 
 func (s *executorReverseServer) runHostStep(ctx context.Context, req *pb.HostStepRequest) (*pb.HostStepReply, error) {
+	// Every RunHostStep arm applies its effect onto the venue through s.exec (HostStepDeps.Exec,
+	// the RebootStep's rebootVenueAndWait, the act-verb shell), so a venue-less channel must
+	// refuse the leg BY NAME rather than hand a nil executor to the host engine.
+	if _, verr := s.venue(); verr != nil {
+		return &pb.HostStepReply{Error: verr.Error()}, nil
+	}
 	var view spec.InstallStepView
 	if err := json.Unmarshal(req.GetStepJson(), &view); err != nil {
 		return &pb.HostStepReply{Error: fmt.Sprintf("decode step view: %v", err)}, nil

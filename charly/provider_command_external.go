@@ -234,23 +234,97 @@ func nestedSubcommandType(subcommands []climodel.CLISubcommand) reflect.Type {
 	return reflect.StructOf(fields)
 }
 
-// dispatchCommand routes a parsed dynamic command to its provider by PLACEMENT (F8): a
-// COMPILED-IN command candy (registered in-proc as an inprocProvider — NOT a *grpcProvider and
-// NOT a static builtin CommandProvider) dispatches IN-PROC via Invoke(ops.OpRun), so the candy's
-// handler runs inside charly's own process with native stdio/TTY; an OUT-OF-PROCESS command
-// dispatches by syscall.Exec'ing its plugin binary (dispatchExternalCommand). This is the command
-// half of placement-invisibility: the SAME command candy works compiled-in or out-of-process,
-// the dynamic Kong grammar (externalCommandHolder) identical for both — only the dispatch
-// transport differs. The dynamic grammar carries no Run() method, so dispatch is manual either way.
+// dispatchCommand routes a parsed dynamic command to its provider, honouring the DECLARED
+// interactive flag (F8, opencharly/charly#1006).
+//
+// THE RULE, and it is data-driven rather than placement-driven:
+//
+//   - a command that DECLARED it needs a real terminal (capMeta.interactive — `shell`,
+//     `logs -f`, `mcp serve --stdio`) keeps the process-replacing EXEC lane:
+//     dispatchExternalCommand syscall.Exec's the plugin, the child BECOMES the process and
+//     inherits charly's stdin/stdout/stderr/TTY, and the plugin's own CLI face is the program;
+//   - EVERY other command dispatches over its provider's Invoke(ops.OpRun) lane, with the host
+//     reverse channel attached — in-proc through hostInProcCtx(), out-of-process through
+//     *grpcProvider.InvokeWithHostReverse — so the same handler in either placement reaches the
+//     host REGISTRY (InvokeProvider / HostBuild / DescribeProvider) identically.
+//
+// Before this, the placement alone decided: a compiled-in command ran in-proc and an
+// out-of-process one ALWAYS syscall.Exec'd. That made the placement VISIBLE in exactly the case
+// it must not be — an out-of-process command whose handler needs the host ran in CLI mode with no
+// host at all, so every InvokeProvider from it died `no host executor`, and
+// `charly pipeline run <entity>` could not reach ANY workflow engine (opencharly/charly#1006).
+// The `--dry-run` control localised it to this leg: resolution + lowering need no host and
+// passed; only the dispatch leg failed. The spec's ProvidedCapability.interactive comment
+// documents exactly this division, and charly had never read the flag.
+//
+// The RESOLVE-BEFORE-DECIDE leg exists because a command dispatch runs BEFORE any project load
+// (main dispatches straight from the parsed grammar), so a baked/welded plugin's providers are
+// registered only if something already connected them. Running the project's declared-plugin
+// connect pre-pass (connectDeclaredKindPlugins — the SAME depth-0 pass the loader's Boundary runs,
+// idempotent and guarded against re-entry) registers a plugin the project's own KINDS require,
+// which is how a front-end that BOTH serves `kind:<word>` and exposes `command:<word>` becomes
+// resolvable here. A command plugin serving no kind is never connected by it and stays on the
+// exec lane, so `charly mcp serve --stdio` and friends are untouched.
+//
 // sub is the declared-subcommand NAME resolveCommandDispatch recovered ("" for the flat case, or a
 // CommandParent nesting with no further declared subcommands).
 func dispatchCommand(d externalCommandDispatch, sub string) error {
-	if prov, ok := providerRegistry.resolveCommand(d.word, d.parent); ok {
-		if _, external := prov.(*grpcProvider); !external {
-			return dispatchInProcCommand(prov, d, sub)
+	prov, ok := providerRegistry.resolveCommand(d.word, d.parent)
+	if !ok {
+		// Nothing connected this word yet. Give the project's declared-plugin set its one
+		// chance to register it, then look again — never a guess, never a fallback that
+		// invents a provider that does not exist.
+		if len(declaredKindWords()) > 0 {
+			connectDeclaredKindPlugins(projectDirPreParse())
+			prov, ok = providerRegistry.resolveCommand(d.word, d.parent)
 		}
 	}
-	return dispatchExternalCommand(d, sub)
+	if !ok {
+		// The word is served by nothing we can invoke in this placement: the plugin binary IS
+		// the program. This is the lane every command without a compiled-in or connectable
+		// provider has always taken.
+		return dispatchExternalCommand(d, sub)
+	}
+	if ic, isCmd := prov.(interface{ InteractiveCommand() bool }); isCmd && ic.InteractiveCommand() {
+		return dispatchExternalCommand(d, sub)
+	}
+	if gp, external := prov.(*grpcProvider); external {
+		return dispatchConnectedCommand(gp, d, sub)
+	}
+	return dispatchInProcCommand(prov, d, sub)
+}
+
+// commandRunParams builds the ops.OpRun envelope a command dispatch sends to its provider — the ONE
+// construction shared by both placements (R2), so a compiled-in and an out-of-process command candy
+// receive byte-identical params.
+func commandRunParams(d externalCommandDispatch, sub string) ([]byte, error) {
+	// Thread the host spec.HostEnv as DATA on the OpRun envelope (the #200 "threads as DATA, does
+	// not anchor a seam" precedent — hostEnvJSON): os.Executable() resolves
+	// correctly to the charly binary ONLY when called in-core (R10 bed-found bug #5), so every
+	// command plugin receives it verbatim. Class-generic, no provider word (F11-safe):
+	// a command that needs it (command:deploy's from-box pod path, which forwards HostEnvJSON into
+	// deploy:pod's PodConfigSetupRequest) reads it; the rest ignore the extra key.
+	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub), "host_env_json": hostEnvJSON()})
+	if err != nil {
+		return nil, fmt.Errorf("command %q: marshal args: %w", d.word, err)
+	}
+	return params, nil
+}
+
+// dispatchConnectedCommand runs a CONNECTED out-of-process command through its provider with the
+// host reverse channel attached — the out-of-process twin of dispatchInProcCommand. The channel is
+// VENUE-LESS by construction (InvokeWithHostReverse): a command dispatch runs no shell on any
+// venue; its handler reaches the host REGISTRY, which is what a front-end dispatching a lowered
+// pipeline to the workflow engine needs.
+func dispatchConnectedCommand(inv *grpcProvider, d externalCommandDispatch, sub string) error {
+	params, err := commandRunParams(d, sub)
+	if err != nil {
+		return err
+	}
+	if _, err := inv.InvokeWithHostReverse(context.Background(), &Operation{Reserved: d.word, Op: ops.OpRun, Params: params}); err != nil {
+		return fmt.Errorf("command %q: %w", d.word, err)
+	}
+	return nil
 }
 
 // dispatchInProcCommand forwards a compiled-in command's parsed pass-through args to its in-proc
@@ -258,15 +332,9 @@ func dispatchCommand(d externalCommandDispatch, sub string) error {
 // os.Stdout/Stderr/TTY natively), mirroring the OUT-OF-PROCESS plugin's pass-through `{"args":[…]}`
 // envelope (the ops.OpRun contract), so a command candy behaves identically in either placement.
 func dispatchInProcCommand(prov Provider, d externalCommandDispatch, sub string) error {
-	// Thread the host spec.HostEnv as DATA on the OpRun envelope (the #200 "threads as DATA, does
-	// not anchor a seam" precedent — hostEnvJSON): os.Executable() resolves
-	// correctly to the charly binary ONLY when called in-core (R10 bed-found bug #5), so every
-	// compiled-in command plugin receives it verbatim. Class-generic, no provider word (F11-safe):
-	// a command that needs it (command:deploy's from-box pod path, which forwards HostEnvJSON into
-	// deploy:pod's PodConfigSetupRequest) reads it; the rest ignore the extra key.
-	params, err := marshalJSON(map[string]any{"args": externalCommandArgs(d, sub), "host_env_json": hostEnvJSON()})
+	params, err := commandRunParams(d, sub)
 	if err != nil {
-		return fmt.Errorf("command %q: marshal args: %w", d.word, err)
+		return err
 	}
 	// Thread the in-proc reverse channel so a compiled-in command's Invoke(ops.OpRun) can call back
 	// HostBuild / InvokeProvider (the command-class analogue of how a compiled-in build/vm-build

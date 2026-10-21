@@ -499,7 +499,7 @@ func discoverBakedPluginWords() {
 				//
 				// Only a command needs a kong grammar entry and only a verb needs the lazy verb
 				// dispatch hook, because those are the two classes the CLI reaches BY WORD before any
-				// dispatch exists. Every other class — a `deploy:` substrate, a `kind:`, a `step:`, a
+				// dispatch exists. Every other class — a `deploy:` substrate, a `step:`, a
 				// `builder:` — is resolved on demand through connectPluginByWordRef, which consults
 				// `bakedPluginBinaries` FIRST, before the project scan. That lookup is class-agnostic
 				// by construction (the map is keyed `class:word[:parent]`), so the ONLY thing that
@@ -508,11 +508,26 @@ func discoverBakedPluginWords() {
 				// `plugin-deploy-pod`, while the same baked directory worked for a verb
 				// (opencharly/charly#831). Recording is not registering: no class gains a CLI surface
 				// it did not have.
+				//
+				// A KIND word is the exception to "resolved on demand", and it needs the parse-time
+				// set for exactly the reason a `deploy:` word needs its prescan: the kind word IS an
+				// authored entity's discriminator, so the project's own charly.yml cannot be PARSED
+				// without it (loaderkit's classifyDisc reads spec.Threaded.Kinds, which
+				// loaderThreaded builds from the registered providers plus `declaredKind`). A baked
+				// plugin's kind therefore has to reach `declaredKind`, or `charly box validate` rejects
+				// a perfectly valid `pipeline:` entity in every project that does not re-declare the
+				// plugin the image already serves — and the connect pre-pass
+				// (connectDeclaredKindPlugins) never learns the word it must connect, so the entity
+				// would decode via nothing at all (opencharly/charly#1006). Registering it here is
+				// what makes a baked kind the peer of a COMPILED-IN one, which reaches the same set
+				// through providerRegistry.allProviders().
 				switch class {
 				case ClassCommand:
 					registerDeclaredExternalCommand(word, parent)
 				case ClassVerb:
 					registerDeclaredExternalVerb(word)
+				case ClassKind:
+					registerDeclaredKind(word)
 				}
 				// FIRST dir wins (CHARLY_PLUGIN_DIR ahead of the FHS path) — consistent with
 				// bakedPluginBinary's first-hit lookup. Precedence only: a word baked under the
