@@ -4395,8 +4395,9 @@ check-kindcluster:
 # check-kindcluster-docker / check-kindcluster-nerdctl — the docker and rootless
 # containerd R10 witnesses of the SAME deploy:kindcluster substrate the podman bed
 # proves (check-kindcluster). kind provisions node containers on any of the three
-# charly engines; the engine word maps 1:1 to kind's KIND_EXPERIMENTAL_PROVIDER, so
-# these beds differ from the podman bed ONLY in `engine:` and their collision-free
+# charly engines; the engine word maps to kind's KIND_EXPERIMENTAL_PROVIDER through
+# the engine capability table (`containerd` -> `nerdctl`; podman/docker to themselves),
+# so these beds differ from the podman bed ONLY in `engine:` and their collision-free
 # cluster name + kubeconfig context (a kind cluster name is unique only WITHIN an
 # engine — `kind get clusters` is engine-scoped — so each engine bed names its own
 # cluster and context). disposable: true authorizes destroy+rebuild.
