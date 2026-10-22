@@ -172,15 +172,15 @@ charly:
                         - tmux
                         - fuse-overlayfs
                         - slirp4netns
-                        # the nerdctl engine stack (plan/nerdctl-integration.md Phase 5):
-                        # nerdctl + CNI + rootlesskit + buildkit. fuse-overlayfs +
+                        # the containerd engine stack (the nerdctl CLI + CNI +
+                        # rootlesskit + buildkit). fuse-overlayfs +
                         # slirp4netns above are shared with the podman path.
                         - nerdctl
                         - cni-plugins
                         - rootlesskit
                         - buildkit
                         # the kind (Kubernetes-in-Docker) local-cluster tool (Arch
-                        # extra) + the containerd runtime its rootless-nerdctl provider
+                        # extra) + the containerd runtime its rootless nerdctl provider
                         # needs (kind-integration: the `kindcluster` deploy substrate).
                         - kind
                         - containerd
@@ -208,7 +208,7 @@ charly:
                         gvisor-tap-vsock: podman-machine networking — provides /usr/lib/podman/gvproxy (AUR)
                         nvidia-utils: nvidia-smi GPU detection + nvidia-ctk CDI generation (GPU targets only)
                         kubectl: Kubernetes deploys + charly eval k8s probes + the `kindcluster` deploy substrate's workload apply (`kubectl apply -k`)
-                        kind: local Kubernetes-in-Docker clusters — the `kindcluster` deploy substrate (docker/podman/nerdctl engines)
+                        kind: local Kubernetes-in-Docker clusters — the `kindcluster` deploy substrate (docker/podman/containerd engines)
                         virtctl-bin: the KubeVirt client — the `kubevirt:` deploy substrate manages the guest-ssh `virtctl port-forward` host-side (AUR; the upstream kubevirt/kubevirt release binary is the fallback)
                         android-tools: "host adb for the remote `target: android` package-download install path"
                         libsecret: secret-tool CLI + pinentry-qt Secret Service passphrase auto-retrieval; the bundled plugin-secrets credential store uses the pure-Go go-keyring D-Bus client
@@ -324,7 +324,8 @@ charly:
                         - libvirt
                         - libvirt-client
                         - libarchive-tools
-                        # the nerdctl engine stack (plan/nerdctl-integration.md Phase 5):
+                        # the containerd engine stack (the nerdctl CLI + CNI +
+                        # rootlesskit + buildkit):
                         - nerdctl
                         - cni-plugins
                         - rootlesskit

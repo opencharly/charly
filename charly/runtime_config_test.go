@@ -156,7 +156,30 @@ func TestResolveRuntime_DockerRunEngineResolvesDirect(t *testing.T) {
 	}
 }
 
+// TestResolveRuntime_InvalidEngine — `nerdctl` is the retired ENGINE word (it
+// remains the CLI binary containerd drives), so the closed #EngineName vocabulary
+// must reject it.
 func TestResolveRuntime_InvalidEngine(t *testing.T) {
+	orig := hostenv.RuntimeConfigPath
+	defer func() { hostenv.RuntimeConfigPath = orig }()
+	hostenv.RuntimeConfigPath = func() (string, error) {
+		return filepath.Join(t.TempDir(), "config.yml"), nil
+	}
+
+	_ = os.Setenv("CHARLY_RUN_ENGINE", "nerdctl")
+	defer os.Unsetenv("CHARLY_RUN_ENGINE") //nolint:errcheck
+	_ = os.Unsetenv("CHARLY_RUN_MODE")
+	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
+
+	_, err := hostenv.ResolveRuntime()
+	if err == nil {
+		t.Error("expected an error for the retired engine word nerdctl")
+	}
+}
+
+// TestResolveRuntime_ContainerdEngineAccepted is the control for the arm above:
+// containerd is a valid engine word and resolves through unchanged.
+func TestResolveRuntime_ContainerdEngineAccepted(t *testing.T) {
 	orig := hostenv.RuntimeConfigPath
 	defer func() { hostenv.RuntimeConfigPath = orig }()
 	hostenv.RuntimeConfigPath = func() (string, error) {
@@ -168,9 +191,12 @@ func TestResolveRuntime_InvalidEngine(t *testing.T) {
 	_ = os.Unsetenv("CHARLY_RUN_MODE")
 	_ = os.Unsetenv("CHARLY_BIND_ADDRESS")
 
-	_, err := hostenv.ResolveRuntime()
-	if err == nil {
-		t.Error("expected error for invalid engine")
+	rt, err := hostenv.ResolveRuntime()
+	if err != nil {
+		t.Fatalf("ResolveRuntime() rejected the engine word containerd: %v", err)
+	}
+	if rt.RunEngine != "containerd" {
+		t.Errorf("RunEngine = %q, want %q", rt.RunEngine, "containerd")
 	}
 }
 

@@ -254,7 +254,7 @@ func (r *Registry) ResolveDeploy(word string) (Provider, bool) {
 func (r *Registry) ResolveStep(word string) (Provider, bool)    { return r.resolve(ClassStep, word) }
 func (r *Registry) ResolveBuilder(word string) (Provider, bool) { return r.resolve(ClassBuilder, word) }
 
-// ResolveEngine resolves a container-engine provider word (podman/docker/nerdctl).
+// ResolveEngine resolves a container-engine provider word (podman/docker/containerd).
 func (r *Registry) ResolveEngine(word string) (Provider, bool) { return r.resolve(ClassEngine, word) }
 
 // allServedUnits expresses every in-proc provider as PluginUnits for

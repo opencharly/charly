@@ -4393,10 +4393,11 @@ check-kindcluster:
 
 # =============================================================================
 # check-kindcluster-docker / check-kindcluster-nerdctl — the docker and rootless
-# nerdctl R10 witnesses of the SAME deploy:kindcluster substrate the podman bed
+# containerd R10 witnesses of the SAME deploy:kindcluster substrate the podman bed
 # proves (check-kindcluster). kind provisions node containers on any of the three
-# charly engines; the engine word maps 1:1 to kind's KIND_EXPERIMENTAL_PROVIDER, so
-# these beds differ from the podman bed ONLY in `engine:` and their collision-free
+# charly engines; the engine word maps to kind's KIND_EXPERIMENTAL_PROVIDER through
+# the engine capability table (`containerd` -> `nerdctl`; podman/docker to themselves),
+# so these beds differ from the podman bed ONLY in `engine:` and their collision-free
 # cluster name + kubeconfig context (a kind cluster name is unique only WITHIN an
 # engine — `kind get clusters` is engine-scoped — so each engine bed names its own
 # cluster and context). disposable: true authorizes destroy+rebuild.
@@ -4472,28 +4473,30 @@ check-kindcluster-docker:
 check-kindcluster-nerdctl-cluster:
     kindcluster:
         box: ""
-        engine: nerdctl
+        engine: containerd
         node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
         nodes:
             - role: control-plane
 check-kindcluster-nerdctl:
     kindcluster:
         from: check-kindcluster-nerdctl-cluster
-        engine: nerdctl
+        engine: containerd
         disposable: true
         lifecycle: dev
         add_candy:
-            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.276.1350'
+            - '@github.com/opencharly/plugin-kube/candy/plugin-kube:v2026.295.1506'
         description: >-
-            R10 witness of deploy:kindcluster on the ROOTLESS NERDCTL engine: a disposable
-            local Kubernetes-in-Docker cluster provisioned by kind on rootless nerdctl
-            (which requires the rootless containerd precondition the layer-kind candy's
-            kind-engine-prepare applies), probed with the `kube:` verb against the context
-            kind writes (kind-check-kindcluster-nerdctl). Proves the engine selector
-            reaches KIND_EXPERIMENTAL_PROVIDER and the cluster comes up on nerdctl;
+            R10 witness of deploy:kindcluster on the ROOTLESS CONTAINERD engine: a
+            disposable local Kubernetes-in-Docker cluster provisioned by kind on rootless
+            containerd through the nerdctl CLI (which requires the rootless containerd
+            precondition the layer-kind candy's kind-engine-prepare applies), probed with
+            the `kube:` verb against the context kind writes
+            (kind-check-kindcluster-nerdctl). Proves the engine selector reaches
+            KIND_EXPERIMENTAL_PROVIDER (nerdctl for the containerd engine) and the cluster
+            comes up on containerd;
             teardown is `kind delete cluster`.
         plan:
-            - check: the kind cluster exists on the nerdctl engine
+            - check: the kind cluster exists on the containerd engine
               id: kcn-cluster-exists
               context:
                 - runtime
@@ -4501,7 +4504,7 @@ check-kindcluster-nerdctl:
               stdout:
                 - contains: "check-kindcluster-nerdctl"
               command: sh -c 'KIND_EXPERIMENTAL_PROVIDER=nerdctl kind get clusters'
-            - check: the kind node container exists on the nerdctl engine (the io.x-k8s.kind.cluster label)
+            - check: the kind node container exists on the containerd engine (the io.x-k8s.kind.cluster label)
               id: kcn-node-container
               context:
                 - runtime
@@ -4509,7 +4512,7 @@ check-kindcluster-nerdctl:
               stdout:
                 - contains: "check-kindcluster-nerdctl"
               command: sh -c 'nerdctl ps --filter label=io.x-k8s.kind.cluster=check-kindcluster-nerdctl --format "{{.Names}}"'
-            - check: the nerdctl cluster reports at least one Ready node
+            - check: the containerd cluster reports at least one Ready node
               id: kcn-node-ready
               context:
                 - runtime
@@ -4520,7 +4523,7 @@ check-kindcluster-nerdctl:
               timeout: 180s
               stdout:
                 - contains: "Ready"
-            - check: the local-path StorageClass kind installs is present on the nerdctl cluster
+            - check: the local-path StorageClass kind installs is present on the containerd cluster
               id: kcn-storageclass
               context:
                 - runtime
@@ -4529,7 +4532,7 @@ check-kindcluster-nerdctl:
                 kube_context: kind-check-kindcluster-nerdctl
               stdout:
                 - contains: "standard"
-            - check: raw — the nerdctl cluster's namespaces include kube-system
+            - check: raw — the containerd cluster's namespaces include kube-system
               id: kcn-raw-namespaces
               context:
                 - runtime
