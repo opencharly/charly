@@ -353,7 +353,7 @@ func describeBounded(ctx context.Context, conn *transport.Conn, timeout time.Dur
 		if cause == nil {
 			cause = context.DeadlineExceeded
 		}
-		return nil, fmt.Errorf("readiness read timed out after %s: %v: %w", timeout, err, cause)
+		return nil, fmt.Errorf("readiness read timed out after %s: %w: %w", timeout, err, cause)
 	}
 	return caps, err
 }
