@@ -2766,6 +2766,117 @@ check-loader-flat-import-local:
                 command: "${CHARLY_BIN} box validate -C charly/testdata/flat-import-project"
                 in_container: false
 # =================================================================
+# check-migrate-local — R10 witness for the `command:migrate` DELIVERY: the plugin-migrate
+# pin charly welds decides the shape `charly migrate` emits, and a pre-#22 pin emits a
+# document its own loader refuses.
+#
+# The changed surface is a MODULE PIN (github.com/opencharly/plugin-migrate/candy/plugin-migrate
+# in charly/go.mod), so the instrument is the emitted DOCUMENT at its real boundary: a
+# committed fixture (charly/testdata/migrate-retired-pipeline) carrying the retired
+# `kind: pipeline` grammar (`stages:` + a lifted-verb `kind:` + `concurrency: {lanes: N}`) is
+# copied to a temp dir, migrated by the binary under test, and then LOADED by that same
+# binary's own `box validate`.
+#
+#   - a pre-#22 pin: the lifted verb is emitted as BARE step-level sugar
+#     (`plan: [- agent: …]`) — validate answers `plan[0] has no intent keyword
+#     (run/check/agent-run/agent-check/include)`, rc=1;
+#   - a current pin: an intent label PLUS the verb key (`- run: assess` + `agent: …`), the
+#     fan-out wrapped in the pooled lane arm, and no invalid `args.type:` — validate answers
+#     `box validate: OK`, rc=0.
+#
+# The negative control is step 1: the RETIRED spelling is refused, naming BOTH retired keys.
+# Without it a fixture that already loaded would make every later assertion vacuous.
+# Does NOT prove: that a REAL pipeline executes (no venue is deployed — the lane arm's
+# runtime is plugin-lobster's, witnessed by its own beds), nor which plugin-pipeline tag a
+# consumer should pin (the fixture's own pin is fixture DATA at a fixed tag).
+# =================================================================
+check-migrate-app:
+    local:
+        description: |-
+            Minimal kind:local template for check-migrate-local — no candies: the bed drives
+            the host charly binary over a committed fixture project.
+        candy: []
+        plan:
+            - check: the bed's host has a charly binary
+              id: charly-present
+              context:
+                - runtime
+              command:
+                command: "test -x ${CHARLY_BIN}"
+                in_container: false
+check-migrate-local:
+    local:
+        from: check-migrate-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole R10 witness for the `command:migrate` DELIVERY (the plugin-migrate pin in
+            charly/go.mod). Step 1 is the negative control: the committed fixture's RETIRED
+            pipeline spelling is refused by this binary's loader, naming `stages: field not
+            allowed` AND `concurrency: field not allowed` — so the fixture is genuinely
+            pre-cutover and a pass later cannot be vacuous. Step 2 copies the fixture to a temp
+            dir, runs `charly migrate`, and asserts the emitted shape (retired keys gone; an
+            intent label `- run: assess` with the verb key as its SIBLING and NO bare
+            `- agent:` sugar; the pooled fan-out lane arm `lanes:` / `batch_size:` / `item_var:`;
+            the fan-out collection arg `prs:` with NO invalid `args.type:`; and the retired
+            per-lane `$pr` REBOUND to the lane item as `$pr.stdout`) and then that the emitted
+            document LOADS (`box validate: OK`, rc=0). A pre-#22 plugin-migrate pin emits bare
+            verb sugar, `args.pr.type: string` and leaves `$pr` unbound, and the same step fails
+            with `plan[0] has no intent keyword`; a current pin passes.
+        plan:
+            - check: the committed fixture's RETIRED pipeline spelling is refused, naming both retired keys (the negative control)
+              id: retired-grammar-is-refused
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: |
+                  set -eu
+                  d=$(mktemp -d)
+                  trap 'rm -rf "$d"' EXIT
+                  rc=0
+                  ${CHARLY_BIN} -C charly/testdata/migrate-retired-pipeline box validate > "$d/validate.log" 2>&1 || rc=$?
+                  if [ "$rc" -eq 0 ]; then echo "a retired-grammar fixture PASSED validate — the control is vacuous"; cat "$d/validate.log"; exit 1; fi
+                  grep -q 'stages: field not allowed' "$d/validate.log" || { echo "the refusal did not name stages:"; cat "$d/validate.log"; exit 1; }
+                  grep -q 'concurrency: field not allowed' "$d/validate.log" || { echo "the refusal did not name concurrency:"; cat "$d/validate.log"; exit 1; }
+                  exit 0
+            - check: migrate emits an intent-labelled step inside the pooled fan-out arm, drops the invalid args.type, and the emitted document LOADS
+              id: migrate-emits-a-loadable-arm
+              exit_status: 0
+              context:
+                - runtime
+              command:
+                command: |
+                  set -eu
+                  d=$(mktemp -d)
+                  trap 'rm -rf "$d"' EXIT
+                  cp -a charly/testdata/migrate-retired-pipeline/. "$d/"
+                  rc=0
+                  ${CHARLY_BIN} -C "$d" migrate > "$d/migrate.log" 2>&1 || rc=$?
+                  [ "$rc" -eq 0 ] || { echo "migrate failed rc=$rc"; cat "$d/migrate.log"; exit 1; }
+                  grep -q 'applied pipeline-lobster-syntax' "$d/migrate.log" || { echo "the pipeline reshape did not run"; cat "$d/migrate.log"; exit 1; }
+                  if [ "$(grep -cE '^[[:space:]]*(stages|concurrency):' "$d/charly.yml")" -ne 0 ]; then
+                    echo "the retired grammar survived the reshape"; exit 1
+                  fi
+                  grep -qE '^[[:space:]]*- run: assess$' "$d/charly.yml" || { echo "no intent label on the lifted verb stage"; sed -n '/steps:/,$p' "$d/charly.yml"; exit 1; }
+                  if [ "$(grep -cE '^[[:space:]]*- agent:$' "$d/charly.yml")" -ne 0 ]; then
+                    echo "the lifted verb was emitted as BARE step-level sugar"; sed -n '/steps:/,$p' "$d/charly.yml"; exit 1
+                  fi
+                  grep -qE '^[[:space:]]*item_var: pr$' "$d/charly.yml" || { echo "no pooled fan-out lane arm (item_var)"; sed -n '/steps:/,$p' "$d/charly.yml"; exit 1; }
+                  grep -qE '^[[:space:]]*batch_size: 16$' "$d/charly.yml" || { echo "the lane arm did not carry the concurrency budget"; sed -n '/steps:/,$p' "$d/charly.yml"; exit 1; }
+                  grep -qE '^[[:space:]]*prs:$' "$d/charly.yml" || { echo "the fan-out collection arg is not declared"; sed -n '/args:/,$p' "$d/charly.yml"; exit 1; }
+                  grep -qF '$pr.stdout' "$d/charly.yml" || { echo "the retired per-lane reference was not rebound to the lane item"; sed -n '/steps:/,$p' "$d/charly.yml"; exit 1; }
+                  if [ "$(grep -cE '^[[:space:]]+type: ' "$d/charly.yml")" -ne 0 ]; then
+                    echo "args still carries the invalid type: key"; sed -n '/args:/,$p' "$d/charly.yml"; exit 1
+                  fi
+                  rc=0
+                  ${CHARLY_BIN} -C "$d" box validate > "$d/validate.log" 2>&1 || rc=$?
+                  [ "$rc" -eq 0 ] || { echo "the emitted document does NOT load rc=$rc"; grep -vE '^WARNING' "$d/validate.log" | tail -5; exit 1; }
+                  grep -q 'box validate: OK' "$d/validate.log" || { echo "validate did not report OK"; cat "$d/validate.log"; exit 1; }
+                  grep -q '0 warnings, 0 errors' "$d/validate.log" || { echo "validate reported a warning"; cat "$d/validate.log"; exit 1; }
+                  exit 0
+# =================================================================
 # check-plugin-buildcache-local — R10 witness for PHASE 1 of the one-store
 # cache wave (charly#896): the plugin build cache is the ONE OCI-Image-Layout
 # store, keyed by D-STORE-4's inputs (module source, go.sum, toolchain,
