@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/opencharly/spec/climodel"
 	specexec "github.com/opencharly/spec/exec"
@@ -332,13 +334,26 @@ func describeBounded(ctx context.Context, conn *transport.Conn, timeout time.Dur
 	rctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	caps, err := describe(rctx, conn)
-	if err != nil && errors.Is(rctx.Err(), context.DeadlineExceeded) {
+	if err != nil && (errors.Is(rctx.Err(), context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded) {
 		// gRPC surfaces an expired deadline as a STATUS error, which errors.Is(err,
 		// context.DeadlineExceeded) does NOT match — re-wrap it so the bound stays recognizable to
 		// every caller above (the loader names the plugin and the phase; the test asserts the
 		// deadline). Every other failure — including a caller's own context being cancelled, which
 		// this bound must never claim as its own — is returned untouched.
-		return nil, fmt.Errorf("readiness read timed out after %s: %w", timeout, rctx.Err())
+		//
+		// The STATUS CODE is part of the test, not only the local context's Err: with grpc
+		// v1.83.2 (raised by sdk v0.2026294.1520) the call returns `code = DeadlineExceeded,
+		// desc = stream terminated by RST_STREAM with error code: CANCEL` at the deadline while
+		// rctx.Err() is still nil for a few microseconds — measured with a probe on the stuck-
+		// Describe fixture: `err=rpc error: code = DeadlineExceeded … rctxErr=<nil> elapsed=5.001s`.
+		// Classifying on rctx.Err() alone therefore turned a bounded wait into an undiagnosable
+		// "refusal" (charly#588 ask #2). A caller cancellation arrives as codes.Canceled with
+		// rctx.Err()==context.Canceled, so it still falls through untouched.
+		cause := rctx.Err()
+		if cause == nil {
+			cause = context.DeadlineExceeded
+		}
+		return nil, fmt.Errorf("readiness read timed out after %s: %v: %w", timeout, err, cause)
 	}
 	return caps, err
 }
