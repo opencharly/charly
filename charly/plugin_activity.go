@@ -110,6 +110,12 @@ type pluginActivity struct {
 	cpus    atomic.Int64 // CPU-advance resets
 	lastLeg atomic.Int64 // unix nanos of the last host-leg event, 0 = never
 	lastCPU atomic.Int64 // unix nanos of the last CPU advance, 0 = never
+	// touches counts touch() ATTEMPTS, not deliveries — it is incremented BEFORE the
+	// non-blocking send, so a dropped/coalesced token still counts. The expiry path
+	// confirms against it (see idleBoundedContext): a producer that tried to report
+	// progress since the last reset is a live source, and a delivery-based check would
+	// read a starved producer as a dead one.
+	touches atomic.Int64
 }
 
 // newPluginActivity builds a call's activity clock with its wake channel initialized.
@@ -123,6 +129,13 @@ func (a *pluginActivity) touch() {
 	if a == nil {
 		return
 	}
+	// COUNT THE ATTEMPT, before the send — and this is the whole point of the field.
+	// The send below is non-blocking and its token can be DROPPED, so a delivery count
+	// would undercount exactly when the guard is deciding whether the source is alive.
+	// An ATTEMPT is evidence that the producer still exists and still considers itself
+	// in progress, and that is the signal the expiry path needs; see the expiry case in
+	// idleBoundedContext.
+	a.touches.Add(1)
 	// Signal the progress EVENT (non-blocking; a full buffer already holds a pending
 	// reset, which is equivalent to this one).
 	if a.wake != nil {
@@ -131,6 +144,17 @@ func (a *pluginActivity) touch() {
 		default:
 		}
 	}
+}
+
+// touchAttempts reports how many times touch has been CALLED on this clock over the
+// call's life — attempts, not deliveries. It is read by the expiry path's confirmation
+// and by tests, and it is deliberately the only new observable: the guard's other
+// counters answer "what did the watchdog see", this one answers "did the producer speak".
+func (a *pluginActivity) touchAttempts() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.touches.Load()
 }
 
 // cpu reads the peer plugin process's monotonic CPU as its WHOLE LIVE PROCESS TREE —
@@ -218,9 +242,10 @@ func agoAt(nanos int64) string {
 }
 
 // observe is the ONE progress measurement the watchdog makes, and the reason a kill
-// cannot happen on a single unconfirmed expiry. It reports whether EITHER source shows
-// progress right now, draining a pending host-leg event if one is waiting, and returns
-// the (possibly advanced) CPU high-water.
+// cannot happen on a single unconfirmed expiry. It reports whether ANY of the THREE
+// sources shows progress right now — a drained host-leg event, a CPU advance, or an
+// attempted touch since the last re-arm — and returns the (possibly advanced) CPU
+// high-water and the attempt count.
 //
 // It must be able to see a leg event that the deadline's expiry raced: touch() is a
 // NON-BLOCKING depth-1 send, so a burst of touches coalesces to one token that can be
@@ -230,24 +255,42 @@ func agoAt(nanos int64) string {
 // progress event "always resets" the deadline and that there is therefore no race; that
 // is true of the EVENT path and false of the EXPIRY path, which is why this exists.)
 //
+// THIRD SOURCE — THE ATTEMPTED TOUCH (#913). A delivery can be coalesced away and the
+// producer itself can be STARVED past the whole window on a loaded machine, so "nothing
+// arrived" and "nothing was sent" are different facts and only the second is idleness. The
+// count of ATTEMPTED touches settles it without a race: a producer that called touch() since
+// the deadline was last re-armed is alive, whatever the scheduler did to its token. That is
+// what stops a starved heartbeat from being read as a wedged plugin — the defect that made
+// this guard red-block unrelated PRs.
+//
 // Passing wake == nil is legal — a nil channel never fires in a select, so the drain is
-// skipped and only the CPU source is measured — but the watcher never does: BOTH of its
-// calls pass the LIVE channel, so a touch that raced either tick is drained and counted
+// skipped and only the CPU + attempt sources are measured — but the watcher never does: BOTH
+// of its calls pass the LIVE channel, so a touch that raced either tick is drained and counted
 // rather than left pending.
-func (a *pluginActivity) observe(wake <-chan struct{}, lastCPU uint64) (uint64, bool) {
+//
+// lastAttempts is the attempt count at the last re-arm; the returned value is the new one,
+// and it advances whenever this measurement found progress by any of the three sources.
+func (a *pluginActivity) observe(wake <-chan struct{}, lastCPU uint64, lastAttempts int64) (uint64, int64, bool) {
+	attempts := a.touchAttempts()
 	select {
 	case <-wake:
 		a.legs.Add(1)
 		a.lastLeg.Store(time.Now().UnixNano())
-		return lastCPU, true
+		return lastCPU, attempts, true
 	default:
 	}
 	if cur := a.cpu(); cur > lastCPU {
 		a.cpus.Add(1)
 		a.lastCPU.Store(time.Now().UnixNano())
-		return cur, true
+		return cur, attempts, true
 	}
-	return lastCPU, false
+	// No delivery and no CPU advance — but did the producer SPEAK? An attempt is evidence
+	// the source still exists and still considers itself in progress, even when its token
+	// was dropped and even when it was starved for longer than the window.
+	if attempts != lastAttempts {
+		return lastCPU, attempts, true
+	}
+	return lastCPU, attempts, false
 }
 
 // pluginActivityKey carries the per-call clock on the invoke context, so the reverse
@@ -379,6 +422,12 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 		// path the value has already been consumed and a bare `<-timer.C` would block
 		// forever and wedge the watcher.
 		reset := func() { resetDeadline(timer, noProgress) }
+		// lastAttempts remembers the touch-attempt count the deadline was last re-armed
+		// against. The EXPIRY path compares it (see there): a producer that attempted a
+		// touch since the last reset is a live source even when its token was dropped AND
+		// when the producer itself was starved past the window, which is the load-sensitive
+		// false kill this guards (#913).
+		lastAttempts := a.touchAttempts()
 		for {
 			select {
 			case <-stop:
@@ -389,6 +438,7 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 				// A host-leg touch is a progress EVENT: reset the deadline.
 				a.legs.Add(1)
 				a.lastLeg.Store(time.Now().UnixNano())
+				lastAttempts = a.touchAttempts()
 				reset()
 			case <-cpu.C:
 				// CPU advancing is progress: refresh the clock + high-water and reset
@@ -396,21 +446,31 @@ func idleBoundedContext(ctx context.Context, noProgress time.Duration, a *plugin
 				// LIVE wake channel is passed, never nil: a nil channel never fires in
 				// a select, so passing it would make observe's drain a no-op and leave
 				// a host-leg touch this tick raced pending for the expiry to trip over.
-				if cur, ok := a.observe(wake, lastCPU); ok {
-					lastCPU = cur
+				if cur, att, ok := a.observe(wake, lastCPU, lastAttempts); ok {
+					lastCPU, lastAttempts = cur, att
 					reset()
 				}
 			case <-timer.C:
-				// CONFIRM before killing, do not kill on a single expiry. Two reasons
+				// CONFIRM before killing, do not kill on a single expiry. THREE reasons
 				// the first expiry is not trustworthy: a burst of host-leg touches
 				// coalesces to one depth-1 token that can be DROPPED, and Go's select
 				// chooses at random among READY cases, so an expiry can win while a
-				// progress event sits unread in the buffer; and the CPU source is only
+				// progress event sits unread in the buffer; the CPU source is only
 				// SAMPLED, so its last observation can predate progress by up to a poll
-				// interval. Re-measure BOTH sources once; cancel only when neither has
-				// anything.
-				if cur, ok := a.observe(wake, lastCPU); ok {
-					lastCPU = cur
+				// interval; and — the one that made this guard red-block unrelated PRs
+				// (#913) — the PRODUCER of the host-leg signal is itself a goroutine
+				// that can be STARVED past the whole window on a loaded machine, so
+				// "nothing arrived" and "nothing was sent" are different facts and only
+				// the second is idleness.
+				//
+				// So confirmation re-measures all THREE sources — and the third is a COUNTER
+				// read rather than an arrival: an ATTEMPTED touch since the last reset proves
+				// the source is alive even when its token was dropped and even when it was
+				// starved for longer than the window. Cancel only when the clock saw no
+				// delivery, no CPU advance AND no attempted touch — which is what a
+				// genuinely wedged peer looks like.
+				if cur, att, ok := a.observe(wake, lastCPU, lastAttempts); ok {
+					lastCPU, lastAttempts = cur, att
 					reset()
 					continue
 				}
