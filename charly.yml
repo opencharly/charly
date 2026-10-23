@@ -5043,3 +5043,40 @@ charly-version-skill:
         name: charly-version
         family: core
         owner: charly-skill-shelf
+
+# =============================================================================
+# The three `internals` contributor skills whose source of truth is THIS repo's
+# own Go module / plugin kernel — routed here from the `layer-charly-internals`
+# prose carrier, whose destination map measured `charly` for all three
+# (opencharly/opencharly#611). ROUTING ONLY: the prose is the FILE at
+# `.agents/skills/<name>/SKILL.md` (with its `references/` half where it has one),
+# copied byte-identically from the carrier at its `main`. A node carries no
+# `description:`/`content:`, because an in-line body that disagrees with its file
+# is a hard error in the marketplace generator.
+#
+# `family: internals` is carried over UNCHANGED so every
+# `/charly-internals:<name>` address survives the move.
+# =============================================================================
+go-skill:
+    skill:
+        name: go
+        family: internals
+        owner: charly-skill-shelf
+        triggers:
+            - "Go source work (adding/modifying `charly` commands)"
+            - "Editing `sdk/schema/*.cue` / `charly task cue-gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike"
+go-quality-skill:
+    skill:
+        name: go-quality
+        family: internals
+        owner: charly-skill-shelf
+        triggers:
+            - "Go code-quality / AGENTS.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml`"
+plugin-skill:
+    skill:
+        name: plugin
+        family: internals
+        owner: charly-skill-shelf
+        triggers:
+            - "Authoring a plugin (a candy with a `plugin:` block) / builtin vs out-of-tree plugin / per-plugin `.cue` schema (single source → `gengotypes` for dev + schema-over-`Describe` RPC at runtime) / the plugin SDK (`github.com/opencharly/sdk`, the proxy-resolved contract module — no submodule) / `sdk/**` / a compiled-in plugin candy (`compiled_plugins:`) or host-coupled kit candy / an external plugin module"
+            - "Editing `sdk/schema/*.cue` / `charly task cue-gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike"
