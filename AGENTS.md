@@ -86,8 +86,9 @@ on a schedule.
   operation, and 1.0 d below the shortest lapse, so it catches the neglect. Over the
   9 days from 2026-10-15 (the day the leaves' intent landed) to 2026-10-23 the control
   was red on 6 of them, and every one of those was a day the twins had genuinely not
-  been advanced — ages of 8.7 d to 14.7 d, every one inside a lapse of 10.2 d or
-  15.3 d. There was no red day on a healthy tree.
+  been advanced — ages of 7.5 d to 14.7 d, every one inside a real lapse: 8.1 d
+  (`box/cachyos`), 10.2 d (`box/arch`, `box/debian`, `box/fedora`, `box/ubuntu`) or
+  15.3 d (`box/omarchy`). There was no red day on a healthy tree.
 - **The bound is this repo's own number.** The producer's knob is opt-in and carries
   no default (unset ⇒ no bound at all), so 168 h is a choice this repo made on this
   repo's own evidence. Re-derive it when the cadence changes.

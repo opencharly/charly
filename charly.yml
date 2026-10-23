@@ -4094,11 +4094,12 @@ sync:
 #
 # MEASURED, over the 9 days from 2026-10-15 (the day the leaves' intent landed) to
 # 2026-10-23: this control was red on 6 of them, and on EVERY one of those 6 the
-# twins had genuinely not been advanced — the ages were 8.7 d to 14.7 d, every one
-# of them inside a lapse of 10.2 d or 15.3 d. It was green on the 3 days when this
-# repo had advanced within its own cadence. There was no red day on a healthy tree —
-# which is the property the org's pin rule demands of a gate, and the reason the
-# criterion is the age and not the distance.
+# twins had genuinely not been advanced — the ages were 7.5 d to 14.7 d, every one
+# of them inside a real lapse: 8.1 d (box/cachyos), 10.2 d (box/arch, box/debian,
+# box/fedora, box/ubuntu) or 15.3 d (box/omarchy). It was green on the 3 days when
+# this repo had advanced within its own cadence. There was no red day on a healthy
+# tree — which is the property the org's pin rule demands of a gate, and the reason
+# the criterion is the age and not the distance.
 #
 # The derivation is a script, not a paragraph: `scripts/measure-pin-cadence.py`
 # reproduces these numbers from this repo's own history and the twins' real remotes,
