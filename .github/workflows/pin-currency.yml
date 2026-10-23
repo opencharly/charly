@@ -2,10 +2,13 @@
 #
 # WHAT IT ASKS. `charly task pin-current` asks whether every `box/*` gitlink is at the
 # ref this repo's own `.gitmodules` declares for it — and FAILS only on NEGLECT: a pin
-# that is behind AND that this repo has not advanced for longer than its own bound
-# (168 h). "Behind" alone is CHURN: measured over this repo's own history, each twin is
+# that is NOT CURRENT and that this repo has not advanced for longer than its own
+# bound (168 h). "Not current" is a SET of classes — `behind`, `not-on-the-served-line`
+# (what a squash-merged upstream produces) and `differs` (no checkout to judge) — and
+# "not current" alone is CHURN: measured over this repo's own history, each twin is
 # behind on most of the days measured (17 to 27 of the 32 days from 2026-09-22 to
-# 2026-10-23; on 28 of those 32 at least one twin was behind), so a gate on the
+# 2026-10-23; on 28 of those 32 at least one twin was behind, and the measurement
+# classifies all 145 not-current pairs in that window as `behind`), so a gate on the
 # distance would be red roughly three days out of four — the permanently-red gate the
 # org's own pin rule forbids. The bound is on the age of this repo's own last advance
 # of that path, and it was placed by measurement: the longest gap that stayed within
@@ -34,6 +37,11 @@ on:
       - 'box/**'
       - 'charly/go.mod'
       - '.github/workflows/pin-currency.yml'
+      # The control's OWN proof lives in these two scripts, so a change to either of
+      # them is a change to the control's gate and must re-run it. Without them in
+      # the trigger, the proof could be weakened in a PR that never runs it.
+      - 'scripts/check-pin-currency.sh'
+      - 'scripts/measure-pin-cadence.py'
   schedule:
     # 05:17 UTC daily — off the hour and off the half hour, so this does not pile onto
     # the same minute as every other scheduled job in the org.
@@ -68,6 +76,9 @@ jobs:
 
       - name: The control's own proof — that it can fail (a neglected pin must go red)
         run: ./bin/charly task pin-currency-proof
+
+      - name: The measurement's own proof — that the classifier tells the classes apart
+        run: python3 -I scripts/measure-pin-cadence.py --self-test
 
       - name: The control — every box/* pin current, within this repo's own bound on neglect
         run: ./bin/charly task pin-current

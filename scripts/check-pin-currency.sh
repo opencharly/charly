@@ -10,15 +10,34 @@
 # invalid; the same is true of a control.
 #
 # WHAT IT PROVES, on a real git repo, with the SHIPPED task wiring:
-#   1. NEGLECT FAILS. A pin that is behind AND that its owner has not advanced for
-#      longer than the bound is reported STALE and the task exits non-zero — and the
-#      verdict names the pin, its age, and the bound that was applied.
+#   1. NEGLECT FAILS. A pin that is NOT CURRENT AND that its owner has not
+#      advanced for longer than the bound is reported STALE and the task exits
+#      non-zero — and the verdict names the pin, its age, and the bound applied.
 #   2. CHURN PASSES. The SAME pin, the SAME distance from the served ref, the SAME
 #      bound — advanced recently — passes. The two arms differ ONLY in the date of
 #      the commit that recorded the pin, so the verdict flips with the AGE and with
 #      nothing else. That is what makes the criterion "neglect", not "distance".
 #   3. The bound that bites is the SHIPPED one (168h), asserted from the verdict
 #      text — not from a constant this script could have drifted away from.
+#
+# NOT CURRENT IS NOT "BEHIND", and the proof has to say so. The criterion is "not
+# current AND un-advanced", and "not current" is a SET of classes: a twin that is
+# behind the ref it declares, a twin whose upstream advanced by a SQUASH-merge
+# (whose served ref does not descend from the recorded pin, so the pin is
+# `not-on-the-served-line`), and a pin with no checkout to judge at all
+# (`differs`). The org merges by squash in several repos, so the second class is
+# ordinary, not exotic, and the org's tree is heading for the third (a light tree
+# materializes no submodule at all). A proof that only exercised `behind` would
+# leave the criterion's own claim unproven for the classes that matter most —
+# which is how a shipped control ends up described by a narrower sentence than the
+# one it implements. So the proof runs SIX arms: the two above over a `behind`
+# twin, the same two over a SQUASH-shaped twin whose served ref does not descend
+# from the recorded pin, and the same two over a twin that is NOT MATERIALIZED,
+# where the pin is not current for the third reason.
+#
+# The third pair also proves the control's verdict does not depend on the TREE
+# SHAPE: on a tree that materializes nothing, a pin that is not current is still
+# reported not current, and still goes red when it is neglected.
 #
 # THE TASKS UNDER TEST ARE EXTRACTED from this repo's own charly.yml, so the fixture
 # exercises the shipped wiring and cannot drift from it: change the wrapper or the
@@ -34,7 +53,7 @@
 # repo, which is how a pin is recorded, not how a pin is advanced.
 #
 # Usage: scripts/check-pin-currency.sh [path-to-charly-binary]
-# Exit:  0 = both arms behaved as specified. 1 = a control defect.
+# Exit:  0 = every arm behaved as specified. 1 = a control defect.
 
 set -euo pipefail
 
@@ -108,86 +127,138 @@ if ! grep -q 'STALE_AFTER=168h' "$WORK/charly.yml"; then
 fi
 
 # ---------------------------------------------------------------------------
-# The fixture: a superproject with ONE pin, behind the served ref, whose
-# recording commit carries a chosen date. The date is the ONLY variable.
+# The fixture: a superproject with ONE pin whose recording commit carries a
+# chosen date. The date is the ONLY variable.
+#
+# TWO twin shapes, because "not current" is a SET of classes:
+#   subsrc    — the served ref DESCENDS from the recorded pin, so the pin is
+#               `behind` (the ordinary churn shape).
+#   squashsrc — the served ref does NOT descend from the recorded pin, which is
+#               what a squash-merge upstream produces, so the pin is
+#               `not-on-the-served-line`. The recorded commit is kept reachable
+#               on a branch of its own, so the clone carries it and the ancestry
+#               question is DECIDABLE (an object the clone lacks would make the
+#               class unjudgeable rather than squash-shaped).
 # ---------------------------------------------------------------------------
 (
   cd "$WORK" && git init -q -b main subsrc && cd subsrc
   echo v1 > f && git add -A && G commit -qm v1
   C1="$(git rev-parse HEAD)"
   echo v2 > f && G commit -qam v2
-  printf 'C1=%s\n' "$C1" > "$WORK/shas"
+  C2="$(git rev-parse HEAD)"
+  printf 'REC=%s\nSERVED=%s\n' "$C1" "$C2" > "$WORK/shas-behind"
+)
+(
+  cd "$WORK" && git init -q -b main squashsrc && cd squashsrc
+  echo v1 > f && git add -A && G commit -qm v1
+  A="$(git rev-parse HEAD)"
+  # A squash-merge: the served tip does not descend from the recorded head.
+  git checkout -q --orphan squashed
+  git rm -q -rf . >/dev/null 2>&1 || true
+  echo v2 > f && git add -A && G commit -qm v2
+  B="$(git rev-parse HEAD)"
+  git checkout -q -B main "$B"
+  git branch -f recorded "$A"
+  printf 'REC=%s\nSERVED=%s\n' "$A" "$B" > "$WORK/shas-squash"
 )
 
 make_fixture() {
-  # make_fixture <dir> <recording-date>
-  local dir="$1" stamp="$2"
+  # make_fixture <dir> <recording-date> <source-repo> <shas-file> <materialize: yes|no>
+  local dir="$1" stamp="$2" src="$3" shas="$4" materialize="$5"
   mkdir -p "$dir"
   (
     cd "$dir"
     git init -q -b main
     echo repo > r && git add -A && G commit -qm base
-    printf '[submodule "gap"]\n\tpath = gap\n\turl = %s\n\tbranch = main\n' "$WORK/subsrc" > .gitmodules
+    printf '[submodule "gap"]\n\tpath = gap\n\turl = %s\n\tbranch = main\n' "$src" > .gitmodules
     git add .gitmodules && G commit -qm gm
-    . "$WORK/shas"
-    # The pin records C1 while the served ref is C2 — the pin is BEHIND.
-    git update-index --add --cacheinfo "160000,$C1,gap"
+    . "$shas"
+    # The pin records REC while the served ref is SERVED.
+    git update-index --add --cacheinfo "160000,$REC,gap"
     GIT_AUTHOR_DATE="$stamp" GIT_COMMITTER_DATE="$stamp" G commit -qm "pin gap"
-    # Materialize the checkout, so the pin is judged against the served ref
-    # (behind) rather than merely "differs (no checkout to judge ancestry)".
-    git -c protocol.file.allow=always submodule update --init -q gap
+    # Materializing the checkout is what lets the pin be CLASSIFIED (behind /
+    # not-on-the-served-line) rather than merely "differs (no checkout to judge
+    # ancestry)". The third pair of arms leaves it unmaterialized on purpose.
+    if [ "$materialize" = yes ]; then
+      git -c protocol.file.allow=always submodule update --init -q gap
+    fi
   )
   cp "$WORK/charly.yml" "$dir/charly.yml"
+}
+
+# must_fail <label> <dir> <stamp> <src> <shas> <materialize> <expected-class>
+# must_pass <label> <dir> <stamp> <src> <shas> <materialize> <expected-class>
+must_fail() {
+  local label="$1" dir="$2" stamp="$3" src="$4" shas="$5" materialize="$6" class="$7" out
+  make_fixture "$dir" "$stamp" "$src" "$shas" "$materialize"
+  if out="$(cd "$dir" && "$CH" task pin-current 2>&1)"; then
+    echo "FAIL: $label — a pin neglected since $stamp must fail the bound" >&2
+    printf '%s\n' "$out" >&2
+    exit 1
+  fi
+  printf '%s\n' "$out" | sed 's/^/   | /'
+  for needle in 'STALE pin(s)' 'has not advanced it for' '(bound 168h)' 'gap' "$class"; do
+    if ! printf '%s\n' "$out" | grep -qF "$needle"; then
+      echo "FAIL: the verdict must name '$needle'; got:" >&2
+      printf '%s\n' "$out" >&2
+      exit 1
+    fi
+  done
+  echo "   a $class pin, un-advanced since $stamp, was reported STALE"
+}
+
+must_pass() {
+  local label="$1" dir="$2" stamp="$3" src="$4" shas="$5" materialize="$6" class="$7" out
+  make_fixture "$dir" "$stamp" "$src" "$shas" "$materialize"
+  if out="$(cd "$dir" && "$CH" task pin-current 2>&1)"; then
+    :
+  else
+    echo "FAIL: $label — a pin advanced just now is churn, not neglect; the bound must not bite" >&2
+    printf '%s\n' "$out" >&2
+    exit 1
+  fi
+  printf '%s\n' "$out" | sed 's/^/   | /'
+  # The green arm must be green BECAUSE the pin is not neglected, not because the
+  # control cannot see that it is not current: the pin is not current in BOTH arms.
+  if ! printf '%s\n' "$out" | grep -qF "$class"; then
+    echo "FAIL: the recent arm's pin must still be reported '$class' — otherwise the two" >&2
+    echo "       arms did not differ only by the date, and the proof is void" >&2
+    printf '%s\n' "$out" >&2
+    exit 1
+  fi
+  if printf '%s\n' "$out" | grep -qF 'STALE pin(s)'; then
+    echo "FAIL: the recent arm must not be reported STALE; got:" >&2
+    printf '%s\n' "$out" >&2
+    exit 1
+  fi
+  echo "   the same $class pin, advanced $stamp, passed the same bound"
 }
 
 NEGLECTED="2020-01-01T00:00:00Z"
 RECENT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "== the control: a pin NEGLECTED past the bound must FAIL =="
-make_fixture "$WORK/neglected" "$NEGLECTED"
-if neg_out="$(cd "$WORK/neglected" && "$CH" task pin-current 2>&1)"; then
-  echo "FAIL: a pin neglected since $NEGLECTED must fail the bound" >&2
-  printf '%s\n' "$neg_out" >&2
-  exit 1
-fi
-printf '%s\n' "$neg_out" | sed 's/^/   | /'
-for needle in 'STALE pin(s)' 'has not advanced it for' '(bound 168h)'; do
-  if ! printf '%s\n' "$neg_out" | grep -qF "$needle"; then
-    echo "FAIL: the verdict must name '$needle'; got:" >&2
-    printf '%s\n' "$neg_out" >&2
-    exit 1
-  fi
-done
-if ! printf '%s\n' "$neg_out" | grep -qF 'gap'; then
-  echo "FAIL: the verdict must name the neglected pin; got:" >&2
-  printf '%s\n' "$neg_out" >&2
-  exit 1
-fi
-echo "   a pin behind its served ref and un-advanced since $NEGLECTED was reported STALE"
+must_fail "the behind twin" "$WORK/neglected-behind" "$NEGLECTED" \
+  "$WORK/subsrc" "$WORK/shas-behind" yes 'behind'
 
 echo "== the control: the SAME pin, the SAME distance, advanced RECENTLY, must PASS =="
-make_fixture "$WORK/recent" "$RECENT"
-if recent_out="$(cd "$WORK/recent" && "$CH" task pin-current 2>&1)"; then
-  :
-else
-  echo "FAIL: a pin advanced just now is churn, not neglect — the bound must not bite" >&2
-  printf '%s\n' "$recent_out" >&2
-  exit 1
-fi
-printf '%s\n' "$recent_out" | sed 's/^/   | /'
-# The green arm must be green BECAUSE the pin is current, not because the control
-# cannot see that it is behind: the pin is behind in BOTH arms.
-if ! printf '%s\n' "$recent_out" | grep -qF 'behind'; then
-  echo "FAIL: the recent arm's pin must still be reported behind — otherwise the two" >&2
-  echo "       arms did not differ only by the date, and the proof is void" >&2
-  printf '%s\n' "$recent_out" >&2
-  exit 1
-fi
-if printf '%s\n' "$recent_out" | grep -qF 'STALE pin(s)'; then
-  echo "FAIL: the recent arm must not be reported STALE; got:" >&2
-  printf '%s\n' "$recent_out" >&2
-  exit 1
-fi
-echo "   the same pin at the same distance, advanced $RECENT, passed the same bound"
+must_pass "the behind twin" "$WORK/recent-behind" "$RECENT" \
+  "$WORK/subsrc" "$WORK/shas-behind" yes 'behind'
+
+echo "== the control: a SQUASH-shaped twin NEGLECTED past the bound must FAIL =="
+must_fail "the squash twin" "$WORK/neglected-squash" "$NEGLECTED" \
+  "$WORK/squashsrc" "$WORK/shas-squash" yes 'not-on-the-served-line'
+
+echo "== the control: the SQUASH-shaped twin, advanced RECENTLY, must PASS =="
+must_pass "the squash twin" "$WORK/recent-squash" "$RECENT" \
+  "$WORK/squashsrc" "$WORK/shas-squash" yes 'not-on-the-served-line'
+
+echo "== the control: a pin with NO CHECKOUT to judge, NEGLECTED past the bound, must FAIL =="
+must_fail "the unmaterialized twin" "$WORK/neglected-nockeckout" "$NEGLECTED" \
+  "$WORK/subsrc" "$WORK/shas-behind" no 'differs'
+
+echo "== the control: the SAME pin, NO CHECKOUT, advanced RECENTLY, must PASS =="
+must_pass "the unmaterialized twin" "$WORK/recent-nockeckout" "$RECENT" \
+  "$WORK/subsrc" "$WORK/shas-behind" no 'differs'
 
 echo "PIN-CURRENCY-PROOF-OK"

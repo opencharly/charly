@@ -4076,6 +4076,21 @@ sync:
 # What separates churn from neglect is the AGE of this repo's OWN last advance of that
 # path: the distance is churn, the age is neglect.
 #
+# THE CRITERION, in the producer's own words, because "not current" is a SET of
+# classes and "behind" is only the first of them. The control fires on NEGLECT: a
+# `box/*` pin that is NOT CURRENT — `behind`, `not-on-the-served-line` (what a
+# squash-merged upstream produces: its served ref does not descend from the recorded
+# pin, so the recorded pin is not on the served line at all), or `differs` (no
+# checkout to judge it) — AND that this repo has not advanced for longer than this
+# repo's own bound. The org merges by squash in several repos, so the second class
+# is ordinary here, not exotic, and a criterion that named only the first would
+# understate the control exactly where it matters.
+#
+# The measurement below CLASSIFIES every pair, with the same ancestry test the
+# control uses, and prints the tally by class: over the 32-day window all 145
+# not-current pairs are the `behind` class, so in THIS repo's history the two
+# readings coincide — shown, not assumed.
+#
 # THE BOUND IS PLACED BY MEASUREMENT, over this repo's own advance history — the
 # gaps between the commits that recorded each twin's gitlink:
 #   - the longest gap that stayed WITHIN a 7-day bound, i.e. ordinary operation, was
@@ -4106,9 +4121,15 @@ sync:
 # `--since`/`--until` name the window by its dates, and `--bound-hours` re-derives
 # them for any other bound. A chosen number that cannot be re-derived is a guess
 # wearing a measurement's clothes.
+#
+# The measurement's own classifier is proved, by `--self-test`, on a scratch twin
+# with the shapes the control has to tell apart: the proxy "the pin is not the tip,
+# so it is behind" calls a squash-advanced pin `behind`, because the two commits
+# differ, and a tally from a classifier that cannot tell the classes apart is a
+# tally of nothing.
 pin-current:
   task:
-    description: Ask whether every box/* pin is at the ref its intent names, bounded by this repo's own neglect bound (fails only on a pin that is behind AND un-advanced past the bound)
+    description: Ask whether every box/* pin is at the ref its intent names, bounded by this repo's own neglect bound (fails only on a pin that is NOT CURRENT — behind, advanced past the served ref by a squash-merge, or unclassifiable — AND un-advanced past the bound)
     dir: .
     plan:
       - run: ask whether every box/* pin is current, within this repo's own bound on neglect
@@ -4123,13 +4144,20 @@ pin-current:
 #
 # A gate that cannot fail is not a gate: if the bound never bites, the control is a
 # green light that proves nothing, and it teaches every reader that the pin surface
-# is watched. The two arms differ ONLY in the date of the commit that recorded the
-# pin — the same pin, the same distance from the served ref, the same bound — so the
-# verdict flips with the AGE and with nothing else. That is what makes the criterion
-# NEGLECT (the owner's own neglect) rather than DISTANCE (churn).
+# is watched. SIX arms, in three pairs, over THREE twin shapes: a `behind` twin (the
+# served ref descends from the recorded pin), a SQUASH-shaped one (it does not) —
+# the `not-on-the-served-line` class the org's own squash merges produce — and one
+# that is NOT MATERIALIZED, where the pin is not current because there is no
+# checkout to judge it (`differs`). Within each pair the arms differ ONLY in the
+# date of the commit that recorded the pin — the same pin, the same distance from
+# the served ref, the same bound — so the verdict flips with the AGE and with
+# nothing else. That is what makes the criterion NEGLECT (the owner's own neglect)
+# rather than DISTANCE (churn). Covering all three classes is what makes the
+# criterion's own claim true: "not current" is a set, and a proof that exercised
+# one class of it would leave the rest unproven.
 pin-currency-proof:
   task:
-    description: Prove the pin-currency control can fail — a pin behind its served ref AND un-advanced past the bound must be reported STALE and fail, while the same pin advanced recently must pass
+    description: Prove the pin-currency control can fail — a pin that is NOT CURRENT (behind its served ref, advanced past it by a squash-merge, or with no checkout to judge it) AND un-advanced past the bound must be reported STALE and fail, while the same pin advanced recently must pass
     dir: .
     plan:
       - check: the control bites on a neglected pin and stands down on a churned one
