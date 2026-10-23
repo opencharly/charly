@@ -613,6 +613,29 @@ func connectPluginByWord(class ProviderClass, word string) (Provider, bool) {
 	return connectPluginByWordRef(class, word, "", "")
 }
 
+// ensureDeployProviderConnected makes the out-of-process deploy-SUBSTRATE provider for `target`
+// reachable in the registry before any deploy resolution routes to it. It is THE one connect step
+// every deploy path shares — `config`/`start`/`stop`/… (dispatchLifecycleTarget), `charly update`,
+// and `charly deploy add`/`del` (ResolveTarget) — so a deploy name that is NOT already a node in
+// the merged project tree still connects its substrate. Before this, only
+// deployNodePluginContext's auto-inject connected a substrate, and that helper resolves a NAME to
+// a node: a NEW name returned no node, so no substrate ref was injected and ResolveTarget's
+// registry lookup failed with "known substrate but its deploy provider is not connected"
+// (charly#1038) while `config` on the same binary worked.
+//
+// Idempotent by construction: a registry hit is the whole operation, and
+// connectPluginByWordRef re-checks the registry before its baked leg and again before the
+// project scan. It is a no-op for an in-process substrate and for an already-connected plugin.
+func ensureDeployProviderConnected(target string) {
+	if target == "" {
+		return
+	}
+	if _, ok := providerRegistry.ResolveDeploy(target); ok {
+		return
+	}
+	connectPluginByWord(ClassDeployTarget, target)
+}
+
 // connectPluginByWordRef is THE one on-demand plugin-connect entry point for a capability
 // IDENTITY (class:word[:parent]) — the SAME chain every host out-call and every peer invoke uses.
 //
@@ -1085,14 +1108,19 @@ func deployNodePluginContext(dir, name string) (addCandy []spec.ExtraCandyRef, r
 	}
 	// The node's plugin words are collected below (no inSubmodule gate — the Phase-4 cutover
 	// moved every substrate plugin candy out of the main repo, so BOTH main and submodule
-	// contexts need the standalone-repo auto-inject; see the visit loop).
-	// Collect the node's plugin words AND recurse into its nested children: a deploy whose
-	// OWN substrate OR whose nested children's substrates are externalized must load each
-	// serving plugin. Two cases this covers, GENERALLY (never substrate-special-cased):
-	//   - a dotted child deploy (check-arch-vm.arch-host) — node IS the nested child, so its
-	//     OWN target (e.g. `local`) is surfaced + its plugin auto-injected;
-	//   - a single-process tree deploy (a pod root walked in one process, its nested children
-	//     of a DIFFERENT substrate) — the recursion surfaces every child's substrate word.
+	// contexts resolve a substrate word). The SUBSTRATE PROVIDER connect is NOT collected here:
+	// ensureDeployProviderConnected (ResolveTarget) is the one connect step, so this helper only
+	// reports the WORD it must scope the scan on. Recurse into nested children so a bed's
+	// single-process walk still knows every substrate word its members reference.
+	// Collect the node's plugin words AND recurse into its nested children, so the scan is scoped
+	// to every SUBSTRATE WORD the node or any nested child references. Two cases this covers,
+	// GENERALLY (never substrate-special-cased):
+	//   - a dotted child deploy (check-arch-vm.arch-host) — node IS the nested child, so its OWN
+	//     target (e.g. `local`) is surfaced;
+	//   - a single-process tree deploy (a pod root walked in one process, its nested children of a
+	//     DIFFERENT substrate) — the recursion surfaces every child's substrate word.
+	// A word whose plugin candy IS in the project closure loads here; one that is not is connected
+	// lazily at resolution (ensureDeployProviderConnected), so this loop never needs the ref.
 	var visit func(n *spec.DeployNode)
 	visit = func(n *spec.DeployNode) {
 		if n == nil {
@@ -1105,23 +1133,15 @@ func deployNodePluginContext(dir, name string) (addCandy []spec.ExtraCandyRef, r
 		// scope at all, which is why the field is typed (spec#188).
 		addCandy = append(addCandy, spec.ScopedExtraCandyRefs(spec.BoxScope(name), n.AddCandy...)...)
 		if n.Target != "" {
+			// The substrate WORD is the reference the loader scopes on; its PROVIDER is connected
+			// by ensureDeployProviderConnected at ResolveTarget, the ONE connect step every deploy
+			// path shares. This block used to ALSO inject canonicalProviderRef here, a second
+			// connect path that only worked when `name` already resolved to a node — so a NEW
+			// deploy name never connected its substrate (charly#1038) and, when the provider was
+			// already served from a baked binary, the injected ref's project-source connect
+			// collided with it instead of deduplicating. A project that VENDORS the substrate candy
+			// still loads it from this word; one that does not is connected lazily at resolution.
 			refWords = append(refWords, n.Target)
-			// An EXTERNALIZED deploy substrate (vm/local/android/kubernetes) is served by an
-			// out-of-process plugin candy in its STANDALONE repo (the Phase-4 cutover moved every
-			// candy/plugin-deploy-* out of the main repo into opencharly/plugin-deploy-*). Neither
-			// the main repo nor a box/<distro> submodule scans that repo in its own closure — the
-			// main repo's candy/ no longer holds plugin-deploy-* (deleted at the cutover) and a
-			// submodule scans only its own + imported candies — so the substrate word would never
-			// resolve to its provider without the auto-inject. Inject the canonical ref via
-			// ExtraCandyRefs UNCONDITIONALLY (both contexts). In a check bed CHARLY_REPO_OVERRIDE
-			// redirects the ref to the local superproject under development. The SAME
-			// host-side-plugin pattern as the verb:libvirt case, generalized to every external
-			// substrate — the ONE class-agnostic provider-ref lookup (R3).
-			if ref := canonicalProviderRef(ClassDeployTarget, n.Target, "", ""); ref != "" {
-				// A PROVIDER ref, not a composition member: it belongs to no box, so EMPTY scope
-				// (an independent composition — SILENT, never a conflict). Never a constant label.
-				addCandy = append(addCandy, spec.ExtraCandyRef{Ref: ref})
-			}
 		}
 		for i := range n.Plan {
 			op := &n.Plan[i].Op
@@ -1226,10 +1246,9 @@ func resolveDeployNodeByPath(tree map[string]spec.DeployNode, name string) (*spe
 // the local scan is fetched too, and its words are then collected from its plan). The
 // SAME scan + loadProjectPlugins the check runner uses (resolveCheckRunnerContext) and
 // the deploy-add path uses — so deploy add / deploy del / charly update all connect a
-// deployment's plugins identically (R3). For an external deploy SUBSTRATE this is what
-// turns the pre-scanned placeholder word into a connected grpcProvider that
-// ResolveTarget can route to. Discovery and build/connect failures retain their original cause and
-// abort dispatch; warning-and-continue used to mask a failed build as a downstream missing provider.
+// deployment's plugins identically (R3). The SUBSTRATE provider itself is connected by
+// ensureDeployProviderConnected at ResolveTarget (one step shared by every deploy path); this
+// function loads the plugins the deploy's PLAN references plus its add_candy candies.
 //
 // FLOOR-M (Cone A shape 3 adjudication): this function directly drives loadProjectPlugins, which
 // mutates providerRegistry — a clause-M kernel mechanism (plugin loading) that cannot live in a
