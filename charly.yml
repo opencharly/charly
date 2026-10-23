@@ -4038,10 +4038,14 @@ pins:
       MODE:
         description: status|bump|verify|currency (the git-submodules mode)
         default: verify
+      STALE_AFTER:
+        description: the OWNER's bound on its OWN bookkeeping — how long this repo may leave a pin un-advanced before it is NEGLECTED rather than merely behind (empty = no bound; only MODE=currency reads it)
+        default: ""
     plan:
       - run: run git-submodules in the selected mode
         git-submodules:
           mode: "${MODE}"
+          stale_after: "${STALE_AFTER}"
         context: [runtime]
 
 # sync — the named entry point for the advance half: a thin wrapper that SELECTS
@@ -4055,6 +4059,83 @@ sync:
         task:
           task: pins
           param: [MODE=bump]
+        context: [runtime]
+
+# pin-current — the named entry point for the CONTROL half: the thin wrapper that
+# SELECTS the currency mode AND this repo's own bound of the ONE definition above.
+#
+# WHY THE BOUND, and why this does not treat "a twin is behind" as a failure:
+# measured over this repo's own history, a twin is behind the ref its own
+# `.gitmodules` declares for most of the time — over the 32 days from 2026-09-22 to
+# 2026-10-23, each of the six was behind on 17 to 27 of them, and on 28 of the 32
+# (88%) at least one was behind. A busy upstream is behind between every wave, so a
+# gate on the DISTANCE would be red roughly three days out of four. That is the
+# permanently-red gate the org's own pin rule forbids: it trains every reader to
+# ignore it, and then it catches nothing.
+#
+# What separates churn from neglect is the AGE of this repo's OWN last advance of that
+# path: the distance is churn, the age is neglect.
+#
+# THE BOUND IS PLACED BY MEASUREMENT, over this repo's own advance history — the
+# gaps between the commits that recorded each twin's gitlink:
+#   - the longest gap that stayed WITHIN a 7-day bound, i.e. ordinary operation, was
+#     6.4 d (box/cachyos, 2026-07-09 -> 2026-07-16);
+#   - 25 gaps ran PAST it, from 8.0 d (the whole set, 2026-07-08 -> 2026-07-16) to
+#     25.1 d (box/debian and box/ubuntu, 2026-08-29 -> 2026-09-23) — genuine lapses.
+# The bound has to sit ABOVE the healthy maximum — during such a gap the pin is
+# behind and the age grows, so a bound at or below it would fire on ordinary
+# operation — and BELOW the shortest lapse, or it catches nothing. 168h (7 d) is the
+# ONLY whole-day bound strictly between 6.4 d and 8.0 d: 0.6 d above the healthy
+# maximum, 1.0 d below the shortest lapse.
+#
+# The bound is THIS repo's own number. The producer's knob is opt-in and carries no
+# default (unset => no bound at all), so 168 h is a choice this repo made, on this
+# repo's own evidence, and it has to be re-derived when the cadence changes.
+#
+# MEASURED, over the 9 days from 2026-10-15 (the day the leaves' intent landed) to
+# 2026-10-23: this control was red on 6 of them, and on EVERY one of those 6 the
+# twins had genuinely not been advanced — the ages were 7.5 d to 14.7 d, every one
+# of them inside a real lapse: 8.1 d (box/cachyos), 10.2 d (box/arch, box/debian,
+# box/fedora, box/ubuntu) or 15.3 d (box/omarchy). It was green on the 3 days when
+# this repo had advanced within its own cadence. There was no red day on a healthy
+# tree — which is the property the org's pin rule demands of a gate, and the reason
+# the criterion is the age and not the distance.
+#
+# The derivation is a script, not a paragraph: `scripts/measure-pin-cadence.py`
+# reproduces these numbers from this repo's own history and the twins' real remotes,
+# `--since`/`--until` name the window by its dates, and `--bound-hours` re-derives
+# them for any other bound. A chosen number that cannot be re-derived is a guess
+# wearing a measurement's clothes.
+pin-current:
+  task:
+    description: Ask whether every box/* pin is at the ref its intent names, bounded by this repo's own neglect bound (fails only on a pin that is behind AND un-advanced past the bound)
+    dir: .
+    plan:
+      - run: ask whether every box/* pin is current, within this repo's own bound on neglect
+        task:
+          task: pins
+          param: [MODE=currency, STALE_AFTER=168h]
+        context: [runtime]
+
+# pin-currency-proof — the control's own proof that it CAN fail, on a scratch
+# fixture, using the wiring EXTRACTED from the two entities above (so the proof
+# cannot drift from the control it proves).
+#
+# A gate that cannot fail is not a gate: if the bound never bites, the control is a
+# green light that proves nothing, and it teaches every reader that the pin surface
+# is watched. The two arms differ ONLY in the date of the commit that recorded the
+# pin — the same pin, the same distance from the served ref, the same bound — so the
+# verdict flips with the AGE and with nothing else. That is what makes the criterion
+# NEGLECT (the owner's own neglect) rather than DISTANCE (churn).
+pin-currency-proof:
+  task:
+    description: Prove the pin-currency control can fail — a pin behind its served ref AND un-advanced past the bound must be reported STALE and fail, while the same pin advanced recently must pass
+    dir: .
+    plan:
+      - check: the control bites on a neglected pin and stands down on a churned one
+        command: "bash scripts/check-pin-currency.sh"
+        stdout:
+          - contains: PIN-CURRENCY-PROOF-OK
         context: [runtime]
 
 # =============================================================================
@@ -4151,6 +4232,10 @@ check-task:
           # the bed goes RED if the surface is missing (opencharly/charly#936).
           - contains: MODE=currency asks whether every pin is at the ref its intent names
           - contains: Advance this repo's own box/* gitlinks
+          # The control's own proof must be DECLARED too: only the task that carries
+          # this description can print it, so the bed goes RED if the surface is
+          # missing (opencharly/charly#1048).
+          - contains: Prove the pin-currency control can fail
         context:
           - runtime
         command:
@@ -4167,6 +4252,12 @@ check-task:
         task:
           task: pins
           param: [MODE=status]
+        context:
+          - runtime
+      - check: the pin-currency CONTROL's own proof runs end to end through verb:task — a neglected pin must be reported STALE and fail, the same pin advanced recently must pass
+        id: task-pin-currency-proof-runs
+        task:
+          task: pin-currency-proof
         context:
           - runtime
       # --- the workflow-wave additions to candy/plugin-task (B5) ---------------------
