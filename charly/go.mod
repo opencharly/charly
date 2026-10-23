@@ -39,7 +39,7 @@ require (
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026288.1214
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235
-	github.com/opencharly/plugin-init/candy/plugin-init v0.2026272.301
+	github.com/opencharly/plugin-init/candy/plugin-init v0.2026296.1
 	github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026276.1353
 	github.com/opencharly/plugin-interface/candy/plugin-interface v0.2026272.230
 	github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026272.235
@@ -68,7 +68,7 @@ require (
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424
 	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356
-	github.com/opencharly/sdk v0.2026295.1359
+	github.com/opencharly/sdk v0.2026296.8
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -139,7 +139,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026288.804
-	github.com/opencharly/spec v0.2026295.1243
+	github.com/opencharly/spec v0.2026295.2356
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect

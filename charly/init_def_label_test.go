@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 	"text/template"
@@ -178,15 +179,25 @@ func TestEmbeddedVocab_SystemdClaimsEveryUnitTypeItInstalls(t *testing.T) {
 	if asm == "" {
 		t.Fatal("systemd declares no assembly_template")
 	}
+	// The staged-unit DIRECTORY is read from the assembly's own mount TARGET, not
+	// assumed to be /systemd: the target is an implementation detail that already
+	// had to move (BuildKit does not materialize a top-level /system* target —
+	// measured), and a test that pins the literal path breaks on a correct rename
+	// while proving nothing about the semantics.
+	m := regexp.MustCompile(`target=(/[^,\s]+)`).FindStringSubmatch(asm)
+	if m == nil {
+		t.Fatalf("the assembly declares no mount target directory: %s", asm)
+	}
+	unitDir := m[1]
 	// The copy must not be extension-specific: a claimed type the copy misses is
 	// staged into the build context and then dropped on the floor.
-	if strings.Contains(asm, "cp /systemd/*.service ") {
+	if strings.Contains(asm, "cp "+unitDir+"/*.service ") {
 		t.Error("the assembly still copies only *.service, so every other claimed unit " +
 			"type is staged and then never installed")
 	}
 	// Enabling must cover the enableable claimed types...
 	for _, ext := range []string{".service", ".socket", ".target"} {
-		if !strings.Contains(asm, "/systemd/*"+ext) {
+		if !strings.Contains(asm, unitDir+"/*"+ext) {
 			t.Errorf("the assembly never enables %s units, though candy_file: claims them", ext)
 		}
 	}
