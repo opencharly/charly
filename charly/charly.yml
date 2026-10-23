@@ -1997,9 +1997,14 @@ systemd:
             # nullglob-free `[ -e ]` guard is required because an unmatched glob stays
             # literal in sh, and `systemctl enable '/systemd/*.socket'` would fail the
             # build for a candy that ships only services.
-            RUN --mount=type=bind,from=systemd-services,source=/systemd,target=/systemd \
-                cp /systemd/* /usr/lib/systemd/user/ && \
-                for unit in /systemd/*.service /systemd/*.socket /systemd/*.target /systemd/*.timer /systemd/*.path; do \
+            # The mount TARGET is /charly-systemd-units, NOT /systemd: BuildKit
+            # 0.34.1 does not materialize a top-level /system* mount target at all
+            # (measured matrix: /systemd, /systemd2 and /system fail; /xs-systemd,
+            # /etc/systemd and /usr/lib/systemd pass), so the old /systemd target
+            # silently mounted nothing. Same convention as systemd-container below.
+            RUN --mount=type=bind,from=systemd-services,source=/systemd,target=/charly-systemd-units \
+                cp /charly-systemd-units/* /usr/lib/systemd/user/ && \
+                for unit in /charly-systemd-units/*.service /charly-systemd-units/*.socket /charly-systemd-units/*.target /charly-systemd-units/*.timer /charly-systemd-units/*.path; do \
                     [ -e "$unit" ] || continue; \
                     systemctl --global enable "$(basename "$unit")"; \
                 done
@@ -2104,3 +2109,105 @@ systemd:
                 {{- end}}
         requires_capability:
             - preserve_user
+
+systemd-container:
+    init:
+        # A CONTAINER-venue systemd: systemd as the container's PID 1 under
+        # podman/runc on cgroup v2. Peer to supervisord: (the container default)
+        # and systemd: (the machine/bootc init) — but NOT a reuse of systemd:.
+        #
+        # WHY IT IS SEPARATE. `systemd:` is the MACHINE init: it requires
+        # preserve_user (a bootc composition), installs USER units, drives the
+        # manager with `systemctl --user`, and ends with `bootc container lint`.
+        # Every one of those is wrong in a container, where there is no machine
+        # boot, no user manager, and no bootc. This variant installs SYSTEM units,
+        # drives the system manager, and declares the runtime facts a container
+        # engine must be told: root, systemd mode, and SIGRTMIN+3 as the stop
+        # signal. Measured (charly#1027): with those, PID 1 is real systemd, the
+        # hierarchy is real, and a probe unit reaches active (running).
+        #
+        # SELECTION. `requires_capability: [init_system:systemd-container]` is the
+        # init-system HINT key a candy provides with
+        # `capability: {init_system_hint: systemd-container}`. Without that hint
+        # this init is not a candidate at all, so it never assembles into an image
+        # that has no systemd; with it, it is selected over the container default.
+        # A box may also pin it with `init: systemd-container`.
+        candy_field:
+            - service
+        candy_file:
+            - '*.service'
+            - '*.socket'
+            - '*.target'
+            - '*.timer'
+            - '*.path'
+            - '*.slice'
+        requires_capability:
+            - 'init_system:systemd-container'
+        # systemd refuses to run in system mode as a non-root PID 1 (measured:
+        # exit 255 / start-limit-hit). Both the build's final USER and a deploy
+        # overlay read this, so neither restores a non-root USER over the image.
+        requires_root: true
+        # The engine must be told systemd mode is ON (podman --systemd=always):
+        # systemd cgroup subtree, /run tmpfs, SIGRTMIN+3.
+        systemd_mode: true
+        # SIGRTMIN+3 is systemd's `systemctl halt` — the clean shutdown.
+        stop_signal: SIGRTMIN+3
+        # Inherit systemd:'s service_template (and any future field) instead of
+        # copy-pasting the unit stanza — the loader re-parses each entry in
+        # isolation, so a document-level YAML alias cannot work (R2 extraction).
+        extends: systemd
+        model: file_copy
+        fragment_dir: systemd-container
+        stage_name: systemd-container-services
+        stage_fragment_copy: COPY .build/{{.BoxName}}/{{.FragmentDir}}/{{.FileName}} /systemd-container/{{.FileName}}
+        assembly_template: |
+            # Install SYSTEM units. Unlike the machine init's USER-unit copy, these
+            # land in /etc/systemd/system and are enabled into the system manager —
+            # a container has no user manager to hand them to.
+            # NOT /systemd-container as the mount target: BuildKit 0.34.1 does not
+            # materialize a top-level /system* mount target (measured: /systemd,
+            # /systemd2, /system fail; /xs-systemd, /etc/systemd pass). The target is
+            # neutral and nested under no reserved prefix.
+            RUN --mount=type=bind,from=systemd-container-services,source=/systemd-container,target=/charly-systemd-container-units \
+                cp /charly-systemd-container-units/* /etc/systemd/system/ && \
+                for unit in /charly-systemd-container-units/*.service /charly-systemd-container-units/*.socket /charly-systemd-container-units/*.target /charly-systemd-container-units/*.timer /charly-systemd-container-units/*.path; do \
+                    [ -e "$unit" ] || continue; \
+                    systemctl enable "$(basename "$unit")"; \
+                done
+        system_enable_template: |
+            # Enable system-level services
+            RUN{{range $i, $unit := .Units}}{{if $i}} && \
+               {{else}} {{end}}systemctl enable {{$unit}}{{end}}
+        post_assembly_template: |
+            # Container-environment units, masked at BUILD time per
+            # CONTAINERD-IMAGES.md §2 (the lease-image contract):
+            #   * serial-getty@hvc0 — under krun the boot hangs on dev-hvc0.device;
+            #     INERT under runc. The krun arm is NOT claimed here (no handler
+            #     exists yet, charly#1027), so this is carried as the contract's
+            #     mask and is unproven for krun.
+            #   * systemd-udevd — udev in a lease acts on HOST devices.
+            #   * sys-kernel-* — the kernel pseudo-filesystem mounts cannot mount in
+            #     an unprivileged/rootless outer container.
+            # /etc/machine-id is emptied so every lease does not share one identity,
+            # and pid_max is raised for the nested workloads §2 describes.
+            RUN mkdir -p /etc/systemd/system /etc/sysctl.d && \
+                systemctl mask serial-getty@hvc0.service systemd-udevd.service systemd-udevd-control.socket systemd-udevd-kernel.socket sys-kernel-config.mount sys-kernel-debug.mount sys-kernel-tracing.mount && \
+                : > /etc/machine-id && \
+                printf 'kernel.pid_max=32768\n' > /etc/sysctl.d/50-pid-max.conf
+        entrypoint:
+            - /sbin/init
+        fallback_entrypoint:
+            - sleep
+            - infinity
+        management_tool: systemctl
+        management_command:
+            restart: restart {{.Service}}
+            start: start {{.Service}}
+            status: status {{.Service}}
+            stop: stop {{.Service}}
+        label_key: ai.opencharly.service.systemdcontainer
+        service_schema:
+            supports_packaged: true
+            # System scope only: there is no user manager in the container.
+            unit_path_template: /etc/systemd/system/{{.Name}}.service
+            # service_template is INHERITED from systemd: via extends — one source.
