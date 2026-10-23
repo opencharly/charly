@@ -30,10 +30,10 @@
 # materializes no submodule at all). A proof that only exercised `behind` would
 # leave the criterion's own claim unproven for the classes that matter most —
 # which is how a shipped control ends up described by a narrower sentence than the
-# one it implements. So the proof runs SIX arms: the two above over a `behind`
-# twin, the same two over a SQUASH-shaped twin whose served ref does not descend
-# from the recorded pin, and the same two over a twin that is NOT MATERIALIZED,
-# where the pin is not current for the third reason.
+# one it implements. So the proof runs SIX arms, in three pairs: the two above
+# over a `behind` twin, the same two over a SQUASH-shaped twin whose served ref
+# does not descend from the recorded pin, and the same two over a twin that is
+# NOT MATERIALIZED, where the pin is not current for the third reason.
 #
 # The third pair also proves the control's verdict does not depend on the TREE
 # SHAPE: on a tree that materializes nothing, a pin that is not current is still
@@ -130,7 +130,7 @@ fi
 # The fixture: a superproject with ONE pin whose recording commit carries a
 # chosen date. The date is the ONLY variable.
 #
-# TWO twin shapes, because "not current" is a SET of classes:
+# THREE twin shapes, because "not current" is a SET of classes:
 #   subsrc    — the served ref DESCENDS from the recorded pin, so the pin is
 #               `behind` (the ordinary churn shape).
 #   squashsrc — the served ref does NOT descend from the recorded pin, which is
@@ -139,6 +139,10 @@ fi
 #               on a branch of its own, so the clone carries it and the ancestry
 #               question is DECIDABLE (an object the clone lacks would make the
 #               class unjudgeable rather than squash-shaped).
+#   unmaterialized — the SAME subsrc twin with NO CHECKOUT, so there is nothing
+#               to judge the ancestry from and the pin is `differs` (no checkout
+#               to judge ancestry) — the third reason a pin is not current, and
+#               the shape of a light tree.
 # ---------------------------------------------------------------------------
 (
   cd "$WORK" && git init -q -b main subsrc && cd subsrc
@@ -237,28 +241,91 @@ must_pass() {
 NEGLECTED="2020-01-01T00:00:00Z"
 RECENT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-echo "== the control: a pin NEGLECTED past the bound must FAIL =="
-must_fail "the behind twin" "$WORK/neglected-behind" "$NEGLECTED" \
-  "$WORK/subsrc" "$WORK/shas-behind" yes 'behind'
+# ---------------------------------------------------------------------------
+# The arms. ONE table, and the counts the surfaces state are DERIVED from it:
+# a shape added here cannot leave a stale "SIX arms" behind in a surface, and
+# a surface that disagrees with the proof turns the check at the end of this
+# script RED instead of waiting for a reader to notice.
+#
+#   slug | label | source repo | shas file | materialize | expected class | neglected headline
+# ---------------------------------------------------------------------------
+ARM_TABLE=(
+  "behind|the behind twin|$WORK/subsrc|$WORK/shas-behind|yes|behind|a pin NEGLECTED past the bound must FAIL"
+  "squash|the squash twin|$WORK/squashsrc|$WORK/shas-squash|yes|not-on-the-served-line|a SQUASH-shaped twin NEGLECTED past the bound must FAIL"
+  "nockeckout|the unmaterialized twin|$WORK/subsrc|$WORK/shas-behind|no|differs|a pin with NO CHECKOUT to judge, NEGLECTED past the bound, must FAIL"
+)
+SHAPE_COUNT=${#ARM_TABLE[@]}
+ARM_COUNT=$(( SHAPE_COUNT * 2 ))
 
-echo "== the control: the SAME pin, the SAME distance, advanced RECENTLY, must PASS =="
-must_pass "the behind twin" "$WORK/recent-behind" "$RECENT" \
-  "$WORK/subsrc" "$WORK/shas-behind" yes 'behind'
+for row in "${ARM_TABLE[@]}"; do
+  IFS='|' read -r slug label src shas materialize expected headline <<<"$row"
+  echo "== the control: $headline =="
+  must_fail "$label" "$WORK/neglected-$slug" "$NEGLECTED" \
+    "$src" "$shas" "$materialize" "$expected"
 
-echo "== the control: a SQUASH-shaped twin NEGLECTED past the bound must FAIL =="
-must_fail "the squash twin" "$WORK/neglected-squash" "$NEGLECTED" \
-  "$WORK/squashsrc" "$WORK/shas-squash" yes 'not-on-the-served-line'
+  echo "== the control: the SAME pin, the SAME distance, advanced RECENTLY, must PASS =="
+  must_pass "$label" "$WORK/recent-$slug" "$RECENT" \
+    "$src" "$shas" "$materialize" "$expected"
+done
 
-echo "== the control: the SQUASH-shaped twin, advanced RECENTLY, must PASS =="
-must_pass "the squash twin" "$WORK/recent-squash" "$RECENT" \
-  "$WORK/squashsrc" "$WORK/shas-squash" yes 'not-on-the-served-line'
+# ---------------------------------------------------------------------------
+# The surfaces must agree on the control's scope.
+#
+# The numbers the prose states — "SIX arms, in three pairs over three twin
+# shapes" — are checked here against the numbers this proof actually ran, which
+# are derived from the arm table above. This is the control that was MISSING
+# when this change's own surfaces disagreed with each other: nothing ever read
+# them against each other, and the drift was invisible until a reader did.
+#
+# The claim is keyed on its FORM — the arms/pairs pair, and the twin shapes — so
+# a sentence that counts something else is not a hit.
+# ---------------------------------------------------------------------------
+SURFACES=(
+  "$ROOT/AGENTS.md"
+  "$ROOT/charly.yml"
+  "$ROOT/scripts/check-pin-currency.sh"
+  "$ROOT/.github/workflows/pin-currency.yml"
+)
+NUMWORDS='([0-9]+|one|two|three|four|five|six|seven|eight)'
 
-echo "== the control: a pin with NO CHECKOUT to judge, NEGLECTED past the bound, must FAIL =="
-must_fail "the unmaterialized twin" "$WORK/neglected-nockeckout" "$NEGLECTED" \
-  "$WORK/subsrc" "$WORK/shas-behind" no 'differs'
+word_num() { # word_num <a number word, or digits> -> the number, or 0
+  case "$1" in
+    one|1) echo 1 ;; two|2) echo 2 ;; three|3) echo 3 ;; four|4) echo 4 ;;
+    five|5) echo 5 ;; six|6) echo 6 ;; seven|7) echo 7 ;; eight|8) echo 8 ;;
+    *) echo 0 ;;
+  esac
+}
 
-echo "== the control: the SAME pin, NO CHECKOUT, advanced RECENTLY, must PASS =="
-must_pass "the unmaterialized twin" "$WORK/recent-nockeckout" "$RECENT" \
-  "$WORK/subsrc" "$WORK/shas-behind" no 'differs'
+echo "== the surfaces must agree on the control's scope =="
+checked=0
+for f in "${SURFACES[@]}"; do
+  [ -f "$f" ] || continue
+  # The surface is read JOINED: a claim may wrap across lines, and a claim
+  # that wraps is still a claim.
+  joined="$(tr '\n' ' ' < "$f")"
+  while read -r arms pairs; do
+    [ -n "$arms" ] || continue
+    checked=$((checked + 1))
+    if [ "$(word_num "$arms")" != "$ARM_COUNT" ] || [ "$(word_num "$pairs")" != "$SHAPE_COUNT" ]; then
+      echo "FAIL: ${f#"$ROOT"/} states '$arms arms, in $pairs pairs', but this proof runs" \
+           "$ARM_COUNT arms, in $SHAPE_COUNT pairs" >&2
+      exit 1
+    fi
+  done < <(printf '%s' "$joined" \
+           | grep -oiE "$NUMWORDS[[:space:]]+arms,[[:space:]]+in[[:space:]]+$NUMWORDS[[:space:]]+pairs" \
+           | tr 'A-Z' 'a-z' | awk '{print $1, $4}' || true)
+  while read -r shapes; do
+    [ -n "$shapes" ] || continue
+    checked=$((checked + 1))
+    if [ "$(word_num "$shapes")" != "$SHAPE_COUNT" ]; then
+      echo "FAIL: ${f#"$ROOT"/} states '$shapes twin shapes', but this proof runs" \
+           "$SHAPE_COUNT twin shapes" >&2
+      exit 1
+    fi
+  done < <(printf '%s' "$joined" \
+           | grep -oiE "$NUMWORDS[[:space:]]+twin[[:space:]]+shapes" \
+           | tr 'A-Z' 'a-z' | awk '{print $1}' || true)
+done
+echo "   $checked statement(s) of the control's scope, and every one of them agrees"
 
 echo "PIN-CURRENCY-PROOF-OK"

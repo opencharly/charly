@@ -95,7 +95,17 @@ def sh_rc(cmd: str, cwd: str) -> tuple[str, int]:
 # producer treats it as a structural failure of its own, because a pin this
 # repo recorded ahead of what the remote serves is not this repo's neglect, it
 # is a pin that names a commit the repo does not serve.
-STALE_ELIGIBLE = ("behind", "not-on-the-served-line")
+#
+# `unjudgeable` IS eligible, on the producer's OWN reason. Its `differs` class
+# — no checkout to judge the difference — is eligible on the ground that such a
+# pin "is still NOT CURRENT", and the producer's `ancestryClass` has no rc=128
+# branch at all, so today it folds an absent object into `not-on-the-served-line`
+# and prints a causal explanation it never measured (opencharly/plugin-task#32
+# asks for the 128 to be told apart). This script keeps the NAME the producer
+# loses and the JUDGEMENT the producer has: a pair whose objects are missing is
+# not current, so an un-advanced one is neglect. A measurement that dropped the
+# class from its own set would under-count the control's red days.
+STALE_ELIGIBLE = ("behind", "not-on-the-served-line", "unjudgeable")
 
 
 def classify(twin: str, rec: str, served: str) -> str:
@@ -104,10 +114,11 @@ def classify(twin: str, rec: str, served: str) -> str:
     The test is the producer's own: `merge-base --is-ancestor`, read in the
     twin's own git dir, and the EXIT CODE decides. A twin whose object store
     does not carry one of the two commits answers 128 — that pair is reported
-    as `unjudgeable` and never folded into a verdict, because "the objects are
-    not here" is not a claim about the pin. (The producer folds it into
-    `not-on-the-served-line`; that fold is opencharly/plugin-task#32, and it
-    does not bite here — this window holds no unjudgeable pair.)
+    as `unjudgeable`, its OWN class: it is counted as not current, and it keeps
+    its own name, because "the objects are not here" is not a claim about the
+    pin. (The producer folds it into `not-on-the-served-line` and prints a
+    causal explanation it never measured; that fold is opencharly/plugin-task#32,
+    and it does not bite here — this window holds no unjudgeable pair.)
     """
     if rec == served:
         return "cur"
@@ -144,10 +155,15 @@ def self_test() -> int:
     produce. Under that proxy the tally would have said `behind=145` and
     "not current coincides with behind HERE" without ever having asked.
 
-    So the classification is tested where it can be wrong: on a scratch twin
-    built to have the three shapes, each with the (recorded, served) pair the
-    control would judge and the class it must name. The old proxy fails the
-    squash arm; the ancestry test passes all four.
+    So the classification is tested where it can be wrong: on a scratch twin,
+    one arm per class this classifier can return, each with the (recorded,
+    served) pair the control would judge and the class it must name. The old
+    proxy fails the squash arm; the ancestry test passes all five.
+
+    The arms also carry each class's NEGLECT-ELIGIBILITY, because that set is
+    what the measurement does with the class it is handed: a measurement whose
+    eligible set had drifted from the control's would count the control's red
+    days wrongly, and silently — the number would still look like a number.
 
     The fixture is a scratch repo in a temp dir. Nothing here touches a real
     twin, and nothing here reads the operator's git identity.
@@ -189,24 +205,49 @@ def self_test() -> int:
         c3 = git("rev-parse", "HEAD")
         git("checkout", "-q", "-B", "main", c2)
 
+        # A commit the twin's object store does NOT carry: the ancestry question
+        # is undecidable, and git answers 128.
+        missing = "0" * 40
+
         # (recorded, served, expected class, what the shape is)
         arms = [
             (c2, c2, "cur", "the pin IS the served ref"),
             (c1, c2, "behind", "the served ref descends from the recorded pin"),
             (c1, c3, "not-on-the-served-line", "a squash-merge: neither descends from the other"),
             (c2, c1, "unmerged", "the recorded pin is AHEAD of the served ref"),
+            (missing, c2, "unjudgeable", "the recorded commit is not in the twin's object store"),
         ]
+        # The EXPECTED neglect-eligibility of each class — the independent
+        # statement this test checks STALE_ELIGIBLE against. It is deliberately
+        # NOT derived from STALE_ELIGIBLE: a test that recomputed the expected
+        # value from the code under test could not fail, and a test that cannot
+        # fail is not a test. `cur` is never neglect, `unmerged` is the
+        # producer's own structural failure rather than this repo's neglect,
+        # and a pair that is not demonstrably current IS not current.
+        eligible = {
+            "cur": False,
+            "behind": True,
+            "not-on-the-served-line": True,
+            "unmerged": False,
+            "unjudgeable": True,
+        }
         failed = 0
         print("the classifier, on a scratch twin:")
         for rec, served, expected, why in arms:
             got = classify(twin, rec, served)
-            ok = got == expected
-            if not ok:
+            cls_ok = got == expected
+            want_elig = eligible[expected]
+            elig_ok = (got in STALE_ELIGIBLE) == want_elig
+            if not (cls_ok and elig_ok):
                 failed += 1
-            print(f"  {'ok  ' if ok else 'FAIL'}  {expected:24s}  ({why})"
-                  + ("" if ok else f"  — got {got!r}"))
+            note = ""
+            if not cls_ok:
+                note += f"  — got {got!r}"
+            if not elig_ok:
+                note += f"  — neglect-eligible {got in STALE_ELIGIBLE}, expected {want_elig}"
+            print(f"  {'ok  ' if cls_ok and elig_ok else 'FAIL'}  {expected:24s}  ({why}){note}")
         if failed:
-            print(f"\nSELF-TEST FAILED: {failed} arm(s) classified wrongly. The tally this"
+            print(f"\nSELF-TEST FAILED: {failed} arm(s) did not behave as specified. The tally this"
                   "\nscript prints cannot be trusted, and neither can the criterion it"
                   "\nsupports.", file=sys.stderr)
             return 1
@@ -339,7 +380,7 @@ def main() -> int:
     print(f"behind_day_rate:      {len(behind_days)}/{n} = {len(behind_days) / n * 100:.1f}%"
           "  (the legacy criterion: a gate that fails on 'behind' is red on these days)")
     print(f"not_current_day_rate: {len(not_current_days)}/{n} = {len(not_current_days) / n * 100:.1f}%"
-          "  (every class the control judges: behind, not-on-the-served-line, differs)")
+          "  (every class but `cur`: behind, not-on-the-served-line, unmerged, unjudgeable)")
     print(f"stale_day_rate:       {len(stale_days)}/{n} = {len(stale_days) / n * 100:.1f}%"
           "  (the criterion the control ships: not current AND un-advanced past the bound)")
     if classes:

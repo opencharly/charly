@@ -116,9 +116,12 @@ on a schedule.
   cannot fail is not a gate; run it before you trust the control.
 - **The measurement's classifier is proved too.** `scripts/measure-pin-cadence.py
   --self-test` builds a scratch twin with the shapes the control has to tell apart
-  and asserts the class each one earns: `cur`, `behind`, `not-on-the-served-line`
-  and `unmerged`. The proxy this script used to carry — *the pin is not the tip, so
-  it is behind* — calls a squash-advanced pin `behind`, because the two commits
+  and asserts the class each one earns — one arm per class the classifier can
+  return: `cur`, `behind`, `not-on-the-served-line`, `unmerged`, and
+  `unjudgeable` (a pair whose commits the twin's object store does not carry, so
+  the ancestry question is undecidable) — and which of them the control treats as
+  neglect-eligible. The proxy this script used to carry — *the pin is not the tip,
+  so it is behind* — calls a squash-advanced pin `behind`, because the two commits
   differ; the self-test is what says the difference is real, and it is what makes
   the class tally in the measurement readable rather than assumed.
 
