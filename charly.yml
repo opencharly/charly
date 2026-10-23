@@ -5003,3 +5003,40 @@ check-wave-pins:
                     cat "$EV"
                     echo WAVE-VM-LIST-OK
                 in_container: false
+
+# =============================================================================
+# charly-skill-shelf — the concept candy owning the charly CLI's own skills.
+#
+# WHY IT EXISTS (opencharly/sdk#434, operator ruling): a `skill:` node's `owner:` must
+# name a CANDY. This repo's candies are the toolchain (`charly`, `charly-dev`), so a
+# skill about the CLI's own surface has no natural candy owner; this shelf is that
+# owner, the same shape opencharly/sdk and opencharly/spec use (`*-skill-shelf`).
+#
+# It ships no install content, composes no box and appears in no image, so the node
+# below adds NOTHING to any `ai.opencharly.skill` OCI label. The prose is the FILE at
+# `.agents/skills/<name>/SKILL.md`; nothing here inlines a `description:` or a
+# `content:` — an inline body that disagrees with its file is a hard error in the
+# marketplace generator.
+# =============================================================================
+charly-skill-shelf:
+    candy:
+        description: |-
+            Concept candy owning the charly CLI's own skills — the ones whose source of truth
+            is this repo's Go module at `charly/` (`main.go`, `version.go`, the Kong command
+            tree). It ships no install content and composes no image; it carries the `skill:`
+            routing nodes, and the prose lives in `.agents/skills/<name>/SKILL.md`.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the CLI's own skill entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            - check: the shelf candy's skill entities are present and their bodies resolve from the repo root
+              id: charly-skill-shelf-present
+              context:
+                - build
+              command: "true"
+charly-version-skill:
+    skill:
+        name: charly-version
+        family: core
+        owner: charly-skill-shelf
