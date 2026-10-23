@@ -1,0 +1,73 @@
+# The pin-currency control — the gate that stops the #1035/#1048 recurrence.
+#
+# WHAT IT ASKS. `charly task pin-current` asks whether every `box/*` gitlink is at the
+# ref this repo's own `.gitmodules` declares for it — and FAILS only on NEGLECT: a pin
+# that is behind AND that this repo has not advanced for longer than its own bound
+# (168 h). "Behind" alone is CHURN: measured over this repo's own history, each twin is
+# behind on most of the days measured (17 to 27 of the 32 days from 2026-09-22 to
+# 2026-10-23; on 28 of those 32 at least one twin was behind), so a gate on the
+# distance would be red roughly three days out of four — the permanently-red gate the
+# org's own pin rule forbids. The bound is on the age of this repo's own last advance
+# of that path, and it was placed by measurement: the longest gap that stayed within
+# a 7-day bound was 6.4 d, 25 gaps ran past it (8.0 d to 25.1 d), and 168 h (7 d) is
+# the only whole-day bound strictly between those two.
+#
+# WHY IT RUNS TWICE. The pull_request trigger gives the owner the answer while the
+# change is still open; the daily schedule is what catches an upstream merge that
+# happened with no PR at all — the #1035/#1048 recurrence is exactly a merge that
+# nobody was looking for.
+#
+# WHY fetch-depth: 0 IS LOAD-BEARING. The staleness age is read from this repo's OWN
+# history — `git log -1 --format=%ct -- <path>` — and a SHALLOW checkout (the
+# checkout action's default is depth 1) cannot see the last commit that touched a path
+# the tip commit did not touch. The read would come back empty, the verb would report
+# the path as never advanced here, and the control would name a pin STALE on a tree
+# that is perfectly healthy: a false red that teaches everyone to ignore the gate. The
+# full history is what makes the age measurable.
+name: pin-currency
+
+on:
+  pull_request:
+    paths:
+      - 'charly.yml'
+      - '.gitmodules'
+      - 'box/**'
+      - 'charly/go.mod'
+      - '.github/workflows/pin-currency.yml'
+  schedule:
+    # 05:17 UTC daily — off the hour and off the half hour, so this does not pile onto
+    # the same minute as every other scheduled job in the org.
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pin-currency:
+    runs-on: ${{ vars.CI_RUNNER_LABEL || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          # The full history, for the reason in the header: the age of this repo's own
+          # last advance of each box/* path is read out of it, and a depth-1 clone
+          # cannot answer that question for a path the tip commit did not touch.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: charly/go.mod
+          cache-dependency-path: charly/go.sum
+
+      # R9: the control runs the worktree-local, CalVer-stamped binary built from this
+      # tree — never a shared install, and never a released binary that could carry a
+      # different plugin-task pin than the one this tree declares.
+      - name: Build the worktree-local binary (R9)
+        run: ./scripts/bootstrap-charly.sh
+
+      - name: The control's own proof — that it can fail (a neglected pin must go red)
+        run: ./bin/charly task pin-currency-proof
+
+      - name: The control — every box/* pin current, within this repo's own bound on neglect
+        run: ./bin/charly task pin-current

@@ -61,6 +61,57 @@ is a no-op; any generation exception requires RCA and a live schema spike. *Deta
 
 *Detail:* `/charly-internals:go`.
 
+## The pin-currency control
+
+This repo's `box/*` gitlinks are pins, and a pin that is never advanced is a pin that
+drifts. The control that keeps them honest is `charly task pin-current`, run by
+`.github/workflows/pin-currency.yml` on every PR that touches the pin surface and daily
+on a schedule.
+
+- **What it asks.** Whether every `box/*` gitlink is at the ref this repo's own
+  `.gitmodules` declares for it — and it FAILS only on **neglect**: a pin that is not
+  current *and* that this repo has not advanced for longer than its own bound (168 h).
+  "Behind" alone is churn, not neglect: measured over this repo's own history, each of
+  the six `box/*` twins is behind the ref it declares for most of the time — on 17 to 27
+  of the 32 days from 2026-09-22 to 2026-10-23, and on 28 of those 32 (88 %) at least
+  one twin was behind — so a gate on the distance would be red roughly three days out
+  of four. That is the permanently-red gate that trains every reader to ignore it. The
+  bound is on the **age of this repo's own last advance** of that path.
+- **The bound is placed by measurement, not by taste.** Over this repo's own advance
+  history — the gaps between the commits that recorded each twin's gitlink — the
+  longest gap that stayed within a 7-day bound (ordinary operation) was 6.4 d
+  (`box/cachyos`, 2026-07-09 → 2026-07-16), and 25 gaps ran past it, from 8.0 d to
+  25.1 d: genuine lapses. 168 h (7 d) is the **only whole-day bound strictly between
+  those two** — 0.6 d above the healthy maximum, so it does not fire on ordinary
+  operation, and 1.0 d below the shortest lapse, so it catches the neglect. Over the
+  9 days from 2026-10-15 (the day the leaves' intent landed) to 2026-10-23 the control
+  was red on 6 of them, and every one of those was a day the twins had genuinely not
+  been advanced — ages of 8.7 d to 14.7 d, every one inside a lapse of 10.2 d or
+  15.3 d. There was no red day on a healthy tree.
+- **The bound is this repo's own number.** The producer's knob is opt-in and carries
+  no default (unset ⇒ no bound at all), so 168 h is a choice this repo made on this
+  repo's own evidence. Re-derive it when the cadence changes.
+- **The bound is a parameter, not a constant in the rule.** `charly task pins` takes
+  `MODE` (`status|bump|verify|currency`) and `STALE_AFTER`; `pin-current` is the thin
+  wrapper that sets `MODE=currency` and `STALE_AFTER=168h`. Change the bound by changing
+  the wrapper, re-derive it with `scripts/measure-pin-cadence.py --bound-hours <h>`, and
+  say in the PR why the new bound is right.
+- **The only sanctioned advance is `charly task sync`** (the `pins` task with
+  `MODE=bump`). Never hand-pin a gitlink, never check out a branch to "catch up", never
+  write the SHA into the index by hand. The verb advances from the remote and records the
+  pin; a hand-pin cannot be judged and is therefore a failure.
+- **A pin that is behind and REPORTED is not a failure.** The control's message says
+  which pins are behind and which are neglected; only a neglected pin turns it red.
+- **The control proves it can fail.** `charly task pin-currency-proof` runs the control
+  over a scratch fixture with the wiring **extracted from this repo's own
+  `charly.yml`** — a pin behind its served ref and un-advanced since 2020 must go red,
+  and the same pin advanced recently must pass. The two arms differ only in the date of
+  the commit that recorded the pin, so the verdict flips with the age and nothing else.
+  A gate that cannot fail is not a gate; run it before you trust the control.
+
+*Detail:* the umbrella `AGENTS.md` Part II #3 (pins are gitlinks; producer-first; a pin's
+state is `cur`/`behind`/`blocked-by`/`not-on-the-served-line`).
+
 ## Core key rules
 
 - One `charly.yml` generic kind-container uses lowercase hyphenated names and shape-based
