@@ -5030,7 +5030,10 @@ charly-skill-shelf:
               command: "true"
               context:
                 - build
-            - check: the shelf candy's skill entities are present and their bodies resolve from the repo root
+            # validate-satisfying no-op — the assertion is NOT performed by this command; the real
+            # body-existence gate is `charly box validate`, whose CollectSkills path errors with
+            # `skill "<name>": no body …` when a node's SKILL.md is missing (the PR's negative control).
+            - check: validate-satisfying no-op — the body-existence assertion is `charly box validate`, not this step
               id: charly-skill-shelf-present
               context:
                 - build
