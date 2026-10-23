@@ -35,16 +35,20 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// closeClosersFrom closes only the plugin connections registered AFTER `before` was sampled (the
-// delta), so a test can reap the plugin process it started without disturbing a closer that
-// belonged to an earlier test in the same process. Cleanups are LIFO, so the caller registers it
-// AFTER snapshotProviderState for this to run FIRST.
+// registeredCloserCount samples how many plugin connections are live, so a test can close exactly
+// the connections IT adds without disturbing one that belonged to an earlier test in the process.
 func registeredCloserCount() int {
 	providerRegistry.mu.RLock()
 	defer providerRegistry.mu.RUnlock()
 	return len(providerRegistry.closers)
 }
 
+// closeClosersFrom closes only the plugin connections registered AFTER `before` was sampled (the
+// delta), so a test can reap the plugin process it started without disturbing a closer that
+// belonged to an earlier test in the same process. It deliberately leaves the closed entries in
+// the registry slice: snapshotProviderState's LIFO restore replaces that slice, so removing them
+// here would only duplicate the restore's work. Cleanups are LIFO, so the caller registers it
+// AFTER snapshotProviderState for this to run FIRST.
 func closeClosersFrom(before int) error {
 	providerRegistry.mu.Lock()
 	if before > len(providerRegistry.closers) {
