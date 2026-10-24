@@ -24,6 +24,7 @@ github.com/opencharly/plugin-check
 github.com/opencharly/plugin-clean
 github.com/opencharly/plugin-cmd
 github.com/opencharly/plugin-command
+github.com/opencharly/plugin-containerd
 github.com/opencharly/plugin-crabbox
 github.com/opencharly/plugin-cstream
 github.com/opencharly/plugin-dbus
@@ -76,7 +77,6 @@ github.com/opencharly/plugin-media
 github.com/opencharly/plugin-migrate
 github.com/opencharly/plugin-mise
 github.com/opencharly/plugin-mount
-github.com/opencharly/plugin-nerdctl
 github.com/opencharly/plugin-oci
 github.com/opencharly/plugin-ollama
 github.com/opencharly/plugin-omarchy
