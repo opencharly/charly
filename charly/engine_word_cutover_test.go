@@ -102,8 +102,11 @@ func TestProjectDeclaresOnlySpecEngineWords(t *testing.T) {
 // TestPluginRefsIndexUsesContainerdWords — the generated word->provider index is
 // the boundary where a plugin's provider words reach the host. It must serve the
 // new words from the canonical plugin repo and carry none of the retired ones.
+// The canonical plugin repo was RENAMED when the engine word changed, so the
+// ref it serves is the renamed module path; the retired words stay retired
+// either way.
 func TestPluginRefsIndexUsesContainerdWords(t *testing.T) {
-	const wantRef = "github.com/opencharly/plugin-nerdctl/candy/plugin-nerdctl"
+	const wantRef = "github.com/opencharly/plugin-containerd/candy/plugin-containerd"
 
 	for _, word := range []string{"engine:containerd", "verb:containerd", "command:containerd"} {
 		ref, ok := pluginProviderRefs[word]
