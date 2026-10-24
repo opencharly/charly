@@ -29,11 +29,26 @@ func generatedCleanScript(t *testing.T) string {
 // generatedCleanFiles is the fixture's committed set. It is deliberately NOT read from the
 // script's --list: the test asserts --list EQUALS this, so silently dropping a path from
 // the guard (weakening it) fails here instead of passing unnoticed.
+//
+// It carries a TRACKED go.work.sum even though this repo no longer tracks one: the fixture
+// is a synthetic repo for exercising the guard, and a tracked-and-drifted workspace sum is
+// the only shape that proves the "inconsistent go.work.sum" class is GONE rather than
+// dormant — an untracked file never trips a `git diff` class either way.
 var generatedCleanFiles = []string{
 	"go.work",
 	"go.work.sum",
 	"charly/plugins_generated.go",
 	"charly/plugins_refs_generated.go",
+}
+
+// runGitIn runs a git command in dir and fails the test if it does not succeed.
+func runGitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
 }
 
 // generatedCleanFixture builds a temp git repo holding those four files, committed and
@@ -44,14 +59,7 @@ func generatedCleanFixture(t *testing.T) string {
 		t.Skip("git not on PATH")
 	}
 	dir := t.TempDir()
-	runGit := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
-		}
-	}
+	runGit := func(args ...string) { runGitIn(t, dir, args...) }
 	runGit("init", "-q")
 	runGit("config", "user.email", "t@example.com")
 	runGit("config", "user.name", "Test")
@@ -124,7 +132,6 @@ func TestGeneratedCleanScriptClassifiesEveryRewrittenFile(t *testing.T) {
 	}
 	want := []string{
 		"inconsistent go.work",
-		"inconsistent go.work.sum",
 		"inconsistent charly/plugins_generated.go",
 		"upstream charly/plugins_refs_generated.go",
 	}
@@ -147,7 +154,7 @@ func TestGeneratedCleanScriptClassifiesEveryRewrittenFile(t *testing.T) {
 // leaves the file ALONE, because the remedy is a human decision to review and commit it.
 func TestGeneratedCleanScriptFailsOnInconsistentDrift(t *testing.T) {
 	dir := generatedCleanFixture(t)
-	for _, rel := range []string{"go.work", "go.work.sum", "charly/plugins_generated.go"} {
+	for _, rel := range []string{"go.work", "charly/plugins_generated.go"} {
 		writeGeneratedCleanFile(t, dir, rel, "# drift "+rel+"\n")
 		got := runGeneratedCleanScript(t, dir)
 		if got.code != 1 {
@@ -164,6 +171,41 @@ func TestGeneratedCleanScriptFailsOnInconsistentDrift(t *testing.T) {
 		}
 		// Restore the fixture for the next iteration.
 		writeGeneratedCleanFile(t, dir, rel, committedBody(rel))
+	}
+}
+
+// TestGeneratedCleanScriptDoesNotClassifyTheWorkspaceSum pins the deliberate drop of the
+// "inconsistent go.work.sum" class (opencharly/charly#1065): the workspace has ONE member,
+// whose go.sum carries every hash, so the workspace has no checksum lock of its own — the
+// tracked file was a fossil of the pre-cutover multi-member workspace, where 134 of its
+// 180 lines named a version no lock in this repo carries. The guard classifies the TRACKED
+// files the build rewrites, and a file this repo does not track is not its business, so a
+// tracked-and-drifted go.work.sum in the tree must NOT fail the run. The control that owns
+// the fact is TestWorkspaceHasOneMemberAndNoSumFile
+// (charly/internal/pluginsgen/main_test.go), which fails if the file sits beside go.work at
+// all — tracked or not.
+//
+// The fixture keeps go.work.sum TRACKED and drifted on purpose: an untracked file would
+// never trip the old class either (`git diff` ignores untracked paths), so only a tracked
+// one proves the class is gone rather than merely dormant.
+//
+// The drift is left UNSTAGED, deliberately. The guard compares the WORKING TREE against the
+// INDEX (`git diff --quiet -- <path>`), so a staged drift is invisible to it: with the drift
+// staged, the guard would see nothing to classify and this test would pass whether or not
+// the class existed — a test that cannot fail is invalid (R7). Unstaged, the guard sees the
+// drift, and the class would fail the run and name the file; with the class gone, the guard
+// never looks at go.work.sum and the run is clean. That is the discrimination.
+func TestGeneratedCleanScriptDoesNotClassifyTheWorkspaceSum(t *testing.T) {
+	dir := generatedCleanFixture(t)
+	const rel = "go.work.sum"
+	writeGeneratedCleanFile(t, dir, rel, "# drift "+rel+"\n")
+
+	got := runGeneratedCleanScript(t, dir)
+	if got.code != 0 {
+		t.Fatalf("a drifted go.work.sum: exit = %d, want 0 — the workspace sum is not a class any more (opencharly/charly#1065)\nstderr: %s", got.code, got.stderr)
+	}
+	if strings.Contains(got.stdout+got.stderr, rel) {
+		t.Errorf("a drifted go.work.sum: the guard named it\nstdout: %s\nstderr: %s", got.stdout, got.stderr)
 	}
 }
 

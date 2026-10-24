@@ -80,6 +80,47 @@ func TestPluginsGenReproducible(t *testing.T) {
 	}
 }
 
+// TestWorkspaceHasOneMemberAndNoSumFile pins the committed workspace's shape, and it owns
+// the fact opencharly/charly#1065 filed: the workspace has exactly ONE member, so its build
+// list IS that member's build list, and every hash that build needs is already in
+// charly/go.sum — the workspace has no checksum lock of its own.
+//
+// go.work.sum was that lock, and it was a FOSSIL: a lock nobody prunes rots silently, and
+// 134 of its 180 lines named a version no lock in this repo carries. It is deleted, and
+// this gate keeps it gone — the file must not sit beside go.work, tracked or not, because a
+// tracked one is a lock that lies about what the build needs, and an untracked one is the
+// same rot with a shorter fuse. The workspace's checksum story lives in the member's
+// go.sum, where `go mod tidy` writes it and the module lock can prune it.
+//
+// The measurement behind the deletion: with a FRESH module cache (401 MB downloaded from
+// the proxy), `go list -test -deps ./...` over the member resolved every package and
+// wrote no workspace sum — the member's go.sum carried every hash.
+func TestWorkspaceHasOneMemberAndNoSumFile(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	work, err := os.ReadFile(filepath.Join(root, "go.work"))
+	if err != nil {
+		t.Fatalf("read go.work: %v", err)
+	}
+	var members []string
+	for _, line := range strings.Split(string(work), "\n") {
+		if fields := strings.Fields(line); len(fields) == 2 && fields[0] == "use" {
+			members = append(members, fields[1])
+		}
+	}
+	if len(members) != 1 {
+		t.Fatalf("go.work has %d member(s) (%v), want exactly 1 — the workspace's checksum lock is empty only while the workspace IS one member's build list, and a second member is how the go.work.sum fossil came back (opencharly/charly#1065)", len(members), members)
+	}
+	if want := "./charly"; members[0] != want {
+		t.Errorf("go.work's member is %q, want %q", members[0], want)
+	}
+	sum := filepath.Join(root, "go.work.sum")
+	if _, err := os.Stat(sum); err == nil {
+		t.Errorf("%s sits beside go.work — the single member's go.sum carries every hash the build needs, so the workspace has no checksum lock of its own (opencharly/charly#1065). Delete it.", sum)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat %s: %v", sum, err)
+	}
+}
+
 // TestPluginsRefsIndexSound gates the committed word->ref index on the only invariant that
 // is TRUE of a projection of a moving upstream: every word it names must STILL be served by
 // that same ref.
