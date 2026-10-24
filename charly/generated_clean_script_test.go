@@ -188,11 +188,17 @@ func TestGeneratedCleanScriptFailsOnInconsistentDrift(t *testing.T) {
 // The fixture keeps go.work.sum TRACKED and drifted on purpose: an untracked file would
 // never trip the old class either (`git diff` ignores untracked paths), so only a tracked
 // one proves the class is gone rather than merely dormant.
+//
+// The drift is left UNSTAGED, deliberately. The guard compares the WORKING TREE against the
+// INDEX (`git diff --quiet -- <path>`), so a staged drift is invisible to it: with the drift
+// staged, the guard would see nothing to classify and this test would pass whether or not
+// the class existed — a test that cannot fail is invalid (R7). Unstaged, the guard sees the
+// drift, and the class would fail the run and name the file; with the class gone, the guard
+// never looks at go.work.sum and the run is clean. That is the discrimination.
 func TestGeneratedCleanScriptDoesNotClassifyTheWorkspaceSum(t *testing.T) {
 	dir := generatedCleanFixture(t)
 	const rel = "go.work.sum"
 	writeGeneratedCleanFile(t, dir, rel, "# drift "+rel+"\n")
-	runGitIn(t, dir, "add", rel)
 
 	got := runGeneratedCleanScript(t, dir)
 	if got.code != 0 {
