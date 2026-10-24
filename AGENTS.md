@@ -101,14 +101,29 @@ on a schedule.
   `MODE=bump`). Never hand-pin a gitlink, never check out a branch to "catch up", never
   write the SHA into the index by hand. The verb advances from the remote and records the
   pin; a hand-pin cannot be judged and is therefore a failure.
-- **A pin that is behind and REPORTED is not a failure.** The control's message says
-  which pins are behind and which are neglected; only a neglected pin turns it red.
+- **A pin that is not current and REPORTED is not a failure.** The control's message says
+  which pins are not current and which are neglected; only a neglected pin turns it red.
 - **The control proves it can fail.** `charly task pin-currency-proof` runs the control
   over a scratch fixture with the wiring **extracted from this repo's own
-  `charly.yml`** — a pin behind its served ref and un-advanced since 2020 must go red,
-  and the same pin advanced recently must pass. The two arms differ only in the date of
-  the commit that recorded the pin, so the verdict flips with the age and nothing else.
-  A gate that cannot fail is not a gate; run it before you trust the control.
+  `charly.yml`** — a pin not current and un-advanced since 2020 must go red, and the
+  same pin advanced recently must pass. It runs SIX arms, in three pairs over three
+  twin shapes: a `behind` twin, a **squash-shaped** one whose served ref does not
+  descend from the recorded pin (the `not-on-the-served-line` class the org's own
+  squash merges produce), and one that is **not materialized** (the `differs` class —
+  not current because there is no checkout to judge it, which is the shape of a light
+  tree). Within each pair the arms differ only in the date of the commit that
+  recorded the pin, so the verdict flips with the age and nothing else. A gate that
+  cannot fail is not a gate; run it before you trust the control.
+- **The measurement's classifier is proved too.** `scripts/measure-pin-cadence.py
+  --self-test` builds a scratch twin with the shapes the control has to tell apart
+  and asserts the class each one earns — one arm per class the classifier can
+  return: `cur`, `behind`, `not-on-the-served-line`, `unmerged`, and
+  `unjudgeable` (a pair whose commits the twin's object store does not carry, so
+  the ancestry question is undecidable) — and which of them the control treats as
+  neglect-eligible. The proxy this script used to carry — *the pin is not the tip,
+  so it is behind* — calls a squash-advanced pin `behind`, because the two commits
+  differ; the self-test is what says the difference is real, and it is what makes
+  the class tally in the measurement readable rather than assumed.
 
 *Detail:* the umbrella `AGENTS.md` Part II #3 (pins are gitlinks; producer-first; a pin's
 state is `cur`/`behind`/`blocked-by`/`not-on-the-served-line`).
