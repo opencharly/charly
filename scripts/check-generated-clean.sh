@@ -37,9 +37,16 @@ set -euo pipefail
 
 # The ONE canonical list. TestGeneratedCleanScript (charly/generated_clean_script_test.go)
 # reads it back with --list instead of restating it, and fails if an entry is dropped.
+#
+# It lists TRACKED files only. go.work.sum was on it until opencharly/charly#1065: the
+# workspace has ONE member, whose go.sum carries every hash, so the workspace has no
+# checksum lock of its own — the file was a fossil of the pre-cutover multi-member
+# workspace, and a lock nobody prunes rots silently. It is deleted, and the control that
+# owns the fact is TestWorkspaceHasOneMemberAndNoSumFile
+# (charly/internal/pluginsgen/main_test.go), which fails if the file sits beside go.work at
+# all — tracked or not. A file that is not tracked is not this guard's business.
 CLASSES=(
   "inconsistent go.work"
-  "inconsistent go.work.sum"
   "inconsistent charly/plugins_generated.go"
   "upstream charly/plugins_refs_generated.go"
 )

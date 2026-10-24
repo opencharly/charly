@@ -293,7 +293,8 @@ placements, ZERO authoring change.
   require, so a stock binary runs the PUBLISHED candy and no bed can fail on your edit.
   `scripts/bootstrap-charly.sh --dev-plugin <candy-name>=<repo-checkout>` (repeatable) makes `pluginsgen`
   read that repo from the checkout instead and emits a SEPARATE `go.work.dev` selected only under an
-  explicit `GOWORK=` (the committed `go.work`/`go.work.sum` stay byte-identical; a later build WITHOUT the
+  explicit `GOWORK=` (the committed `go.work` stays byte-identical — it has ONE member, whose `go.sum`
+  carries every hash, so the workspace has no checksum lock of its own; a later build WITHOUT the
   flag deletes it, and `--install` is refused). It validates the name is in `compiled_plugins:` and that
   `candy/<name>/go.mod` declares module `github.com/opencharly/<name>/candy/<name>`. Then prove the changed
   path EXECUTED — `go version -m` (`(devel)` vs the module-proxy tag) is necessary but not sufficient; a

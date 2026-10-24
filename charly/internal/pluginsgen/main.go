@@ -618,7 +618,8 @@ func resolveDevPlugins(devs []devPlugin) (map[string]string, error) {
 // looks for exactly `go.work`) and is selected only by an explicit GOWORK=; and Go keys a
 // workspace's checksum lock off the WORKSPACE FILE PATH (the workspace sum file is
 // <go.work path> + ".sum"), so a dev build's lock lands in go.work.dev.sum and the committed
-// go.work / go.work.sum stay byte-identical.
+// go.work stays byte-identical. The committed workspace carries no checksum lock of its own:
+// it has ONE member, whose go.sum holds every hash (opencharly/charly#1065).
 func devWorkspace(goVer string, devRoots map[string]string) []byte {
 	if len(devRoots) == 0 {
 		return nil
@@ -636,11 +637,12 @@ func devWorkspace(goVer string, devRoots map[string]string) []byte {
 	w.WriteString("// NOT A RELEASE BUILD: each module below resolves from a LOCAL checkout instead of its\n")
 	w.WriteString("// pinned module-proxy tag, so a bed run on this binary exercises UNMERGED plugin source.\n")
 	w.WriteString("//\n")
-	w.WriteString("// The committed workspace is untouched and so is its checksum lock: `go build` auto-detects\n")
-	w.WriteString("// only a file named exactly go.work, so this one is used only under an explicit GOWORK=,\n")
-	w.WriteString("// and a workspace's sum file is its own path + \".sum\" (go.work.dev.sum). A plain build\n")
-	w.WriteString("// never reads this file, and scripts/bootstrap-charly.sh DELETES it (with its lock) the\n")
-	w.WriteString("// first time it runs without an override.\n")
+	w.WriteString("// The committed workspace is untouched: `go build` auto-detects only a file named exactly\n")
+	w.WriteString("// go.work, so this one is used only under an explicit GOWORK=, and a workspace's sum file\n")
+	w.WriteString("// is its own path + \".sum\" (go.work.dev.sum — the dev build's OWN lock; the committed\n")
+	w.WriteString("// workspace has none, because it has ONE member whose go.sum carries every hash). A plain\n")
+	w.WriteString("// build never reads this file, and scripts/bootstrap-charly.sh DELETES it (with its lock)\n")
+	w.WriteString("// the first time it runs without an override.\n")
 	w.WriteString("//\n")
 	w.WriteString("// Overridden:\n")
 	for _, n := range names {
