@@ -53,8 +53,13 @@ defaults:
     # Build-speed tunables (project-wide). Precedence: CLI flag / env wins,
     # then these defaults, then a built-in fallback. See /charly-build:build.
     jobs: 4 # outer: concurrent IMAGE builds per DAG level (--jobs / CHARLY_BUILD_JOBS)
-    podman_jobs: 0 # inner: stages per `podman build`; 0 = auto = min(NCPU, podman_jobs_cap)
-    podman_jobs_cap: 8 # ceiling for the auto calc — proven safe on podman 5.8.2 (20-run race gate)
+    stage_parallelism: 0 # inner: stages of ONE build; 0 = auto = min(NCPU, stage_parallelism_cap)
+    stage_parallelism_cap: 4 # ceiling for the auto calc. The builder is BuildKit: the resolved
+    # value is the DAEMON's [worker.oci] max-parallelism
+    # (candy/plugin-build/buildkit.go) — set at daemon START and host-global per uid, so it
+    # applies only when it matches the value the running daemon was started with. 4 is the
+    # sdk's conservative fallback (sdk/buildkit/build_helpers.go) and the value the org's
+    # builds run at today; the podman-era cap of 8 does not carry over to BuildKit.
     # Heavy directories never COPYed by any Containerfile — merged into the
     # generated .containerignore/.dockerignore on top of the built-in baseline
     # (.git, bin, charly, *.md, editor/python/node cache-bust globs).
