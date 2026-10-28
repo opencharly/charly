@@ -4032,11 +4032,11 @@ push:
 # =============================================================================
 pins:
   task:
-    description: The pin operation over this repo's own box/* gitlinks (mode via param) — MODE=currency asks whether every pin is at the ref its intent names, and its Message IS the answer
+    description: The pin operation over this repo's own box/* gitlinks (mode via param) — MODE=bump advances EVERY pin this repo declares and does not commit, MODE=currency asks whether every pin is at the ref its intent names, and its Message IS the answer
     dir: .
     params:
       MODE:
-        description: status|bump|verify|currency (the git-submodules mode)
+        description: status|bump|verify|currency (the git-submodules mode) — bump advances EVERY pin this repo declares and does not commit
         default: verify
       STALE_AFTER:
         description: the OWNER's bound on its OWN bookkeeping — how long this repo may leave a pin un-advanced before it is NEGLECTED rather than merely behind (empty = no bound; only MODE=currency reads it)
@@ -4050,12 +4050,22 @@ pins:
 
 # sync — the named entry point for the advance half: a thin wrapper that SELECTS
 # the mode of the ONE definition above, so the pin operation exists exactly once.
+#
+# WHAT IT DOES, in the words a reader needs BEFORE running it: it advances EVERY
+# pin this repo declares — this repo's own six `box/*` gitlinks, which are all the
+# pins it has (there is no `pin_map`, so there is no edge) — to the tip the remote
+# serves for the ref each path's own `.gitmodules` entry names, NEVER a PR branch.
+# It is not a report: a path that HAS a checkout is ROLLED in that checkout and
+# every advance is STAGED in this repo's index, while a path with NO checkout is
+# advanced in the index alone. It does not commit and it does not open a PR, and it
+# FAILS LOUD for every path it could not advance — a sync over a tree it could not
+# fully advance must never report success.
 sync:
   task:
-    description: Advance this repo's own box/* gitlinks to each distro's default-branch HEAD (preview only; does not commit)
+    description: Advance EVERY pin this repo declares — this repo's own box/* gitlinks — to the tip the remote serves for the ref each path's own .gitmodules entry names, never a PR branch; it rolls the checkouts that exist and stages their gitlinks, and it does not commit and does not open a PR
     dir: .
     plan:
-      - run: advance the box/* pins to the refs their intent names
+      - run: advance EVERY pin this repo declares to the ref its intent names
         task:
           task: pins
           param: [MODE=bump]
@@ -4166,6 +4176,62 @@ pin-currency-proof:
           - contains: PIN-CURRENCY-PROOF-OK
         context: [runtime]
 
+# pin-verb-scope — the control over this repo's OWN pin-advance claim.
+#
+# The `sync` task's own description used to call the advance a non-mutating
+# kind: it said the advance changed nothing, and that it did not commit. The
+# first half was FALSE — the verb advances EVERY pin this repo declares, rolls
+# the checkouts that exist and stages their gitlinks (opencharly/charly#1079) —
+# and an operator who read that line would have run a wave they believed was a
+# report.
+#
+# A claim that is wrong once is a claim that is wrong until something checks
+# it, so the claim gets a control — and the control lives HERE, because this
+# repo declares the pins and owns the wording about them. The umbrella's own
+# gate for the same rule says, in its own header, that it speaks for the
+# UMBRELLA's prose only: "a submodule is a repo of its own, with its own
+# rulebook and its own gates".
+#
+# THREE arms over this repo's own tracked tree:
+#   SCOPE         every claim-maker surface states that the advance touches
+#                 EVERY pin this repo declares (the CLAIM, not the keyword:
+#                 "every" alone also matches a question about currency);
+#   NO RETIRED    no tracked file calls the advance a non-mutating kind;
+#   COVERAGE      every file that NAMES the verb is classified, so a new
+#                 claim-maker surface cannot slip in unclassified.
+# The surfaces are located by STRUCTURAL anchors, so a surface that MOVES is a
+# finding rather than a silent pass.
+pin-verb-scope:
+  task:
+    description: Check this repo's own pin-advance claim — every claim-maker surface must state that the advance touches EVERY pin this repo declares, and no tracked file may call the advance a non-mutating kind
+    dir: .
+    plan:
+      - check: every pin-advance claim in this repo states its scope, and no tracked file calls the advance a non-mutating kind
+        command: "python3 -I scripts/check-pin-verb-scope.py"
+        stdout:
+          - contains: PIN-VERB-SCOPE-OK
+        context: [runtime]
+
+# pin-verb-scope-proof — the control's own proof that it CAN fail.
+#
+# A gate that cannot fail is a green light that proves nothing. The self-test
+# turns each of the control's arms RED on its own mutation: a surface that
+# drops the scope, a surface whose line is gone, a tracked file that calls the
+# advance a non-mutating kind — including the EXACT wording this issue was
+# filed about — a file that names the verb without being classified, and a
+# classification that has gone stale. The shipped tree must be GREEN in the
+# same run, so the arms are discriminating rather than merely loud.
+pin-verb-scope-proof:
+  task:
+    description: Prove the pin-verb-scope control can fail — every arm must go red on its own mutation, including the retired wording this issue is about, while the shipped tree stays green
+    dir: .
+    plan:
+      - check: the control bites on every arm it claims to cover
+        command: "python3 -I scripts/check-pin-verb-scope.py --self-test"
+        stdout:
+          - contains: 'check-pin-verb-scope --self-test: OK'
+        context: [runtime]
+
 # =============================================================================
 # check-task-app + check-task — the R10 witness for the compiled-in `charly task`
 # surface (candy/plugin-task: kind:task / command:task / verb:task).
@@ -4259,11 +4325,18 @@ check-task:
           # string below can only be printed by the task entity that carries it, so
           # the bed goes RED if the surface is missing (opencharly/charly#936).
           - contains: MODE=currency asks whether every pin is at the ref its intent names
-          - contains: Advance this repo's own box/* gitlinks
+          # The advance half's own description must state its SCOPE and its TARGET:
+          # the verb advances EVERY pin this repo declares, to the tip the remote
+          # serves for the ref each path's own .gitmodules entry names
+          # (opencharly/charly#1079).
+          - contains: Advance EVERY pin this repo declares
+          - contains: to the tip the remote serves for the ref each path's own .gitmodules entry names
           # The control's own proof must be DECLARED too: only the task that carries
           # this description can print it, so the bed goes RED if the surface is
           # missing (opencharly/charly#1048).
           - contains: Prove the pin-currency control can fail
+          # And so must the SCOPE control's own proof (opencharly/charly#1079).
+          - contains: Prove the pin-verb-scope control can fail
         context:
           - runtime
         command:
@@ -4286,6 +4359,16 @@ check-task:
         id: task-pin-currency-proof-runs
         task:
           task: pin-currency-proof
+        context:
+          - runtime
+      - check: the pin-verb-scope CONTROL itself runs green on the tree the bed just realized — every claim-maker surface in it states its scope, and no tracked file calls the advance a non-mutating kind
+        id: task-pin-verb-scope-runs
+        task:
+          task: pin-verb-scope
+      - check: the pin-verb-scope CONTROL's own proof runs end to end through verb:task — every arm must go red on its own mutation, and the shipped tree must stay green
+        id: task-pin-verb-scope-proof-runs
+        task:
+          task: pin-verb-scope-proof
         context:
           - runtime
       # --- the workflow-wave additions to candy/plugin-task (B5) ---------------------

@@ -1,0 +1,66 @@
+# The pin-advance SCOPE control — the gate that stops a false claim about this
+# repo's own pin advance from coming back (opencharly/charly#1079).
+#
+# WHAT IT ASKS. `scripts/check-pin-verb-scope.py` reads this repo's own tracked
+# tree and asks three things:
+#   SCOPE      every claim-maker surface — the `sync` task's description and step
+#              name, the `pins` task's description and its MODE parameter, and the
+#              two AGENTS.md bullets — states that the advance touches EVERY pin
+#              this repo declares;
+#   RETIRED    no tracked file calls the advance a non-mutating kind (a preview, a
+#              dry run, a read-only report). It is not one: the verb advances every
+#              declared pin, rolls the checkouts that exist and stages their
+#              gitlinks;
+#   COVERAGE   every file that NAMES the verb is classified, so a new claim-maker
+#              surface cannot slip in unclassified.
+# The surfaces are located by STRUCTURAL anchors, so a surface that MOVES is a
+# finding rather than a silent pass.
+#
+# WHY IT IS ITS OWN WORKFLOW, and not a step of pin-currency.yml: the currency
+# control and this control answer different questions — one watches the PINS, the
+# other watches the WORDS about the advance — and this one needs neither a Go
+# build nor a submodule checkout, so it stays fast and its trigger can be exactly
+# the claim's own surface.
+#
+# WHY THE CONTROL RUNS AS A SCRIPT HERE, and not through `charly task`: the task
+# (`pin-verb-scope`) is the OPERATOR's interface, and it is witnessed by the
+# check-task R10 bed; the script IS the control, and a CI gate should run the
+# control itself.
+#
+# WHY fetch-depth IS NOT LOAD-BEARING HERE, the way it is in pin-currency.yml: the
+# control reads the INDEX (`git ls-files`) and the working tree — it asks what this
+# repo CLAIMS now, not what it once claimed — so no history is needed.
+#
+# WHAT THIS GATE IS NOT: a LOAD gate. The control reads `charly.yml` as TEXT, so a
+# manifest that cannot load would leave it green — measured, on this change: a
+# `stdout:` assertion whose plain scalar carried ": " made the whole project
+# unloadable while the control stayed green (opencharly/charly#1079's own gate run
+# caught it, in `charly task list`). The manifest's LOADABILITY has its own control
+# and always had one: the pin-currency workflow runs `charly task pin-current` on
+# every PR that touches `charly.yml`, so a manifest that cannot load is red THERE.
+# This gate asks the claim's question; that one asks the manifest's.
+name: pin-verb-scope
+
+on:
+  pull_request:
+    paths:
+      - 'charly.yml'
+      - 'AGENTS.md'
+      - 'scripts/check-pin-verb-scope.py'
+      - '.github/workflows/pin-verb-scope.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pin-verb-scope:
+    runs-on: ${{ vars.CI_RUNNER_LABEL || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: The control — every pin-advance claim in this repo states its scope
+        run: python3 -I scripts/check-pin-verb-scope.py
+
+      - name: The control's own proof — that every arm can fail
+        run: python3 -I scripts/check-pin-verb-scope.py --self-test
