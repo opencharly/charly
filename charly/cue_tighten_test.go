@@ -207,7 +207,7 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 			candy(candyHead + candyPlan + "  extract:\n  - source: img:tag\n    path: /a\n    dest: rel\n"), true},
 		{"box a retired version field rejected (closedness)", "box",
 			"name: x\nbase: y\nversion: 2026.150.0000\n", true},
-		// --- cutover #9: box jobs>=1 / podman_jobs_cap>=1 (replaces validateBuildTunables range) ---
+		// --- cutover #9: box jobs>=1 / stage_parallelism_cap>=1 (replaces validateBuildTunables range) ---
 		{"box jobs zero rejected", "box",
 			"name: x\nbase: y\njobs: 0\n", true},
 		{"box jobs valid accepted", "box",
