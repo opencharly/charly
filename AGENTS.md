@@ -93,14 +93,17 @@ on a schedule.
   no default (unset ⇒ no bound at all), so 168 h is a choice this repo made on this
   repo's own evidence. Re-derive it when the cadence changes.
 - **The bound is a parameter, not a constant in the rule.** `charly task pins` takes
-  `MODE` (`status|bump|verify|currency`) and `STALE_AFTER`; `pin-current` is the thin
+  `MODE` (`status|bump|verify|currency` — `bump` advances EVERY pin this repo declares
+  and does not commit) and `STALE_AFTER`; `pin-current` is the thin
   wrapper that sets `MODE=currency` and `STALE_AFTER=168h`. Change the bound by changing
   the wrapper, re-derive it with `scripts/measure-pin-cadence.py --bound-hours <h>`, and
   say in the PR why the new bound is right.
 - **The only sanctioned advance is `charly task sync`** (the `pins` task with
   `MODE=bump`). Never hand-pin a gitlink, never check out a branch to "catch up", never
-  write the SHA into the index by hand. The verb advances from the remote and records the
-  pin; a hand-pin cannot be judged and is therefore a failure.
+  write the SHA into the index by hand. The verb advances EVERY pin this repo declares
+  from the remote and records the pin — it rolls the checkouts that exist and stages
+  their gitlinks, and it does not commit; a hand-pin cannot be judged and is therefore a
+  failure.
 - **A pin that is not current and REPORTED is not a failure.** The control's message says
   which pins are not current and which are neglected; only a neglected pin turns it red.
 - **The control proves it can fail.** `charly task pin-currency-proof` runs the control
@@ -127,6 +130,37 @@ on a schedule.
 
 *Detail:* the umbrella `AGENTS.md` Part II #3 (pins are gitlinks; producer-first; a pin's
 state is `cur`/`behind`/`blocked-by`/`not-on-the-served-line`).
+
+## The pin-advance claim control
+
+The `sync` task's own description used to call the advance a non-mutating kind — it
+said the advance changed nothing, and that it did not commit — and the FIRST half was
+FALSE: the verb advances every pin this repo declares, rolls the checkouts that exist
+and stages their gitlinks. An operator who read that line would have run a wave they
+believed was a report. The control that keeps the claim true lives in this repo,
+because this repo declares the pins and owns the words about them — the umbrella's
+own gate for the same rule says, in its own header, that it speaks for the umbrella's
+prose only.
+
+- **What it asks.** `scripts/check-pin-verb-scope.py` reads this repo's own tracked
+  tree over three arms: **SCOPE** (every claim-maker surface states that the advance
+  touches EVERY pin this repo declares — the CLAIM, not the keyword, because "every"
+  alone also matches a question about currency), **NO RETIRED CLAIM** (no tracked file
+  calls the advance a non-mutating kind) and **COVERAGE** (every file that names the
+  verb is classified, so a new claim-maker surface cannot slip in unclassified). The
+  surfaces are located by structural anchors, so a surface that moves is a finding,
+  not a silent pass.
+- **It is run two ways.** `charly task pin-verb-scope` runs the control and
+  `charly task pin-verb-scope-proof` runs its own proof; both are steps of the
+  `check-task` R10 bed, and `.github/workflows/pin-verb-scope.yml` runs the control
+  in CI.
+- **The control proves it can fail.** `python3 -I scripts/check-pin-verb-scope.py
+  --self-test` turns each of the arms RED on its own mutation — a surface that drops
+  the scope, a surface whose line is gone, a file that calls the advance a
+  non-mutating kind (including the exact wording this defect carried), a file that
+  names the verb without being classified, and a classification that has gone stale —
+  while the shipped tree stays GREEN in the same run. A gate that cannot fail is not
+  a gate.
 
 ## Core key rules
 
