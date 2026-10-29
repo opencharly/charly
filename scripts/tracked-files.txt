@@ -11,8 +11,11 @@
 #
 # THE READERS. `scripts/check-pin-verb-scope.py` (the pin-advance claim control)
 # and `charly/retired_build_selector_test.go` (the retired-knob surface control)
-# BOTH read this file, so the two gates cannot drift. Edit THIS file, never a
-# reader's copy: two copies of one rule are two rules, and they drift.
+# BOTH read this file, so the exemptions have ONE home and the two gates cannot
+# drift on WHICH modes are exempt. Each reader parses this file in its own
+# language, so a copy of the LIST in a reader would be a second list, and two
+# lists drift (R2). The GRAMMAR is specified ONCE, in the WHAT IS EXEMPT header
+# above - never restated in a reader. Edit THIS file, never a reader's copy.
 #
 # The mode numbers are git's own (`git ls-files --stage`): 100644 and 100755 are
 # regular files, 120000 is a symlink, 160000 is a gitlink.

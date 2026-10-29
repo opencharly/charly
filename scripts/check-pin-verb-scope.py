@@ -50,8 +50,11 @@ SELF_REL = "scripts/check-pin-verb-scope.py"
 
 # The ONE rule for what this repository's tracked tree contains: the index modes
 # that are EXEMPT from it. It is a committed FILE, and BOTH readers of the tracked
-# tree read it — this gate and charly/retired_build_selector_test.go — so the two
-# cannot drift (R2): two copies of one rule are two rules.
+# tree read it — this gate and charly/retired_build_selector_test.go — so the
+# exemptions have ONE home and the two gates cannot drift on WHICH modes are exempt
+# (R2). Each reader parses that file in its own language, so a copy of the LIST in
+# a reader would be a second list, and two lists drift. The file's own header
+# specifies the grammar; read it there, never copy it here.
 TRACKED_FILES_RULE = "tracked-files.txt"
 
 # The SCOPE claim: the verb advances EVERY pin this repo declares.
@@ -257,7 +260,8 @@ def extract(lines, idx, kind):
 def tracked_files_rule():
     """The index modes that are EXEMPT from this repository's tracked tree — the
     ONE rule, read from the committed `scripts/tracked-files.txt` that the
-    retired-knob surface control reads too, so the two gates cannot drift (R2)."""
+    retired-knob surface control reads too, so the exemptions have ONE home and the
+    two gates cannot drift on WHICH modes are exempt (R2)."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), TRACKED_FILES_RULE)
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -285,7 +289,8 @@ def tracked_files(root):
     """The tracked REGULAR files of a tree — derived from the INDEX, never
     hand-kept. The modes that are exempt from it come from the ONE committed
     rule (`scripts/tracked-files.txt`), which the retired-knob surface control
-    reads too, so the two gates cannot drift (R2)."""
+    reads too, so the exemptions have ONE home and the two gates cannot drift on
+    WHICH modes are exempt (R2)."""
     try:
         raw = subprocess.run(
             ["git", "ls-files", "-s", "-z"],
