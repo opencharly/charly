@@ -52,9 +52,9 @@ SELF_REL = "scripts/check-pin-verb-scope.py"
 # that are EXEMPT from it. It is a committed FILE, and BOTH readers of the tracked
 # tree read it — this gate and charly/retired_build_selector_test.go — so the
 # exemptions have ONE home and the two gates cannot drift on WHICH modes are exempt
-# (R2). Each reader parses that file in its own language: the grammar is one
-# `<mode> <reason>` per line, with `#` comments and blank lines ignored, so a copy
-# of the LIST in a reader would be a second list, and two lists drift.
+# (R2). Each reader parses that file in its own language, so a copy of the LIST in
+# a reader would be a second list, and two lists drift. The file's own header
+# specifies the grammar; read it there, never copy it here.
 TRACKED_FILES_RULE = "tracked-files.txt"
 
 # The SCOPE claim: the verb advances EVERY pin this repo declares.

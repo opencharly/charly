@@ -23,10 +23,10 @@ package main
 // the same rule `scripts/check-pin-verb-scope.py` applies. The modes that are EXEMPT
 // from that set live in ONE committed file — `scripts/tracked-files.txt` — which BOTH
 // controls read, so the exemptions have ONE home and the two gates cannot drift on
-// WHICH modes are exempt (R2). Each reader parses that file in its own language — the
-// grammar is one `<mode> <reason>` per line, with `#` comments and blank lines
-// ignored — so a copy of the LIST in a reader would be a second list, and two lists
-// drift. The sweep reads each tracked path's CONTENT from disk, so a change that is
+// WHICH modes are exempt (R2). Each reader parses that file in its own language, so a
+// copy of the LIST in a reader would be a second list, and two lists drift. The rule
+// file's own header specifies its grammar; read it there, never copy it here. The
+// sweep reads each tracked path's CONTENT from disk, so a change that is
 // not staged yet is still judged; the index decides WHICH files are in scope, and the
 // working tree decides WHAT they say.
 
@@ -65,8 +65,8 @@ func repoRootFromModule(t *testing.T) string {
 // tracked-file set. They come from ONE committed file — `scripts/tracked-files.txt` —
 // which the pin-advance claim control (`scripts/check-pin-verb-scope.py`) reads too,
 // so the exemptions have ONE home and the two gates cannot drift on WHICH modes are
-// exempt (R2). Each reader parses the file in its own language: the grammar is one
-// `<mode> <reason>` per line, with `#` comments and blank lines ignored.
+// exempt (R2). Each reader parses the file in its own language; the rule file's own
+// header specifies its grammar.
 func trackedFilesRule(t *testing.T, root string) map[string]bool {
 	t.Helper()
 	path := filepath.Join(root, "scripts", "tracked-files.txt")
