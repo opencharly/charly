@@ -154,6 +154,14 @@ prose only.
   `charly task pin-verb-scope-proof` runs its own proof; both are steps of the
   `check-task` R10 bed, and `.github/workflows/pin-verb-scope.yml` runs the control
   in CI.
+- **The tracked tree is the INDEX, and its exemptions are ONE rule.** The tree is
+  `git ls-files -s -z`: the index decides WHICH files are in scope, and each tracked
+  path's content is read from disk, so the working tree decides WHAT they say. The
+  index modes that are exempt from it live in ONE committed file,
+  `scripts/tracked-files.txt`, which BOTH this control and the retired-knob surface
+  control (`charly/retired_build_selector_test.go`) read — so the two gates cannot
+  drift, and two copies of one rule are two rules (R2). Edit that file, never a
+  reader's copy.
 - **The control proves it can fail.** `python3 -I scripts/check-pin-verb-scope.py
   --self-test` turns each of the arms RED on its own mutation — a surface that drops
   the scope, a surface whose line is gone, a file that calls the advance a
