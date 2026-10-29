@@ -18,11 +18,17 @@ package main
 // example line and a config key are the same finding, because a user reads all three the
 // same way. The name may survive in exactly two kinds of place — HISTORY (`CHANGELOG/`),
 // and the files that NARRATE the retirement. Everywhere else it is a finding.
+//
+// The sweep reads the repo's TRACKED files, and it derives that set from the INDEX —
+// the same rule `scripts/check-pin-verb-scope.py` applies, so this repo has ONE notion
+// of "the tracked files" (R2). It reads each tracked path's CONTENT from disk, so a
+// change that is not staged yet is still judged; the index decides WHICH files are in
+// scope, and the working tree decides WHAT they say.
 
 import (
 	"bytes"
-	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -50,6 +56,41 @@ func repoRootFromModule(t *testing.T) string {
 	return root
 }
 
+// trackedRegularFiles returns the repository's tracked REGULAR files, as paths relative
+// to the repo root — derived from the INDEX, never hand-kept. A gitlink (160000) and a
+// symlink (120000) are skipped: neither is a file this repo's prose lives in.
+//
+// The set comes from `git ls-files -s -z`, the same enumeration
+// `scripts/check-pin-verb-scope.py` uses, so this repo has ONE definition of "the
+// tracked files" (R2). Deriving it from the index also means the sweep's scope is the
+// COMMITTED surface: an untracked scratch file in a developer's working tree is not
+// this repo's surface and must not fail this gate.
+func trackedRegularFiles(t *testing.T, root string) []string {
+	t.Helper()
+	cmd := exec.Command("git", "ls-files", "-s", "-z")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("read the index of %s: %v", root, err)
+	}
+	var files []string
+	for _, rec := range strings.Split(string(out), "\x00") {
+		if rec == "" {
+			continue
+		}
+		tab := strings.IndexByte(rec, '\t')
+		if tab == -1 {
+			continue
+		}
+		mode := strings.Fields(rec[:tab])[0]
+		if mode == "160000" || mode == "120000" {
+			continue
+		}
+		files = append(files, filepath.FromSlash(rec[tab+1:]))
+	}
+	return files
+}
+
 // TestRetiredBuildSelectorNameSurvivesOnlyInHistoryAndNarration — the retired knob's name
 // may survive only in history and in the files that narrate the retirement. Every other
 // tracked file is a finding: a surface that still offers (or names) a knob the contract
@@ -58,61 +99,36 @@ func TestRetiredBuildSelectorNameSurvivesOnlyInHistoryAndNarration(t *testing.T)
 	root := repoRootFromModule(t)
 
 	visited := 0
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return nil // an unreadable entry is not a finding
+	for _, rel := range trackedRegularFiles(t, root) {
+		path := filepath.Join(root, rel)
+		info, infoErr := os.Stat(path)
+		if infoErr != nil || !info.Mode().IsRegular() {
+			continue // a tracked path that is not a readable regular file
 		}
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "bin", "node_modules":
-				return fs.SkipDir
-			}
-			if path != root {
-				// A nested repository (a gitlink's checkout) is a repo of its own, with its
-				// own rulebook and its own controls. This control speaks for THIS repo.
-				if _, statErr := os.Stat(filepath.Join(path, ".git")); statErr == nil {
-					return fs.SkipDir
-				}
-			}
-			return nil
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		info, infoErr := d.Info()
-		if infoErr != nil || info.Size() > 1<<20 {
-			return nil // a build artifact or a large blob
+		if info.Size() > 1<<20 {
+			continue // a large blob
 		}
 		data, readErr := os.ReadFile(path)
 		if readErr != nil || bytes.IndexByte(data, 0) >= 0 {
-			return nil // binary
+			continue // binary
 		}
 		visited++
 		if !strings.Contains(string(data), retiredBuildEngineName) {
-			return nil
+			continue
 		}
-		if rel == "CHANGELOG" || strings.HasPrefix(rel, "CHANGELOG/") {
-			return nil // history
+		slashed := filepath.ToSlash(rel)
+		if slashed == "CHANGELOG" || strings.HasPrefix(slashed, "CHANGELOG/") {
+			continue // history
 		}
-		if reason, ok := retiredBuildEngineNarration[rel]; ok {
-			t.Logf("%s names the retired knob — allowed: %s", rel, reason)
-			return nil
+		if reason, ok := retiredBuildEngineNarration[slashed]; ok {
+			t.Logf("%s names the retired knob — allowed: %s", slashed, reason)
+			continue
 		}
 		t.Errorf("%s names the retired knob %q: the contract carries no builder selector, so setting it does nothing",
-			rel, retiredBuildEngineName)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk %s: %v", root, err)
+			slashed, retiredBuildEngineName)
 	}
 	if visited < 100 {
-		t.Fatalf("the walk read %d file(s) under %s — the sweep is too small to have covered the repo's surfaces", visited, root)
+		t.Fatalf("the sweep read %d file(s) under %s — the sweep is too small to have covered the repo's surfaces", visited, root)
 	}
 	t.Logf("read %d tracked file(s) under %s", visited, root)
 }
