@@ -48,6 +48,12 @@ import sys
 
 SELF_REL = "scripts/check-pin-verb-scope.py"
 
+# The ONE rule for what this repository's tracked tree contains: the index modes
+# that are EXEMPT from it. It is a committed FILE, and BOTH readers of the tracked
+# tree read it — this gate and charly/retired_build_selector_test.go — so the two
+# cannot drift (R2): two copies of one rule are two rules.
+TRACKED_FILES_RULE = "tracked-files.txt"
+
 # The SCOPE claim: the verb advances EVERY pin this repo declares.
 #
 # `[\s\S]` (not `[^\n]`) because a claim WRAPS: the scope sentence runs over a
@@ -248,10 +254,38 @@ def extract(lines, idx, kind):
     return "\n".join(out)
 
 
+def tracked_files_rule():
+    """The index modes that are EXEMPT from this repository's tracked tree — the
+    ONE rule, read from the committed `scripts/tracked-files.txt` that the
+    retired-knob surface control reads too, so the two gates cannot drift (R2)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), TRACKED_FILES_RULE)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            raw = fh.read()
+    except OSError as exc:
+        raise GateError("cannot read the tracked-files rule %s: %s" % (path, exc))
+    modes = set()
+    for line in raw.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split()
+        if not fields:
+            continue
+        modes.add(fields[0])
+    if not modes:
+        raise GateError(
+            "the tracked-files rule %s declares no exempt mode: the tracked set would widen "
+            "silently, and a gitlink's checkout is not this repo's prose" % path
+        )
+    return modes
+
+
 def tracked_files(root):
     """The tracked REGULAR files of a tree — derived from the INDEX, never
-    hand-kept. A gitlink (160000) and a symlink (120000) are skipped: neither is
-    a file this repo's prose lives in."""
+    hand-kept. The modes that are exempt from it come from the ONE committed
+    rule (`scripts/tracked-files.txt`), which the retired-knob surface control
+    reads too, so the two gates cannot drift (R2)."""
     try:
         raw = subprocess.run(
             ["git", "ls-files", "-s", "-z"],
@@ -261,6 +295,7 @@ def tracked_files(root):
         ).stdout.decode("utf-8", "replace")
     except (subprocess.CalledProcessError, OSError) as exc:
         raise GateError("cannot read the index of %s: %s" % (root, exc))
+    exempt = tracked_files_rule()
     out = []
     for rec in raw.split("\0"):
         if not rec:
@@ -269,7 +304,7 @@ def tracked_files(root):
         if tab == -1:
             continue
         mode = rec[:tab].split(" ")[0]
-        if mode in ("160000", "120000"):
+        if mode in exempt:
             continue
         out.append(rec[tab + 1:])
     return out
@@ -287,9 +322,10 @@ def read_text(abs_path):
     return buf.decode("utf-8", "replace")
 
 
-def findings(root, overrides=None, non_claim_mentions=None, exempt_files=None):
+def findings(root, overrides=None, non_claim_mentions=None, exempt_files=None, tracked=None):
     """The findings over the files the run sees: the tree's tracked files, with
-    `overrides` replacing or adding one (the --self-test's mutations)."""
+    `overrides` replacing or adding one (the --self-test's mutations). `tracked`
+    overrides the tracked set itself (the --self-test's mutation of the SCOPE)."""
     overrides = overrides or {}
     non_claim_mentions = NON_CLAIM_MENTIONS if non_claim_mentions is None else non_claim_mentions
     exempt_files = EXEMPT_FILES if exempt_files is None else exempt_files
@@ -299,6 +335,25 @@ def findings(root, overrides=None, non_claim_mentions=None, exempt_files=None):
         if rel in overrides:
             return overrides[rel]
         return read_text(os.path.join(root, rel))
+
+    tracked = tracked_files(root) if tracked is None else tracked
+
+    # The SCOPE arm: the tracked tree this control judges must CONTAIN every
+    # claim-maker surface. A surface that is not tracked is a surface no reader
+    # of this repository sees, and a rule whose scope silently stopped covering
+    # it is a green light that proves nothing.
+    for surface in SURFACES:
+        rel = surface["rel"]
+        if rel not in tracked:
+            out.append(
+                (
+                    "B",
+                    rel,
+                    0,
+                    "%s — the surface is not a TRACKED file: the control's scope does not "
+                    "cover the tree a reader of this repository sees" % surface["id"],
+                )
+            )
 
     # A + the EXISTENCE arm: every claim-maker surface exists, is unique, and
     # states the scope.
@@ -336,7 +391,6 @@ def findings(root, overrides=None, non_claim_mentions=None, exempt_files=None):
             )
 
     # B: no tracked file calls the advance a non-mutating kind.
-    tracked = tracked_files(root)
     for rel in tracked:
         if rel.startswith("CHANGELOG/") or rel == SELF_REL:
             continue  # history, not a current claim; and this gate carries the class on purpose
@@ -521,6 +575,16 @@ def self_test(root):
         "verb is a finding",
         any(k == "C" and "no longer names" in m for k, _, _, m in got),
         "(no stale-classification finding)",
+    )
+
+    # The SCOPE arm: a scope that stopped covering the claim-maker surfaces is a
+    # finding, not a silent pass — the tracked set is emptied here, which is what
+    # a rule file that exempts the wrong mode does.
+    got = findings(root, tracked=[])
+    check(
+        "the SCOPE arm bites — a surface that is not a TRACKED file is a finding",
+        any(k == "B" and "not a TRACKED file" in m for k, _, _, m in got),
+        "(no scope finding)",
     )
 
     if failures:

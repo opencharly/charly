@@ -20,10 +20,12 @@ package main
 // and the files that NARRATE the retirement. Everywhere else it is a finding.
 //
 // The sweep reads the repo's TRACKED files, and it derives that set from the INDEX —
-// the same rule `scripts/check-pin-verb-scope.py` applies, so this repo has ONE notion
-// of "the tracked files" (R2). It reads each tracked path's CONTENT from disk, so a
-// change that is not staged yet is still judged; the index decides WHICH files are in
-// scope, and the working tree decides WHAT they say.
+// the same rule `scripts/check-pin-verb-scope.py` applies. The modes that are EXEMPT
+// from that set live in ONE committed file — `scripts/tracked-files.txt` — which BOTH
+// controls read, so the two gates cannot drift (R2): two copies of one rule are two
+// rules. The sweep reads each tracked path's CONTENT from disk, so a change that is
+// not staged yet is still judged; the index decides WHICH files are in scope, and the
+// working tree decides WHAT they say.
 
 import (
 	"bytes"
@@ -56,17 +58,69 @@ func repoRootFromModule(t *testing.T) string {
 	return root
 }
 
+// trackedFilesRule returns the index modes that are EXEMPT from this repository's
+// tracked-file set. They come from ONE committed file — `scripts/tracked-files.txt` —
+// which the pin-advance claim control (`scripts/check-pin-verb-scope.py`) reads too,
+// so the two gates cannot drift (R2): two copies of one rule are two rules.
+func trackedFilesRule(t *testing.T, root string) map[string]bool {
+	t.Helper()
+	path := filepath.Join(root, "scripts", "tracked-files.txt")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the tracked-files rule %s: %v", path, err)
+	}
+	modes := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		modes[fields[0]] = true
+	}
+	if len(modes) == 0 {
+		t.Fatalf("the tracked-files rule %s declares no exempt mode — the tracked set would widen silently", path)
+	}
+	return modes
+}
+
+// requireRepoCheckout skips VISIBLY when the tree is not THIS repository's own
+// checkout: a tree with no index of its own has no tracked files, and there is
+// nothing here for a control over the tracked tree to judge — an absent premise is
+// not a failure. A checkout whose index cannot be read is a defect, and the control
+// below fails loudly on it.
+func requireRepoCheckout(t *testing.T, root string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skipf("git is not on PATH — this control judges %s's TRACKED tree, and there is none here", root)
+	}
+	cmd := exec.Command("git", "rev-parse", "--show-prefix")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Skipf("%s is not a git checkout (%v) — this control judges that checkout's TRACKED tree, and there is none here",
+			root, err)
+	}
+	if prefix := strings.TrimSpace(string(out)); prefix != "" {
+		t.Skipf("%s is INSIDE the checkout whose root is above it (prefix %q) — this control judges the ROOT's TRACKED tree, and there is none here",
+			root, prefix)
+	}
+}
+
 // trackedRegularFiles returns the repository's tracked REGULAR files, as paths relative
-// to the repo root — derived from the INDEX, never hand-kept. A gitlink (160000) and a
-// symlink (120000) are skipped: neither is a file this repo's prose lives in.
+// to the repo root — derived from the INDEX, never hand-kept. The modes that are exempt
+// from it are the ONE committed rule (`scripts/tracked-files.txt`), shared with the
+// pin-advance claim control, so the two gates cannot drift (R2).
 //
-// The set comes from `git ls-files -s -z`, the same enumeration
-// `scripts/check-pin-verb-scope.py` uses, so this repo has ONE definition of "the
-// tracked files" (R2). Deriving it from the index also means the sweep's scope is the
-// COMMITTED surface: an untracked scratch file in a developer's working tree is not
-// this repo's surface and must not fail this gate.
+// Deriving the set from the index also means the sweep's scope is the COMMITTED
+// surface: an untracked scratch file in a developer's working tree is not this repo's
+// surface and must not fail this gate.
 func trackedRegularFiles(t *testing.T, root string) []string {
 	t.Helper()
+	exempt := trackedFilesRule(t, root)
 	cmd := exec.Command("git", "ls-files", "-s", "-z")
 	cmd.Dir = root
 	out, err := cmd.Output()
@@ -82,8 +136,11 @@ func trackedRegularFiles(t *testing.T, root string) []string {
 		if tab == -1 {
 			continue
 		}
-		mode := strings.Fields(rec[:tab])[0]
-		if mode == "160000" || mode == "120000" {
+		fields := strings.Fields(rec[:tab])
+		if len(fields) == 0 {
+			continue // a record with no mode field names no path this repo ships
+		}
+		if exempt[fields[0]] {
 			continue
 		}
 		files = append(files, filepath.FromSlash(rec[tab+1:]))
@@ -97,6 +154,7 @@ func trackedRegularFiles(t *testing.T, root string) []string {
 // retired teaches a user to set something that does nothing.
 func TestRetiredBuildSelectorNameSurvivesOnlyInHistoryAndNarration(t *testing.T) {
 	root := repoRootFromModule(t)
+	requireRepoCheckout(t, root)
 
 	visited := 0
 	for _, rel := range trackedRegularFiles(t, root) {
@@ -138,7 +196,9 @@ func TestRetiredBuildSelectorNameSurvivesOnlyInHistoryAndNarration(t *testing.T)
 // (TestResolveRuntime_DockerRunEngineResolvesDirect), so the example keeps it. This arm
 // also proves the sweep above is not vacuous: it reads the file the finding is about.
 func TestEnvExampleOffersOnlyLiveKnobs(t *testing.T) {
-	example := filepath.Join(repoRootFromModule(t), ".env.example")
+	root := repoRootFromModule(t)
+	requireRepoCheckout(t, root)
+	example := filepath.Join(root, ".env.example")
 	data, err := os.ReadFile(example)
 	if err != nil {
 		t.Fatalf("read %s: %v", example, err)

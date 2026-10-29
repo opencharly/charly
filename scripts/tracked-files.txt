@@ -1,0 +1,20 @@
+# The tracked files of THIS repository - the ONE enumeration every control over
+# this repo's own tracked tree uses (R2).
+#
+# WHAT IT IS. The tracked files are the entries of the repository's INDEX:
+# `git ls-files -s -z`. The INDEX decides WHICH files are in scope; each tracked
+# path's CONTENT is read from disk, so the working tree decides WHAT they say -
+# a change that is not staged yet is still judged.
+#
+# WHAT IS EXEMPT, and why. One `<mode> <reason>` per line; blank lines and `#`
+# comments are ignored. A mode that is not listed here is IN scope.
+#
+# THE READERS. `scripts/check-pin-verb-scope.py` (the pin-advance claim control)
+# and `charly/retired_build_selector_test.go` (the retired-knob surface control)
+# BOTH read this file, so the two gates cannot drift. Edit THIS file, never a
+# reader's copy: two copies of one rule are two rules, and they drift.
+#
+# The mode numbers are git's own (`git ls-files --stage`): 100644 and 100755 are
+# regular files, 120000 is a symlink, 160000 is a gitlink.
+160000 a gitlink - a submodule's checkout is a repo of its own, with its own rulebook and its own gates
+120000 a symlink - its content is a path, not a file of this repo's
