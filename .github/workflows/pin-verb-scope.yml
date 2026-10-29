@@ -2,7 +2,7 @@
 # repo's own pin advance from coming back (opencharly/charly#1079).
 #
 # WHAT IT ASKS. `scripts/check-pin-verb-scope.py` reads this repo's own tracked
-# tree and asks three things:
+# tree and asks these things:
 #   SCOPE      every claim-maker surface — the `sync` task's description and step
 #              name, the `pins` task's description and its MODE parameter, and the
 #              two AGENTS.md bullets — states that the advance touches EVERY pin
@@ -12,9 +12,18 @@
 #              declared pin, rolls the checkouts that exist and stages their
 #              gitlinks;
 #   COVERAGE   every file that NAMES the verb is classified, so a new claim-maker
-#              surface cannot slip in unclassified.
+#              surface cannot slip in unclassified;
+#   ONE HOME   the shared rule (`scripts/tracked-files.txt`) states its GRAMMAR and
+#              its exempt-mode LIST in its OWN header and nowhere else, and every
+#              reader that file NAMES still reads it. A copy of either into a
+#              reader is a second rule, and two rules drift (R2).
 # The surfaces are located by STRUCTURAL anchors, so a surface that MOVES is a
 # finding rather than a silent pass.
+#
+# WHY THE RULE FILE AND ITS READERS ARE IN THE TRIGGER: the ONE HOME arm reads
+# `scripts/tracked-files.txt` and both of the readers that file names. A change to
+# the rule file — a new exempt mode, a grammar that moved — and a change to a
+# reader are exactly the changes that arm judges, so the gate has to run for them.
 #
 # WHY IT IS ITS OWN WORKFLOW, and not a step of pin-currency.yml: the currency
 # control and this control answer different questions — one watches the PINS, the
@@ -47,6 +56,8 @@ on:
       - 'charly.yml'
       - 'AGENTS.md'
       - 'scripts/check-pin-verb-scope.py'
+      - 'scripts/tracked-files.txt'
+      - 'charly/retired_build_selector_test.go'
       - '.github/workflows/pin-verb-scope.yml'
   workflow_dispatch:
 

@@ -4197,21 +4197,26 @@ pin-currency-proof:
 # UMBRELLA's prose only: "a submodule is a repo of its own, with its own
 # rulebook and its own gates".
 #
-# THREE arms over this repo's own tracked tree:
+# Arms over this repo's own tracked tree:
 #   SCOPE         every claim-maker surface states that the advance touches
 #                 EVERY pin this repo declares (the CLAIM, not the keyword:
 #                 "every" alone also matches a question about currency);
 #   NO RETIRED    no tracked file calls the advance a non-mutating kind;
 #   COVERAGE      every file that NAMES the verb is classified, so a new
-#                 claim-maker surface cannot slip in unclassified.
+#                 claim-maker surface cannot slip in unclassified;
+#   ONE HOME      the shared rule (scripts/tracked-files.txt) states its
+#                 GRAMMAR and its exempt-mode LIST in its OWN header and
+#                 nowhere else, and every reader that file NAMES still reads
+#                 it — a copy of either into a reader is a second rule, and two
+#                 rules drift (R2).
 # The surfaces are located by STRUCTURAL anchors, so a surface that MOVES is a
 # finding rather than a silent pass.
 pin-verb-scope:
   task:
-    description: Check this repo's own pin-advance claim — every claim-maker surface must state that the advance touches EVERY pin this repo declares, and no tracked file may call the advance a non-mutating kind
+    description: Check this repo's own pin-advance claim — every claim-maker surface must state that the advance touches EVERY pin this repo declares, no tracked file may call the advance a non-mutating kind, and the shared rule's grammar and exempt-mode list must live in the rule file's own header, with every reader it names still reading it
     dir: .
     plan:
-      - check: every pin-advance claim in this repo states its scope, and no tracked file calls the advance a non-mutating kind
+      - check: every pin-advance claim in this repo states its scope, no tracked file calls the advance a non-mutating kind, and the shared rule has one home
         command: "python3 -I scripts/check-pin-verb-scope.py"
         stdout:
           - contains: PIN-VERB-SCOPE-OK
@@ -4223,9 +4228,13 @@ pin-verb-scope:
 # turns each of the control's arms RED on its own mutation: a surface that
 # drops the scope, a surface whose line is gone, a tracked file that calls the
 # advance a non-mutating kind — including the EXACT wording this issue was
-# filed about — a file that names the verb without being classified, and a
-# classification that has gone stale. The shipped tree must be GREEN in the
-# same run, so the arms are discriminating rather than merely loud.
+# filed about — a file that names the verb without being classified, a
+# classification that has gone stale, a reader that restates the shared rule's
+# grammar, a copy of that grammar inside the rule file's own other paragraph, a
+# rule file whose header stops stating the grammar, a reader that copies the
+# exempt-mode list, and a named reader whose code stops naming the rule file.
+# The shipped tree must be GREEN in the same run, so the arms are discriminating
+# rather than merely loud.
 pin-verb-scope-proof:
   task:
     description: Prove the pin-verb-scope control can fail — every arm must go red on its own mutation, including the retired wording this issue is about, while the shipped tree stays green
@@ -4366,7 +4375,7 @@ check-task:
           task: pin-currency-proof
         context:
           - runtime
-      - check: the pin-verb-scope CONTROL itself runs green on the tree the bed just realized — every claim-maker surface in it states its scope, and no tracked file calls the advance a non-mutating kind
+      - check: the pin-verb-scope CONTROL itself runs green on the tree the bed just realized — every claim-maker surface in it states its scope, no tracked file calls the advance a non-mutating kind, and the shared rule's grammar and exempt-mode list live in the rule file's own header
         id: task-pin-verb-scope-runs
         task:
           task: pin-verb-scope
