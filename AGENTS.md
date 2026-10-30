@@ -160,9 +160,9 @@ prose only.
   `git ls-files -s -z`: the index decides WHICH files are in scope, and each tracked
   path's content is read from disk, so the working tree decides WHAT they say. The
   index modes that are exempt from it live in ONE committed file,
-  `scripts/tracked-files.txt`, which BOTH this control and the retired-knob surface
+  `scripts/tracked-files.txt`, which this control and the retired-knob surface
   control (`charly/retired_build_selector_test.go`) read — so the exemptions have ONE
-  home and the two gates cannot drift on WHICH modes are exempt. Each reader parses
+  home and no reader can drift on WHICH modes are exempt. Each reader parses
   that file in its own language, so a copy of the LIST in a reader would be a second
   list, and two lists drift (R2). That file's own header specifies its grammar, and
   the ONE HOME arm holds that: the grammar and the LIST live in that header and

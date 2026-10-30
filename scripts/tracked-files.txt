@@ -11,7 +11,7 @@
 #
 # THE READERS. `scripts/check-pin-verb-scope.py` (the pin-advance claim control)
 # and `charly/retired_build_selector_test.go` (the retired-knob surface control)
-# BOTH read this file, so the exemptions have ONE home and the two gates cannot
+# each of those readers reads this file, so the exemptions have ONE home and no reader can
 # drift on WHICH modes are exempt. Each reader parses this file in its own
 # language, so a copy of the LIST in a reader would be a second list, and two
 # lists drift (R2). The GRAMMAR is specified ONCE, in the WHAT IS EXEMPT header
