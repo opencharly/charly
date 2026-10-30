@@ -87,12 +87,31 @@ func TestIdleBoundedContext_TripsOnlyWhenIdle(t *testing.T) {
 	}
 	stop()
 
-	// Progressing: a toucher every 50ms (< the 150ms window) → never cancelled.
+	// Progressing — and this arm is DETERMINISTIC, which is the whole point of the seam.
+	//
+	// The former arm raced a 50ms ticker against the 150ms window and asserted survival for
+	// 600ms. That asserts something the scheduler does not owe anyone: the ticker's cadence
+	// is a TARGET, and a loaded machine can starve the toucher past the whole window
+	// (measured on this host: `host reverse legs=4 (last 244ms ago); window=150ms`), at
+	// which point the guard is RIGHT to cancel — nothing attempted progress inside the
+	// window — while the test reads that correctness as failure. Raising the multiplier
+	// would only tune the test to the runner.
+	//
+	// So the arm is split into the two things that are each provable without a race:
+	// (a) the guard's CONFIRMATION treats an ATTEMPTED touch as progress — the case that
+	// makes the guard load-robust, proved directly below; and (b) a call whose progress
+	// source is LIVE and still attempting is not cancelled, proved by advancing the
+	// producer from THIS goroutine so the premise cannot be starved away.
 	b := newPluginActivity(0)
 	ctx2, stop2 := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), b)
+	// stop2 runs LAST (the idle arm below needs the watcher still live), so it is deferred
+	// rather than called inline; the toucher is stopped explicitly before that assertion.
+	defer stop2()
+
+	// The producer is represented by a real background toucher, as in production.
 	touchStop := make(chan struct{})
 	go func() {
-		tk := time.NewTicker(50 * time.Millisecond)
+		tk := time.NewTicker(20 * time.Millisecond)
 		defer tk.Stop()
 		for {
 			select {
@@ -103,15 +122,93 @@ func TestIdleBoundedContext_TripsOnlyWhenIdle(t *testing.T) {
 			}
 		}
 	}()
-	select {
-	case <-ctx2.Done():
+
+	// (b) ADVANCE THE PRODUCER FROM HERE, so "the source is live" cannot be starved away:
+	// the loop below runs on THIS goroutine, and it stops the moment the guard cancels, so
+	// a cancellation is a REAL finding rather than a missed deadline. Assert the clock
+	// counted the attempts and that the context is still alive while they happen.
+	deadline := time.Now().Add(3 * pluginInvokeNoProgress())
+	for time.Now().Before(deadline) {
+		b.touch()
+		select {
+		case <-ctx2.Done():
+			close(touchStop)
+			t.Fatalf("a call whose progress source is live (attempts=%d) must not be cancelled: %v", b.touchAttempts(), context.Cause(ctx2))
+		default:
+		}
+	}
+	if got := b.touchAttempts(); got < 10 {
+		t.Fatalf("the progress source made %d attempts over 3 windows — the arm did not exercise a live producer", got)
+	}
+
+	if ctx2.Err() != nil {
 		close(touchStop)
-		t.Fatalf("progressing call must not be cancelled, got %v", context.Cause(ctx2))
-	case <-time.After(600 * time.Millisecond):
-		// good: outlived 4x the idle window while progressing
+		t.Fatalf("progressing call must not be cancelled while its source attempts progress, got %v", context.Cause(ctx2))
 	}
 	close(touchStop)
-	stop2()
+
+	// And IDLENESS still trips: once the producer stops, the guard cancels with the
+	// sentinel — so the arm proves both directions rather than only the flattering one.
+	select {
+	case <-ctx2.Done():
+		if !errors.Is(context.Cause(ctx2), errPluginCallIdle) {
+			t.Fatalf("idle-after-progress call: expected errPluginCallIdle, got %v", context.Cause(ctx2))
+		}
+	case <-time.After(4 * pluginInvokeNoProgress()):
+		t.Fatal("an idle call must still be cancelled once progress stops — the guard must not be held open by a producer that went quiet")
+	}
+}
+
+// TestPluginActivity_ConfirmationAcceptsAnAttemptedTouch pins the EXPIRY path's third
+// confirmation source, which is what makes the guard load-robust (#913): at expiry the guard
+// re-measures deliveries, CPU advance AND whether the producer ATTEMPTED a touch since the
+// last reset. A delivery can be coalesced away and a producer can be starved, but an attempt
+// is a fact the clock counts, so a live source is never mistaken for a dead one.
+//
+// Deterministic: the clock is built here, the token is seeded synchronously, and observe is
+// called directly — no goroutine, no wall-clock race, nothing the scheduler can reorder.
+func TestPluginActivity_ConfirmationAcceptsAnAttemptedTouch(t *testing.T) {
+	a := newPluginActivity(0)
+	const burst = 32
+	for i := 0; i < burst; i++ {
+		a.touch()
+	}
+	if got := a.touchAttempts(); got != burst {
+		t.Fatalf("touchAttempts = %d after %d touches; a DELIVERY-based count would read %d, because the depth-1 buffer coalesces a burst to one pending token", got, burst, cap(a.wake))
+	}
+	// pid 0 turns the CPU source off, so the ONLY thing observe can find is the pending
+	// host-leg token. This is the exact state a starved producer leaves behind.
+	if _, _, ok := a.observe(a.wake, 0, 0); !ok {
+		t.Fatal("the guard's expiry confirmation found nothing while a progress event was pending and touches had been attempted — a live producer would be killed as idle")
+	}
+	// And an attempt with NO pending token still counts: the token was consumed by the
+	// guard's normal loop and the producer never got to send another. Without this, a
+	// burst that coalesced into a consumed token reads as silence at expiry.
+	a.touch()
+	if attempts := a.touchAttempts(); attempts != burst+1 {
+		t.Fatalf("touchAttempts = %d, want %d", attempts, burst+1)
+	}
+}
+
+// TestPluginActivity_TouchAttemptCountsAttemptsNotDeliveries pins the seam's ONE property,
+// because getting it backwards would re-introduce exactly the confusion the seam exists to
+// remove: a counter of ACCEPTED sends undercounts whenever the depth-1 buffer already holds
+// a pending token, which is the normal case for a burst.
+func TestPluginActivity_TouchAttemptCountsAttemptsNotDeliveries(t *testing.T) {
+	a := newPluginActivity(0)
+	const burst = 64
+	for i := 0; i < burst; i++ {
+		a.touch()
+	}
+	if got := a.touchAttempts(); got != burst {
+		t.Fatalf("touchAttempts = %d after %d touches; a delivery-based count would read %d (the depth-1 buffer coalesces)", got, burst, cap(a.wake))
+	}
+	// A NIL clock is safe and reports zero, so a server without a clock never trips.
+	var nilClock *pluginActivity
+	if nilClock.touchAttempts() != 0 {
+		t.Fatal("a nil clock must report 0 attempts")
+	}
+	nilClock.touch() // must not panic
 }
 
 // TestPluginInvokeErr_CarriesTheStallReport is the regression guard for the FIRST R10 run of
@@ -452,15 +549,47 @@ func procStatFields(pid int) []string {
 func TestObserve_PendingLegEventAtExpiryIsProgress(t *testing.T) {
 	a := newPluginActivity(0) // pid 0: the CPU source contributes nothing here
 	a.touch()                 // one pending event = the coalesced burst still waiting
-	if _, ok := a.observe(a.wake, 0); !ok {
+	if _, _, ok := a.observe(a.wake, 0, 0); !ok {
 		t.Fatal("a pending host-leg event must count as progress at confirmation")
 	}
 	if a.legs.Load() != 1 {
 		t.Fatalf("the drained event must be counted as a host leg, got %d", a.legs.Load())
 	}
-	// Second read: the buffer is now empty and there is no CPU source, so nothing.
-	if _, ok := a.observe(a.wake, 0); ok {
-		t.Fatal("an empty buffer with a frozen peer must not report progress")
+	// Second read: the buffer is empty, there is no CPU source, and the producer has
+	// attempted nothing NEW since the last re-arm — so nothing.
+	if _, _, ok := a.observe(a.wake, 0, a.touchAttempts()); ok {
+		t.Fatal("an empty buffer with a frozen peer and no new attempt must not report progress")
+	}
+}
+
+// TestObserve_AttemptedTouchIsProgress is the #913 unit-level form, and it pins the THIRD
+// source on its own: no leg event is delivered and the peer burns no CPU, yet the producer
+// ATTEMPTED a touch since the last re-arm — so the call is progressing and must not be
+// killed. That is the state a starved heartbeat leaves behind on a loaded machine, and
+// without this source the guard reads a live producer as a wedged plugin (measured:
+// `host reverse legs=4 (last 244ms ago); window=150ms`).
+//
+// Deterministic: pid 0 turns the CPU source off, the buffer is never touched, and the
+// attempt count is advanced explicitly — nothing here depends on the scheduler.
+func TestObserve_AttemptedTouchIsProgress(t *testing.T) {
+	a := newPluginActivity(0)
+	baseline := a.touchAttempts()
+
+	// A producer that is alive but whose token never landed and whose CPU is frozen.
+	a.touch()
+	if a.wake == nil {
+		t.Fatal("the clock must have a live wake channel")
+	}
+	<-a.wake // consume it: now NOTHING is pending, exactly as after a coalesced burst
+
+	if _, _, ok := a.observe(a.wake, 0, baseline); !ok {
+		t.Fatal("an ATTEMPTED touch since the last re-arm must count as progress even with no pending token and no CPU advance — otherwise a starved producer is reported as idle")
+	}
+
+	// And with no new attempt at all, nothing is progress: the source has gone quiet.
+	quiet := a.touchAttempts()
+	if _, _, ok := a.observe(a.wake, 0, quiet); ok {
+		t.Fatal("with no delivery, no CPU advance and no new attempt the guard must report NO progress, or it could never kill a wedged peer")
 	}
 }
 
@@ -483,7 +612,7 @@ func TestObserve_LiveChildCPUIsProgress(t *testing.T) {
 		t.Fatal("the peer tree's CPU never left 0 — the tree walk is not reading the child")
 	}
 	time.Sleep(200 * time.Millisecond)
-	if _, ok := peer.observe(nil, base); !ok {
+	if _, _, ok := peer.observe(nil, base, peer.touchAttempts()); !ok {
 		t.Fatalf("the peer's live child is burning CPU but observe reported no progress (high-water %d, tree now %d)",
 			base, peer.cpu())
 	}
