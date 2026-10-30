@@ -21,8 +21,8 @@ package main
 //
 // The sweep reads the repo's TRACKED files, and it derives that set from the INDEX —
 // the same rule `scripts/check-pin-verb-scope.py` applies. The modes that are EXEMPT
-// from that set live in ONE committed file — `scripts/tracked-files.txt` — which BOTH
-// controls read, so the exemptions have ONE home and the two gates cannot drift on
+// from that set live in ONE committed file — `scripts/tracked-files.txt` — which every
+// control reads, so the exemptions have ONE home and no reader can drift on
 // WHICH modes are exempt (R2). Each reader parses that file in its own language, so a
 // copy of the LIST in a reader would be a second list, and two lists drift. The rule
 // file's own header specifies its grammar; read it there, never copy it here. The
@@ -64,7 +64,7 @@ func repoRootFromModule(t *testing.T) string {
 // trackedFilesRule returns the index modes that are EXEMPT from this repository's
 // tracked-file set. They come from ONE committed file — `scripts/tracked-files.txt` —
 // which the pin-advance claim control (`scripts/check-pin-verb-scope.py`) reads too,
-// so the exemptions have ONE home and the two gates cannot drift on WHICH modes are
+// so the exemptions have ONE home and no reader can drift on WHICH modes are
 // exempt (R2). Each reader parses the file in its own language; the rule file's own
 // header specifies its grammar.
 func trackedFilesRule(t *testing.T, root string) map[string]bool {
@@ -118,7 +118,7 @@ func requireRepoCheckout(t *testing.T, root string) {
 // trackedRegularFiles returns the repository's tracked REGULAR files, as paths relative
 // to the repo root — derived from the INDEX, never hand-kept. The modes that are exempt
 // from it are the ONE committed rule (`scripts/tracked-files.txt`), shared with the
-// pin-advance claim control, so the exemptions have ONE home and the two gates cannot
+// pin-advance claim control, so the exemptions have ONE home and no reader can
 // drift on WHICH modes are exempt (R2).
 //
 // Deriving the set from the index also means the sweep's scope is the COMMITTED

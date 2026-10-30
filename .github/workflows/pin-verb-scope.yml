@@ -5,7 +5,7 @@
 # tree and asks these things:
 #   SCOPE      every claim-maker surface — the `sync` task's description and step
 #              name, the `pins` task's description and its MODE parameter, and the
-#              two AGENTS.md bullets — states that the advance touches EVERY pin
+#              AGENTS.md bullets — states that the advance touches EVERY pin
 #              this repo declares;
 #   RETIRED    no tracked file calls the advance a non-mutating kind (a preview, a
 #              dry run, a read-only report). It is not one: the verb advances every
@@ -21,7 +21,7 @@
 # finding rather than a silent pass.
 #
 # WHY THE RULE FILE AND ITS READERS ARE IN THE TRIGGER: the ONE HOME arm reads
-# `scripts/tracked-files.txt` and both of the readers that file names. A change to
+# `scripts/tracked-files.txt` and every reader that file names. A change to
 # the rule file — a new exempt mode, a grammar that moved — and a change to a
 # reader are exactly the changes that arm judges, so the gate has to run for them.
 #

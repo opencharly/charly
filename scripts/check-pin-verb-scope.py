@@ -24,7 +24,7 @@ WHAT IT ASKS, over this repo's own tracked tree:
      its exempt-mode LIST in its OWN header, and nowhere else: a copy of either into
      a reader is a second rule, and two rules drift (R2). And every reader the rule
      file NAMES still READS that file — a reader that stopped reading it would parse
-     a format the rule file no longer specifies, and the two gates would disagree
+     a format the rule file no longer specifies, and the readers would disagree
      about the file's syntax without anything saying so.
 
 And a surface that MOVED is a finding too, not a silent pass. Every surface is
@@ -56,9 +56,9 @@ import sys
 SELF_REL = "scripts/check-pin-verb-scope.py"
 
 # The ONE rule for what this repository's tracked tree contains: the index modes
-# that are EXEMPT from it. It is a committed FILE, and BOTH readers of the tracked
-# tree read it — this gate and charly/retired_build_selector_test.go — so the
-# exemptions have ONE home and the two gates cannot drift on WHICH modes are exempt
+# that are EXEMPT from it. It is a committed FILE, and every reader of the tracked
+# tree reads it — this gate and charly/retired_build_selector_test.go — so the
+# exemptions have ONE home and no reader can drift on WHICH modes are exempt
 # (R2). Each reader parses that file in its own language, so a copy of the LIST in
 # a reader would be a second list, and two lists drift. The file's own header
 # specifies the grammar; read it there, never copy it here.
@@ -307,8 +307,8 @@ def rule_paragraph(lines, anchor):
 def tracked_files_rule():
     """The index modes that are EXEMPT from this repository's tracked tree — the
     ONE rule, read from the committed `scripts/tracked-files.txt` that the
-    retired-knob surface control reads too, so the exemptions have ONE home and the
-    two gates cannot drift on WHICH modes are exempt (R2)."""
+    retired-knob surface control reads too, so the exemptions have ONE home and no
+    reader can drift on WHICH modes are exempt (R2)."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), TRACKED_FILES_RULE)
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -336,7 +336,7 @@ def tracked_files(root):
     """The tracked REGULAR files of a tree — derived from the INDEX, never
     hand-kept. The modes that are exempt from it come from the ONE committed
     rule (`scripts/tracked-files.txt`), which the retired-knob surface control
-    reads too, so the exemptions have ONE home and the two gates cannot drift on
+    reads too, so the exemptions have ONE home and no reader can drift on
     WHICH modes are exempt (R2)."""
     try:
         raw = subprocess.run(
@@ -826,6 +826,21 @@ def self_test(root):
         "named reader are all readable",
         rule_text is not None and reader_text is not None and para is not None,
         "(a fixture is unreadable, so the arm would prove nothing)",
+    )
+
+    # The fixture reader is CHECKED against the set's home, not hardcoded beside it: the
+    # rule file's readers paragraph NAMES the readers, so a fixture that is not named
+    # there proves nothing about the set the arm claims to cover.
+    readers_para = rule_paragraph(rule_text.split("\n"), READERS_PARAGRAPH_RE) if rule_text else None
+    named_readers = (
+        [p for p in BACKTICKED_RE.findall(readers_para[0]) if "/" in p] if readers_para else []
+    )
+    check(
+        "the ONE-HOME arm's fixture reader is one the rule file NAMES — the self-test's "
+        "target is checked against the set's home, not hardcoded beside it",
+        reader_rel in named_readers,
+        "(the fixture reader %s is not named in %s's readers paragraph, so the arm would "
+        "prove nothing about the reader set it claims to cover)" % (reader_rel, RULE_REL),
     )
 
     if rule_text is not None and reader_text is not None and para is not None:
