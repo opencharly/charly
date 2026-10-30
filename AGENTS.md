@@ -143,11 +143,13 @@ own gate for the same rule says, in its own header, that it speaks for the umbre
 prose only.
 
 - **What it asks.** `scripts/check-pin-verb-scope.py` reads this repo's own tracked
-  tree over three arms: **SCOPE** (every claim-maker surface states that the advance
+  tree over these arms: **SCOPE** (every claim-maker surface states that the advance
   touches EVERY pin this repo declares — the CLAIM, not the keyword, because "every"
   alone also matches a question about currency), **NO RETIRED CLAIM** (no tracked file
-  calls the advance a non-mutating kind) and **COVERAGE** (every file that names the
-  verb is classified, so a new claim-maker surface cannot slip in unclassified). The
+  calls the advance a non-mutating kind), **COVERAGE** (every file that names the
+  verb is classified, so a new claim-maker surface cannot slip in unclassified) and
+  **ONE HOME** (the shared rule's GRAMMAR and its exempt-mode LIST live in the rule
+  file's OWN header, and every reader that file names still reads it). The
   surfaces are located by structural anchors, so a surface that moves is a finding,
   not a silent pass.
 - **It is run two ways.** `charly task pin-verb-scope` runs the control and
@@ -162,15 +164,20 @@ prose only.
   control (`charly/retired_build_selector_test.go`) read — so the exemptions have ONE
   home and the two gates cannot drift on WHICH modes are exempt. Each reader parses
   that file in its own language, so a copy of the LIST in a reader would be a second
-  list, and two lists drift (R2). That file's own header specifies its grammar; read
-  it there, never copy it here. Edit that file, never a reader's copy.
+  list, and two lists drift (R2). That file's own header specifies its grammar, and
+  the ONE HOME arm holds that: the grammar and the LIST live in that header and
+  nowhere else, and every reader the file names still reads it — read the grammar
+  there, never copy it here. Edit that file, never a reader's copy.
 - **The control proves it can fail.** `python3 -I scripts/check-pin-verb-scope.py
   --self-test` turns each of the arms RED on its own mutation — a surface that drops
   the scope, a surface whose line is gone, a file that calls the advance a
   non-mutating kind (including the exact wording this defect carried), a file that
-  names the verb without being classified, and a classification that has gone stale —
-  while the shipped tree stays GREEN in the same run. A gate that cannot fail is not
-  a gate.
+  names the verb without being classified, a classification that has gone stale, a
+  reader that restates the shared rule's grammar, a copy of that grammar inside the
+  rule file's own other paragraph, a rule file whose header stops stating the
+  grammar, a reader that copies the exempt-mode list, and a named reader whose code
+  stops naming the rule file — while the shipped tree stays GREEN in the same run. A
+  gate that cannot fail is not a gate.
 
 ## Core key rules
 

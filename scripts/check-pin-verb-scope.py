@@ -20,6 +20,13 @@ WHAT IT ASKS, over this repo's own tracked tree:
      file that names the verb and is in NEITHER list is a FINDING: a new
      claim-maker surface cannot slip in unclassified.
 
+  D. ONE HOME — the shared rule (`scripts/tracked-files.txt`) states its GRAMMAR and
+     its exempt-mode LIST in its OWN header, and nowhere else: a copy of either into
+     a reader is a second rule, and two rules drift (R2). And every reader the rule
+     file NAMES still READS that file — a reader that stopped reading it would parse
+     a format the rule file no longer specifies, and the two gates would disagree
+     about the file's syntax without anything saying so.
+
 And a surface that MOVED is a finding too, not a silent pass. Every surface is
 located by a STRUCTURAL anchor — a chain of keys (the `sync:` task, the `MODE:`
 parameter) and the LINE KIND inside them, never the claim's own wording — so the
@@ -56,6 +63,29 @@ SELF_REL = "scripts/check-pin-verb-scope.py"
 # a reader would be a second list, and two lists drift. The file's own header
 # specifies the grammar; read it there, never copy it here.
 TRACKED_FILES_RULE = "tracked-files.txt"
+
+# The rule file's own PATH in this tree — the ONE place the shared rule lives.
+RULE_REL = "scripts/" + TRACKED_FILES_RULE
+
+# The GRAMMAR's marker: the phrase the rule file's own header uses to say how a
+# line of the rule file is written. It is assembled from parts, so this control's
+# own SOURCE never carries the phrase — a control that flagged itself would be a
+# gate that can never be green.
+GRAMMAR_MODE = "<mode>"
+GRAMMAR_REASON = "<reason>"
+GRAMMAR_RE = re.compile(r"`%s\s+%s`\s+per line" % (GRAMMAR_MODE, GRAMMAR_REASON))
+GRAMMAR_PHRASE = "`%s %s` per line" % (GRAMMAR_MODE, GRAMMAR_REASON)
+
+# The rule file's paragraphs, located by their OWN HEADINGS — a structural anchor,
+# never the grammar's own wording, so a copy that MOVES cannot make this arm blind
+# instead of red.
+GRAMMAR_PARAGRAPH_RE = re.compile(r"^#\s*WHAT IS EXEMPT\b")
+READERS_PARAGRAPH_RE = re.compile(r"^#\s*THE READERS\b")
+BACKTICKED_RE = re.compile(r"`([^`]+)`")
+
+# A reader READS the rule file when its CODE names the file as a string literal.
+# A prose mention of the rule file is a mention, not a read.
+QUOTED_RULE_RE = re.compile(r"""['"]%s['"]""" % re.escape(TRACKED_FILES_RULE))
 
 # The SCOPE claim: the verb advances EVERY pin this repo declares.
 #
@@ -255,6 +285,23 @@ def extract(lines, idx, kind):
             break
         out.append(line)
     return "\n".join(out)
+
+
+def rule_paragraph(lines, anchor):
+    """The comment paragraph a structural anchor opens: (text, first_line, last_line).
+
+    A paragraph ends at the next bare comment marker, or where the comment block
+    ends. The anchor is the paragraph's OWN HEADING, so a copy that MOVES cannot
+    make this arm blind: an anchor that matches no paragraph — or more than one —
+    is a FINDING, never an empty pass."""
+    hits = [i for i, line in enumerate(lines) if anchor.search(line)]
+    if len(hits) != 1:
+        return None
+    start = hits[0]
+    end = start + 1
+    while end < len(lines) and lines[end].startswith("#") and lines[end].strip() != "#":
+        end += 1
+    return ("\n".join(lines[start:end]), start + 1, end)
 
 
 def tracked_files_rule():
@@ -457,6 +504,180 @@ def findings(root, overrides=None, non_claim_mentions=None, exempt_files=None, t
                 )
             )
 
+
+    # D: the shared rule has ONE home. Its GRAMMAR and its exempt-mode LIST live in
+    # its own header, and every reader it NAMES still reads it. A copy of either
+    # into a reader is a second rule, and two rules drift (R2).
+    rule_text = text_of(RULE_REL)
+    if rule_text is None:
+        out.append(
+            (
+                "D",
+                RULE_REL,
+                0,
+                "the shared rule file is unreadable — its shape was NOT judged",
+            )
+        )
+    else:
+        rule_lines = rule_text.split("\n")
+        grammar_span = None
+        para = rule_paragraph(rule_lines, GRAMMAR_PARAGRAPH_RE)
+        if para is None:
+            out.append(
+                (
+                    "D",
+                    RULE_REL,
+                    0,
+                    "the rule file has no single 'WHAT IS EXEMPT' paragraph — the grammar's "
+                    "home cannot be located, and a gate that cannot see it proves nothing",
+                )
+            )
+        else:
+            grammar_span = (para[1], para[2])
+            if not GRAMMAR_RE.search(para[0]):
+                out.append(
+                    (
+                        "D",
+                        RULE_REL,
+                        para[1],
+                        "the rule file's own header does not state the GRAMMAR any more — the "
+                        "one home of the rule's syntax is empty, and every reader would be "
+                        "parsing a format nothing specifies",
+                    )
+                )
+
+        # The GRAMMAR, site by site: one, in the rule file's own header.
+        for rel in tracked:
+            if rel.startswith("CHANGELOG/") or rel == RULE_REL:
+                continue
+            text = text_of(rel)
+            if text is None:
+                continue
+            for lineno, line in enumerate(text.split("\n"), 1):
+                if GRAMMAR_RE.search(line):
+                    out.append(
+                        (
+                            "D",
+                            rel,
+                            lineno,
+                            "the shared rule's GRAMMAR is restated here — it is specified ONCE, "
+                            "in %s's own header, and a copy of it in a reader is a second rule "
+                            "(R2)" % RULE_REL,
+                        )
+                    )
+
+        # And inside the rule file itself, the grammar may live ONLY in that header.
+        if grammar_span is not None:
+            for lineno, line in enumerate(rule_lines, 1):
+                if not GRAMMAR_RE.search(line):
+                    continue
+                if grammar_span[0] <= lineno <= grammar_span[1]:
+                    continue
+                out.append(
+                    (
+                        "D",
+                        RULE_REL,
+                        lineno,
+                        "the shared rule's GRAMMAR is restated OUTSIDE its own header — the "
+                        "header is its one home, and a second statement of the same rule in "
+                        "the same file is two rules (R2)",
+                    )
+                )
+
+        # The exempt-mode LIST, site by site: one, in the rule file. A copy is a copy
+        # of the LIST — the mode AND its reason — not a prose mention of a number.
+        listed = []
+        for line in rule_lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            fields = stripped.split()
+            if len(fields) < 2:
+                continue
+            listed.append((fields[0], " ".join(fields[1:])))
+        if not listed:
+            out.append(
+                (
+                    "D",
+                    RULE_REL,
+                    0,
+                    "the rule file declares no exempt mode — the tracked set would widen "
+                    "silently, and a gitlink's checkout is not this repo's prose",
+                )
+            )
+        for mode, reason in listed:
+            for rel in tracked:
+                if rel.startswith("CHANGELOG/") or rel == RULE_REL:
+                    continue
+                text = text_of(rel)
+                if text is None:
+                    continue
+                for lineno, line in enumerate(text.split("\n"), 1):
+                    flat = " ".join(line.split())
+                    if mode not in flat.split():
+                        continue
+                    if reason not in flat:
+                        continue
+                    out.append(
+                        (
+                            "D",
+                            rel,
+                            lineno,
+                            "the shared rule's exempt-mode LIST is restated here — the modes "
+                            "live in %s, and a copy of the list in a reader is a second list, "
+                            "and two lists drift (R2)" % RULE_REL,
+                        )
+                    )
+
+        # And every reader the rule file NAMES still READS it.
+        readers = rule_paragraph(rule_lines, READERS_PARAGRAPH_RE)
+        if readers is None:
+            out.append(
+                (
+                    "D",
+                    RULE_REL,
+                    0,
+                    "the rule file has no single 'THE READERS' paragraph — the readers cannot "
+                    "be located, and a gate that cannot see them proves nothing",
+                )
+            )
+        else:
+            paths = [p for p in BACKTICKED_RE.findall(readers[0]) if "/" in p]
+            if not paths:
+                out.append(
+                    (
+                        "D",
+                        RULE_REL,
+                        readers[1],
+                        "the rule file's readers paragraph names no path — the readers of the "
+                        "shared rule are not derivable",
+                    )
+                )
+            for named in paths:
+                if named not in tracked:
+                    out.append(
+                        (
+                            "D",
+                            RULE_REL,
+                            readers[1],
+                            "the rule file names %s as a reader, but it is not a tracked file "
+                            "of this tree" % named,
+                        )
+                    )
+                    continue
+                text = text_of(named)
+                if text is None or not QUOTED_RULE_RE.search(text):
+                    out.append(
+                        (
+                            "D",
+                            named,
+                            0,
+                            "%s is named as a reader of the shared rule, but its code does not "
+                            "name the rule file — it stopped reading the rule, and it now "
+                            "parses a format the rule file no longer specifies" % named,
+                        )
+                    )
+
     return out
 
 
@@ -592,6 +813,97 @@ def self_test(root):
         "(no scope finding)",
     )
 
+
+    # D: the shared rule has ONE home — its grammar, its exempt-mode list, and the
+    # readers that read it. Each mutation below is checked to have APPLIED before
+    # its arm is credited: an unapplied mutation dies for free and proves nothing.
+    rule_text = read_text(os.path.join(root, RULE_REL))
+    reader_rel = "charly/retired_build_selector_test.go"
+    reader_text = read_text(os.path.join(root, reader_rel))
+    para = rule_paragraph(rule_text.split("\n"), GRAMMAR_PARAGRAPH_RE) if rule_text else None
+    check(
+        "the ONE-HOME arm has its fixtures — the rule file, its grammar paragraph and its "
+        "named reader are all readable",
+        rule_text is not None and reader_text is not None and para is not None,
+        "(a fixture is unreadable, so the arm would prove nothing)",
+    )
+
+    if rule_text is not None and reader_text is not None and para is not None:
+        # D: the shared rule has ONE home — its grammar, its exempt-mode list, and the
+        # readers that read it. Each mutation below is checked to have APPLIED before
+        # its arm is credited: an unapplied mutation dies for free and proves nothing.
+        copied = reader_text + "\n// the grammar is one " + GRAMMAR_PHRASE + ", with `#` comments ignored\n"
+        check(
+            "the ONE-HOME arm bites — a reader that restates the GRAMMAR is a finding",
+            copied != reader_text
+            and GRAMMAR_RE.search(copied)
+            and any(
+                k == "D" and "GRAMMAR is restated here" in m for k, _, _, m in findings(root, {reader_rel: copied})
+            ),
+            "(the mutation did not apply, or no D finding)",
+        )
+
+        # The same copy INSIDE the rule file's own other paragraph is a finding: the
+        # header is the grammar's one home, and the rule file's other paragraphs are
+        # not it.
+        lines = list(rule_text.split("\n"))
+        # AFTER the paragraph's own separator: a copy that landed INSIDE the header
+        # would be the header, and the mutation must not be the thing it claims to be.
+        lines.insert(para[2] + 1, "# the grammar is one " + GRAMMAR_PHRASE + ", with `#` comments ignored")
+        inside = "\n".join(lines)
+        check(
+            "the ONE-HOME arm bites — a copy of the GRAMMAR inside the rule file's own other "
+            "paragraph is a finding",
+            inside != rule_text
+            and GRAMMAR_RE.search(inside)
+            and any(
+                k == "D" and "OUTSIDE its own header" in m for k, _, _, m in findings(root, {RULE_REL: inside})
+            ),
+            "(the mutation did not apply, or no D finding)",
+        )
+
+        # A rule file whose header stops stating the grammar is a finding: the one home
+        # of the rule's syntax would be empty.
+        without = GRAMMAR_RE.sub("", rule_text, count=1)
+        check(
+            "the ONE-HOME arm bites — a rule file whose header stops stating the GRAMMAR is a "
+            "finding",
+            without != rule_text
+            and any(
+                k == "D" and "does not state the GRAMMAR" in m for k, _, _, m in findings(root, {RULE_REL: without})
+            ),
+            "(the mutation did not apply, or no D finding)",
+        )
+
+        # A reader that copies the exempt-mode LIST is a finding: the list has one home.
+        data_line = next(
+            line for line in rule_text.split("\n") if line.strip() and not line.strip().startswith("#")
+        )
+        listed = reader_text + "\n// " + data_line.strip() + "\n"
+        check(
+            "the ONE-HOME arm bites — a reader that copies the exempt-mode LIST is a finding",
+            listed != reader_text
+            and any(
+                k == "D" and "exempt-mode LIST is restated" in m for k, _, _, m in findings(root, {reader_rel: listed})
+            ),
+            "(the mutation did not apply, or no D finding)",
+        )
+
+        # A named reader whose code stops naming the rule file is a finding: it stopped
+        # reading the rule, and it now parses a format the rule file no longer specifies.
+        stopped = reader_text.replace('"tracked-files.txt"', '"rule-file.txt"')
+        check(
+            "the ONE-HOME arm bites — a named reader whose code stops naming the rule file is a "
+            "finding",
+            stopped != reader_text
+            and QUOTED_RULE_RE.search(reader_text)
+            and not QUOTED_RULE_RE.search(stopped)
+            and any(
+                k == "D" and "stopped reading the rule" in m for k, _, _, m in findings(root, {reader_rel: stopped})
+            ),
+            "(the mutation did not apply, or no D finding)",
+        )
+
     if failures:
         print("check-pin-verb-scope --self-test: FAILED (%d arm(s))" % len(failures))
         return 1
@@ -624,7 +936,9 @@ def main():
         return 1
     print(
         "check-pin-verb-scope: OK — %d claim-maker surface(s) state the pin-advance verb's "
-        "scope, and no tracked file calls the advance a non-mutating kind" % len(SURFACES)
+        "scope, no tracked file calls the advance a non-mutating kind, and the shared rule "
+        "has ONE home: its grammar and its exempt-mode list live in %s, and every reader it "
+        "names reads it" % (len(SURFACES), RULE_REL)
     )
     print("PIN-VERB-SCOPE-OK")
     return 0
