@@ -31,9 +31,11 @@
 # `go version -m` read) is unaffected, so `charly version`, stack traces, and
 # the arm64 `go version -m` build-info assertion below all still work.
 #
-# Pure Go cross-compilation (CGO_ENABLED=0), so this runs on a stock
-# ubuntu-latest runner — no distro-native tooling, no self-hosted host. The
-# amd64 binary is built FIRST and used to regenerate each plugin's `.providers`
+# Pure Go cross-compilation (CGO_ENABLED=0), so no distro-native tooling is
+# needed. The runner is the org's self-hosted fleet (`vars.CI_RUNNER_LABEL`, and
+# `ubuntu-latest` when that variable is unset), and the Go toolchain is declared
+# by the `actions/setup-go` step below — never inherited from the runner image.
+# The amd64 binary is built FIRST and used to regenerate each plugin's `.providers`
 # manifest (`charly __plugin-providers <candy-dir>`); the arm64 `.providers`
 # files are COPIED from amd64 (the manifests are arch-independent word lists —
 # the arm64 binary cannot run on the amd64 runner to regenerate them).
@@ -79,6 +81,20 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+      # The toolchain is DECLARED here, not inherited from the runner image. Every
+      # build step below runs `go`, and the fleet's image ships WITHOUT Go by
+      # design (opencharly/distro-ubuntu's `github-runner-ubuntu` candy: "Go is
+      # deliberately NOT here: every workflow that needs it uses actions/setup-go,
+      # which downloads the pinned toolchain"). A runner image that does not carry
+      # Go turns the whole workflow into `go: command not found` (exit 127) —
+      # which is what the `opencharly-ubuntu` fleet did, for every release build
+      # since 2026-10-22, while `ci.yml` and `pin-currency.yml` stayed green
+      # because THEY declare Go. Same step, same form, same version source as
+      # ci.yml: the Go version is the one the module being built declares.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: charly/go.mod
+          cache-dependency-path: charly/go.sum
       - name: Resolve the release tag + CalVer (tag push, tag-on-merge completion, or manual dispatch)
         run: |
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then

@@ -82,13 +82,12 @@ func TestResolveDeployNodeByPath(t *testing.T) {
 	}
 }
 
-// TestDeploySubstrateCanonicalRef proves the substrate→canonical-plugin-candy mapping a
-// box/<distro> submodule auto-injects so an externalized substrate word resolves to its
-// out-of-process provider (the main repo discovers it from candy/ directly; a submodule does
-// not). A non-externalized substrate has NO ref. The ref and the set are BOTH projections of
-// the generated index (the former checkDeployProviderBijection gate is retired), so this test
-// is the in-tree consistency check between them — both read the ONE class-agnostic lookup
-// (canonicalProviderRef).
+// TestDeploySubstrateCanonicalRef proves the substrate→canonical-plugin-candy mapping
+// ensureDeployProviderConnected uses to connect an externalized substrate word on demand (the
+// project-scan leg of connectPluginByWordRef). A non-externalized substrate has NO ref. The ref
+// and the set are BOTH projections of the generated index (the former checkDeployProviderBijection
+// gate is retired), so this test is the in-tree consistency check between them — both read the ONE
+// class-agnostic lookup (canonicalProviderRef).
 func TestDeploySubstrateCanonicalRef(t *testing.T) {
 	want := map[string]string{
 		"vm":         "@github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",

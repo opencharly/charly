@@ -68,7 +68,7 @@ const (
 	// host keeps the fetch orchestration (override/cache/migrate). See candy/plugin-refs (P7).
 	ClassRefs ProviderClass = "refs"
 	// ClassEngine serves the container-engine PROVIDER family (engine:podman, engine:docker
-	// compiled-in; engine:nerdctl out-of-process). Each provider answers the engine op envelope
+	// compiled-in; engine:containerd out-of-process). Each provider answers the engine op envelope
 	// (spec/schema/engine.cue): describe/binary/gpu_args/start_plan/unit_emit/network_ensure.
 	// The op BODIES are pure and live once in spec/container.InvokeEngineOp, so a compiled-in
 	// provider and an out-of-process plugin serve identical behavior. Compiled-in for the same

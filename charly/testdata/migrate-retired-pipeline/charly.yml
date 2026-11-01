@@ -1,0 +1,57 @@
+# A fixture for the `charly migrate` PIPELINE reshape as this binary DELIVERS it.
+#
+# It carries the RETIRED `kind: pipeline` grammar verbatim — `stages:` whose stage `kind:` is a
+# LIFTED VERB (`kind: agent`), plus `concurrency: {lanes: N}` — with two REF-INDEPENDENT
+# stages, which is the shape the pooled fan-out arm can be emitted for. This is the fixture
+# that tells a pre-cutover `command:migrate` from a current one:
+#
+#   - the retired spelling does NOT load (`stages:` / `concurrency: field not allowed`);
+#   - a PRE-#22 migrate emits the lifted verb as BARE step-level sugar (`plan: [- agent: …]`)
+#     and an invalid `type:` under `args:`, so the emitted document does NOT load
+#     (`plan[0] has no intent keyword (run/check/agent-run/agent-check/include)`);
+#   - a CURRENT migrate emits an intent label PLUS the verb key (`- run: assess` + `agent: …`),
+#     wraps the fan-out in the lane arm (`lanes:` / `batch_size:` / `item_var:` / `steps:`), and
+#     drops the invalid `args.type:` — so the emitted document LOADS.
+#
+# The `kind: pipeline` WORD is plugin-provided, so the fixture pins its provider: without the
+# pin the loader refuses the entity with `no kind discriminator` BEFORE any plan-intent check
+# can run, and the fixture would then fail to discriminate at all. The pin is FIXTURE DATA at a
+# fixed tag, the same way the bed roster's `@github` candy refs are: it is stable by design and
+# it is not a claim about which plugin-pipeline tag a consumer should run.
+#
+# Used by the R10 bed check-migrate-local. NOT part of the repo's own manifest: `box validate`
+# walks candy/ and box/, never testdata/.
+migrate-pipeline-plugin:
+  candy:
+    description: |-
+      The pipeline engine, pinned for the migrate fixture: the `kind: pipeline` word is
+      plugin-provided, so the fixture project must carry its pin or the loader refuses the
+      entity before the plan-intent gate that this fixture exists to exercise can run.
+    candy:
+      - '@github.com/opencharly/plugin-pipeline/candy/plugin-pipeline:v2026.294.2124'
+    plan:
+      - check: the pinned pipeline plugin is registered as the pipeline kind's provider
+        command:
+          command: 'true'
+          in_container: false
+
+check-migrate-sample:
+  pipeline:
+    description: |-
+      A retired-grammar `kind: pipeline` entity: the pre-cutover spelling (`stages:` stages
+      whose `kind:` is a lifted verb, plus `concurrency: {lanes: N}`), with two
+      REF-INDEPENDENT stages.
+    concurrency: {lanes: 16}
+    stages:
+      - id: assess
+        kind: agent
+        skill: [omarchy-eval]
+        tools: [ledger]
+        max_turns: 4
+      - id: publish
+        kind: command
+        # The per-lane `$pr` reference is LOAD-BEARING for this fixture: it is what makes the
+        # reshape declare the pipeline's `args:` — the OLD emission then writes the invalid
+        # `type: string` into that arg, and the arm rebinds the reference to the lane item.
+        command: 'test -d .check && echo $pr'
+        expect_exit: 0

@@ -36,7 +36,7 @@ it — and hands the whole loop to your agents through the same CLI you use.
 ```mermaid
 flowchart LR
     C["your candy list<br/>(charly.yml)"] --> P["install plan<br/>(one target-neutral form)"]
-    P --> pod["pod<br/>podman · docker · nerdctl"]
+    P --> pod["pod<br/>podman · docker · containerd"]
     P --> vm["vm<br/>rootless libvirt"]
     P --> local["local<br/>this host or SSH"]
     P --> android["android<br/>device or emulator"]
@@ -51,7 +51,7 @@ flowchart LR
 |---|---|---|
 | **Build** | Multi-stage Containerfiles from a candy list; images that carry their own capabilities and tests as `ai.opencharly.*` labels | `box build` `box validate` `box reconcile` · builders `pixi` `npm` `cargo` `aur` `mise` |
 | **Distros** | Ready-made base boxes and coder boxes with the AI coding CLIs, runtimes and nested containers | fedora · arch · cachyos · debian · ubuntu · omarchy |
-| **Engines & init** | Run on podman, docker or nerdctl, chosen per host for building and running; declare a `service:` once and charly composes the init the destination needs | `podman` `docker` `nerdctl` · supervisord · systemd · OpenRC |
+| **Engines & init** | Run on podman, docker or containerd, chosen per host for building and running; declare a `service:` once and charly composes the init the destination needs | `podman` `docker` `containerd` · supervisord · systemd · OpenRC |
 | **Deploy** | Seven substrates, sidecars, Tailscale/Cloudflare tunnels, encrypted volumes, reversible host installs | `deploy add` `deploy del` `start` `stop` `config` |
 | **VMs** | Rootless libvirt guests from seven sources, cloud-init, UEFI/Secure Boot, snapshots, GPU passthrough with a preemption arbiter | `charly vm` · `libvirt:` `spice:` |
 | **Kubernetes** | Kustomize + Helm deploys, kind clusters, k3s inside a VM, the KubeVirt platform | `kubernetes:` `kindcluster:` `kubevirt:` · `kube:` `helm:` |
@@ -262,7 +262,7 @@ each word to whichever one claims it; there is no `pod` case in a switch stateme
 | **command** — `charly` subcommands | `deploy` `check` `vm` `mcp` `agent` |
 | **step** — install operations | `service-custom` `helm-release` `reboot` |
 | **builder** — multi-stage build patterns | `pixi` `npm` `cargo` `aur` `mise` |
-| **engine** — container engines | `podman` `docker` `nerdctl` |
+| **engine** — container engines | `podman` `docker` `containerd` |
 
 You extend charly by writing candies — in your own repo, referenced by git URL — and a substrate you
 invent is the same kind of thing as `pod:`. The [provider index](https://opencharly.ai/reference/providers/)

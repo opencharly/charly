@@ -40,14 +40,9 @@ func dispatchLifecycleTarget(verb string, node *spec.DeployNode, deployName stri
 	if err := loadDeployPlugins(dir, deployName, nil); err != nil {
 		return nil, err
 	}
-	// A bare box with NO deploy entry (an UNCONFIGURED image `charly shell`/`cmd`/`logs` targets — the
-	// former standalone-podman path) is a {Target:"pod"} node the plugin synthesized that no tree node
-	// references, so the reference-scoped loadDeployPlugins never built its substrate plugin. Connect the
-	// substrate deploy provider by word (idempotent — a no-op once registered; local-first, network-free)
-	// so the interactive/logs legs work on an unconfigured image, not only on a configured deploy.
-	if node.Target != "" {
-		connectPluginByWord(ClassDeployTarget, node.Target)
-	}
+	// ResolveTarget connects the substrate provider itself (ensureDeployProviderConnected), so the
+	// former node.Target-scoped connectPluginByWord call here is DELETED: it was a second copy of
+	// the same connect step, and keeping it would leave two connect paths for one substrate.
 	target, err := ResolveTarget(node, deployName)
 	if err != nil {
 		return nil, err
