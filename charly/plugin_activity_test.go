@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -14,6 +15,16 @@ import (
 	"github.com/opencharly/spec/ops"
 	pb "github.com/opencharly/spec/proto"
 )
+
+// withoutDaemonDiscovery isolates a test from any real charly daemon on the developer's
+// host (a concurrent build's buildkitd would otherwise be summed into the clock). The
+// daemon-following arm has its own test that installs an explicit root set.
+func withoutDaemonDiscovery(t *testing.T) {
+	t.Helper()
+	old := charlyDaemonPidsFn
+	charlyDaemonPidsFn = func() []int { return nil }
+	t.Cleanup(func() { charlyDaemonPidsFn = old })
+}
 
 // progressThenReturnProvider performs host-visible progress on the shared per-call
 // clock for a while (the shape of a long rebuild whose host child is alive), then
@@ -47,6 +58,7 @@ func (progressThenReturnProvider) Invoke(ctx context.Context, _ *Operation) (*Re
 // cap (`context deadline exceeded`) though it was progressing; the idle bound must
 // let it finish.
 func TestInvokeProvider_ProgressingLongCallIsNotKilled(t *testing.T) {
+	withoutDaemonDiscovery(t)
 	old := pluginInvokeNoProgressOverride
 	pluginInvokeNoProgressOverride = 200 * time.Millisecond
 	defer func() { pluginInvokeNoProgressOverride = old }()
@@ -180,7 +192,7 @@ func TestIdleBoundedContext_PluginLocalCPUIsProgress(t *testing.T) {
 	// The clock polls the BURNER's pid directly (standing in for the plugin pid: the
 	// plugin's own CPU is what we must observe).
 	a := newPluginActivity(cmd.Process.Pid)
-	// Baseline via procCPUTicks DIRECTLY (not a.cpu()) so this test still exercises the
+	// Baseline via procCPUTicks DIRECTLY (not a.work()) so this test still exercises the
 	// idle guard's CPU source: with cpu() disabled the guard would idle-kill below and
 	// the test would FAIL, which is the regression it guards.
 	base := uint64(0)
@@ -271,10 +283,16 @@ func TestProcessPid_NilSafeAndLive(t *testing.T) {
 	if got := processPid(cmd); got != cmd.Process.Pid {
 		t.Fatalf("processPid(started) = %d, want %d", got, cmd.Process.Pid)
 	}
-	// And a grpcProvider built with that pid surfaces it via providerPid.
+	// And a grpcProvider built with that pid surfaces it via newProviderActivity, while a
+	// COMPILED-IN provider watches the host's descendants instead of a nonexistent peer pid.
 	gp := &grpcProvider{pid: cmd.Process.Pid}
-	if got := providerPid(gp); got != cmd.Process.Pid {
-		t.Fatalf("providerPid = %d, want %d", got, cmd.Process.Pid)
+	if a := newProviderActivity(gp); a.pid != cmd.Process.Pid || a.excludeRoot {
+		t.Fatalf("newProviderActivity(grpc pid %d) = pid %d excludeRoot %v, want pid %d excludeRoot false",
+			cmd.Process.Pid, a.pid, a.excludeRoot, cmd.Process.Pid)
+	}
+	if a := newProviderActivity(blockingProvider{}); a.pid != os.Getpid() || !a.excludeRoot {
+		t.Fatalf("newProviderActivity(compiled-in) = pid %d excludeRoot %v, want host pid %d excludeRoot true",
+			a.pid, a.excludeRoot, os.Getpid())
 	}
 }
 
@@ -450,16 +468,16 @@ func procStatFields(pid int) []string {
 // token pending, and Go's select picks at RANDOM among ready cases — an expiry can thus
 // win with an unread touch in the buffer. observe() must drain it.
 func TestObserve_PendingLegEventAtExpiryIsProgress(t *testing.T) {
-	a := newPluginActivity(0) // pid 0: the CPU source contributes nothing here
+	a := newPluginActivity(0) // pid 0: the tree-work source contributes nothing here
 	a.touch()                 // one pending event = the coalesced burst still waiting
-	if _, ok := a.observe(a.wake, 0); !ok {
+	if _, ok := a.observe(a.wake, procWork{}); !ok {
 		t.Fatal("a pending host-leg event must count as progress at confirmation")
 	}
 	if a.legs.Load() != 1 {
 		t.Fatalf("the drained event must be counted as a host leg, got %d", a.legs.Load())
 	}
-	// Second read: the buffer is now empty and there is no CPU source, so nothing.
-	if _, ok := a.observe(a.wake, 0); ok {
+	// Second read: the buffer is now empty and there is no tree-work source, so nothing.
+	if _, ok := a.observe(a.wake, procWork{}); ok {
 		t.Fatal("an empty buffer with a frozen peer must not report progress")
 	}
 }
@@ -472,21 +490,239 @@ func TestObserve_LiveChildCPUIsProgress(t *testing.T) {
 	startInOwnGroup(t, cmd)
 
 	peer := newPluginActivity(cmd.Process.Pid)
-	var base uint64
+	var base procWork
 	for i := 0; i < 200; i++ {
 		time.Sleep(10 * time.Millisecond)
-		if base = peer.cpu(); base > 0 {
+		if base = peer.work(); base.cpuTicks > 0 {
 			break
 		}
 	}
-	if base == 0 {
+	if base.cpuTicks == 0 {
 		t.Fatal("the peer tree's CPU never left 0 — the tree walk is not reading the child")
 	}
 	time.Sleep(200 * time.Millisecond)
 	if _, ok := peer.observe(nil, base); !ok {
 		t.Fatalf("the peer's live child is burning CPU but observe reported no progress (high-water %d, tree now %d)",
-			base, peer.cpu())
+			base.cpuTicks, peer.work().cpuTicks)
 	}
+}
+
+// TestObserve_CompiledInPeerDescendantIOIsProgress pins the build half of #1088: a
+// COMPILED-IN peer has no pid, so its clock watches the HOST's descendants, and a
+// descendant that is MOVING BYTES is progress even when CPU barely advances — the shape
+// of the client-side OCI export and the engine load that the default 90s window killed.
+// The child writes a file continuously; nothing heartbeats the clock.
+func TestObserve_CompiledInPeerDescendantIOIsProgress(t *testing.T) {
+	withoutDaemonDiscovery(t)
+	out := filepath.Join(t.TempDir(), "io")
+	cmd := exec.Command("sh", "-c", `while :; do printf xxxxxxxxxxxxxxxx; done > "$1"`, "sh", out)
+	startInOwnGroup(t, cmd)
+
+	a := newCompiledInPluginActivity()
+	base := a.work()
+	deadline := time.Now().Add(2 * time.Second)
+	for a.work().ioBytes <= base.ioBytes && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cur := a.work()
+	if cur.ioBytes <= base.ioBytes {
+		t.Fatalf("the host descendant's I/O never advanced (%d -> %d) — the compiled-in peer's work is not watched",
+			base.ioBytes, cur.ioBytes)
+	}
+	if _, ok := a.observe(nil, base); !ok {
+		t.Fatalf("a host descendant moving %d I/O bytes is real work, but observe reported no progress", cur.ioBytes-base.ioBytes)
+	}
+}
+
+// TestIdleBoundedContext_CompiledInPeerDescendantWorkIsProgress is the R7 regression guard
+// for opencharly/charly#1088 (item (c) of opencharly/.github#263): a compiled-in peer whose
+// work is a HOST CHILD running past the no-progress window must not be killed, while the
+// PRE-FIX source — pid 0, "no peer pid, watches nothing" — kills the very same call.
+// The failing-without-the-fix arm is the pid-0 clock below; the child only writes a file
+// (real I/O), so the surviving call is evidence of work, never a fabricated heartbeat.
+func TestIdleBoundedContext_CompiledInPeerDescendantWorkIsProgress(t *testing.T) {
+	withoutDaemonDiscovery(t)
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 300 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
+
+	out := filepath.Join(t.TempDir(), "io")
+	cmd := exec.Command("sh", "-c", `while :; do printf xxxxxxxxxxxxxxxx; done > "$1"`, "sh", out)
+	startInOwnGroup(t, cmd)
+
+	// The fixed clock: the compiled-in peer's clock watches the host's descendants.
+	a := newCompiledInPluginActivity()
+	base := a.work()
+	deadline := time.Now().Add(2 * time.Second)
+	for a.work().ioBytes <= base.ioBytes && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if a.work().ioBytes <= base.ioBytes {
+		t.Fatalf("the host descendant's I/O never advanced (%d -> %d) — the compiled-in peer's work is not watched",
+			base.ioBytes, a.work().ioBytes)
+	}
+	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+	defer stop()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("a compiled-in peer whose host child is writing files must not be idle-killed: %v", context.Cause(ctx))
+	case <-time.After(time.Second):
+		// good: outlived >3x the window on the child's I/O alone
+	}
+
+	// The PRE-FIX source over the SAME live child: pid 0 watches no tree, so the
+	// 300ms window trips. This is the control that FAILS without the change.
+	legacy := newPluginActivity(0)
+	legacyCtx, legacyStop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), legacy)
+	defer legacyStop()
+	select {
+	case <-legacyCtx.Done():
+		if !errors.Is(context.Cause(legacyCtx), errPluginCallIdle) {
+			t.Fatalf("pre-fix source: expected errPluginCallIdle, got %v", context.Cause(legacyCtx))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the pid-0 source did not trip — the negative arm is not exercising the blindness it claims")
+	}
+}
+
+// TestIdleBoundedContext_CompiledInPeerNoDescendantWorkTrips keeps the GENUINE-HANG arm:
+// with the compiled-in source in place, a peer that spawns no working descendant still
+// trips. The host ROOT is excluded from the sum for exactly this reason — the charly
+// process's own runtime/GC ticks must not mask a wedged in-process call. Without this arm
+// the positive test above could be satisfied by disabling the guard.
+func TestIdleBoundedContext_CompiledInPeerNoDescendantWorkTrips(t *testing.T) {
+	withoutDaemonDiscovery(t)
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 300 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
+
+	a := newCompiledInPluginActivity()
+	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+	defer stop()
+	select {
+	case <-ctx.Done():
+		if !errors.Is(context.Cause(ctx), errPluginCallIdle) {
+			t.Fatalf("expected errPluginCallIdle, got %v", context.Cause(ctx))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a compiled-in peer with no working descendant must still trip the idle guard")
+	}
+}
+
+// TestCharlyDaemonPids_FindsProcessesUnderTheCharlyCacheRoot pins the discovery itself: a
+// process whose argv names a path under charly's own cache root is a charly-owned daemon
+// root. This is deliberately kind-agnostic (the argv path is the only signal), which is what
+// lets a detached `buildkitd` be followed without a core kind word.
+func TestCharlyDaemonPids_FindsProcessesUnderTheCharlyCacheRoot(t *testing.T) {
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		t.Skipf("no user cache dir: %v", err)
+	}
+	probe := filepath.Join(cache, "charly", "watchdog-probe-daemon")
+	cmd := exec.Command("sh", "-c", `while :; do sleep 1; done`, "sh", probe)
+	startInOwnGroup(t, cmd)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, pid := range charlyDaemonPids() {
+			if pid == cmd.Process.Pid {
+				return
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("charlyDaemonPids did not find a process whose argv names %s", probe)
+}
+
+// TestIdleBoundedContext_CompiledInPeerDetachedDaemonTreeIsProgress is the second R7 arm
+// for #1088: a compiled-in build's heavy phase runs in buildkitdrive's DETACHED daemon
+// (rootlesskit RE-EXECs, so the tree is reparented to init), which is NOT a descendant of
+// the charly process. The client can be silent longer than the window while the daemon
+// works — measured on the final `pod-crabbox` RUN. This test double-forks a writer, proves
+// it is not a host descendant, and requires the daemon-following source to see its I/O;
+// with discovery OFF the same call trips, which is the arm that fails without the change.
+func TestIdleBoundedContext_CompiledInPeerDetachedDaemonTreeIsProgress(t *testing.T) {
+	old := pluginInvokeNoProgressOverride
+	pluginInvokeNoProgressOverride = 300 * time.Millisecond
+	defer func() { pluginInvokeNoProgressOverride = old }()
+
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "daemon.pid")
+	out := filepath.Join(dir, "io")
+	// The outer shell starts the writer, records its pid, and exits — so the writer is
+	// reparented AWAY from this test process, exactly like a detached daemon.
+	cmd := exec.Command("sh", "-c",
+		`sh -c 'echo $$ > "$1"; while :; do printf xxxxxxxxxxxxxxxx; done > "$2"' sh "$1" "$2" & exit 0`,
+		"sh", pidFile, out)
+	startInOwnGroup(t, cmd)
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("detached writer's launcher: %v", err)
+	}
+	daemonPid := readPidFile(t, pidFile)
+	t.Cleanup(func() { _ = syscall.Kill(daemonPid, syscall.SIGKILL) })
+
+	// Premise: the writer is NOT in this process's descendant tree — the shape that made
+	// the descendant-only source still kill the build.
+	for _, p := range procTreeProcs(os.Getpid()) {
+		if p.pid == daemonPid {
+			t.Skipf("pid %d reparented to the test process (subreaper) — the detached shape is not exercised", daemonPid)
+		}
+	}
+
+	charlyDaemonPidsFn = func() []int { return []int{daemonPid} }
+	defer func() { charlyDaemonPidsFn = charlyDaemonPids }()
+
+	a := newCompiledInPluginActivity()
+	base := a.work()
+	deadline := time.Now().Add(2 * time.Second)
+	for a.work().ioBytes <= base.ioBytes && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if cur := a.work(); cur.ioBytes <= base.ioBytes {
+		t.Fatalf("detached writer pid %d is moving bytes but the watched tree saw none (%d -> %d)",
+			daemonPid, base.ioBytes, cur.ioBytes)
+	}
+	ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+	select {
+	case <-ctx.Done():
+		t.Fatalf("a compiled-in peer whose DETACHED daemon is working must not be idle-killed: %v", context.Cause(ctx))
+	case <-time.After(time.Second):
+		// good: outlived >3x the window on the detached daemon's I/O
+	}
+	// JOIN the watcher before changing the discovery seam: stop() waits for the goroutine
+	// to exit, so the negative arm's seam write cannot race the positive arm's last sample.
+	stop()
+
+	// The control: with daemon discovery OFF, the same live writer is invisible to the
+	// clock, so the window trips. This is the arm that FAILS without the change.
+	charlyDaemonPidsFn = func() []int { return nil }
+	blind := newCompiledInPluginActivity()
+	blindCtx, blindStop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), blind)
+	defer blindStop()
+	select {
+	case <-blindCtx.Done():
+		if !errors.Is(context.Cause(blindCtx), errPluginCallIdle) {
+			t.Fatalf("descendant-only source: expected errPluginCallIdle, got %v", context.Cause(blindCtx))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the descendant-only source did not trip — the control is not exercising the detached-daemon blindness")
+	}
+}
+
+// readPidFile reads a pid a helper wrote, retrying because the writer starts asynchronously.
+func readPidFile(t *testing.T, path string) int {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if b, err := os.ReadFile(path); err == nil {
+			if pid, perr := strconv.Atoi(strings.TrimSpace(string(b))); perr == nil && pid > 0 {
+				return pid
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("the detached writer never wrote a pid to %s", path)
+	return 0
 }
 
 // TestResetDeadline_NonBlockingOnTheExpiryPath puts the timer in EXACTLY the state the
