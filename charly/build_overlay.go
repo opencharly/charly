@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,6 +114,38 @@ func isQualifiedRef(ref string) bool {
 	return strings.ContainsAny(ref, "/:.")
 }
 
+// overlayBaseRefFromResolution elects the ref an untagged overlay build tags against, given
+// what the local-CalVer resolver said about `base`.
+//
+// It is the WHOLE decision, split out of hostBuildOverlay so the decision can be exercised
+// directly: the reply `hostBuildOverlay` builds is a contract the caller reads, and the one
+// outcome that must never leave here is "no ref, no error" — an empty reply with a nil error
+// reads downstream as a SUCCESSFUL build of nothing.
+//
+// Three outcomes, one per input shape:
+//   - the resolver elected a ref: use it;
+//   - the resolver refused and `base` is already fully qualified (a registry/repo/tag ref):
+//     the refusal is the expected answer, and `base` is itself taggable, so use it;
+//   - the resolver refused and `base` is a bare box name: the ONLY usable ref was the one the
+//     resolver would have returned, so the refusal is the answer. Propagating it is what
+//     stops an untaggable bare name reaching the deploy-name alias tag and surfacing to the
+//     operator as `command exited 125` instead of a named resolution failure (charly#867).
+func overlayBaseRefFromResolution(base, resolved string, rerr error) (string, error) {
+	if rerr == nil && resolved != "" {
+		return resolved, nil
+	}
+	if isQualifiedRef(base) {
+		return base, nil
+	}
+	if rerr == nil {
+		// The resolver answered `("", nil)`. Returning that pair unchanged is the defect this
+		// arm must not reintroduce: a nil error says "built", and the caller would tag an
+		// empty ref. A refusal was still owed, so synthesize one that names what failed.
+		return "", fmt.Errorf("overlay build: no local image resolves the bare name %q (the local CalVer resolver returned no ref and no error)", base)
+	}
+	return "", rerr
+}
+
 func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ buildEngineContext) (spec.OverlayBuildReply, error) {
 	dir := req.Dir
 	if dir == "" {
@@ -162,19 +195,11 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	case tag != "":
 		baseRef = base + ":" + tag
 	default:
-		if resolved, rerr := container.ResolveNewestLocalCalVer(hostEngineBinary(), base); rerr == nil && resolved != "" {
-			baseRef = resolved
-		} else if isQualifiedRef(base) {
-			// A fully-qualified ref needs no local CalVer resolution: the refusal above is the
-			// expected answer for a registry/repo/tag ref, and `base` is already a ref this path
-			// can tag. Fall through to it deliberately.
-			baseRef = base
-		} else {
-			// `base` is a bare name (a short box name), so the ONLY usable ref is the one
-			// ResolveNewestLocalCalVer elects. Discarding its refusal here is what let an
-			// untaggable bare name reach the deploy-name alias tag, where it surfaced to the
-			// operator as `command exited 125` instead of naming the resolution failure (charly#867).
-			return spec.OverlayBuildReply{}, rerr
+		resolved, rerr := container.ResolveNewestLocalCalVer(hostEngineBinary(), base)
+		var berr error
+		baseRef, berr = overlayBaseRefFromResolution(base, resolved, rerr)
+		if berr != nil {
+			return spec.OverlayBuildReply{}, berr
 		}
 	}
 
