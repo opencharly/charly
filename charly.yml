@@ -5133,7 +5133,7 @@ check-wave-pins:
         disposable: true
         lifecycle: dev
         plan:
-            - check: the module graph the binary was built from carries the adopted pins (plugin-build v0.2026286.1121, plugin-vm v0.2026286.856, and the sdk the three tools modules are aligned to)
+            - check: the module graph the binary was built from carries the pins charly/go.mod declares (derived from the tree under test, not from a literal in this step)
               id: wp-pins
               context:
                 - runtime
@@ -5145,17 +5145,51 @@ check-wave-pins:
                 command: |
                     set -eu
                     ROOT="$PWD"; mkdir -p "$ROOT/.check"; EV="$ROOT/.check/wave-pins.log"
-                    cd charly
+                    # The TREE UNDER TEST is located EXPLICITLY: the deploy does not hand this step a cwd that is
+                    # the source tree, so reading go.mod relative to $PWD is the bug this step used to have.
+                    SRC="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+                    [ -f "$SRC/charly/go.mod" ] || { echo "no charly/go.mod under the tree under test: $SRC"; exit 1; }
+                    # The graph is read FROM THE BINARY, so no working-directory assumption is made here.
                     {
                       echo "binary under test: ${CHARLY_BIN}"
                       ${CHARLY_BIN} version 2>/dev/null | tail -1
-                      go list -m github.com/opencharly/plugin-build/candy/plugin-build github.com/opencharly/plugin-vm/candy/plugin-vm github.com/opencharly/sdk
+                      # `go version -m` separates fields with TABS; normalize to spaces so the assertion below,
+                      # which greps for "path version" pairs, reads the same shape it writes.
+                      go version -m "${CHARLY_BIN}" | tr "\t" " "
                     } > "$EV" 2>&1 || { cat "$EV"; exit 1; }
                     # Assert the versions from the graph itself — a hand-copied string would pass a
                     # diff that never moved the pin.
-                    grep -q 'plugin-build/candy/plugin-build v0.2026286.1121' "$EV" || { cat "$EV"; exit 1; }
-                    grep -q 'plugin-vm/candy/plugin-vm v0.2026286.856' "$EV" || { cat "$EV"; exit 1; }
-                    grep -q '^github.com/opencharly/sdk v' "$EV" || { cat "$EV"; exit 1; }
+                    # The expected versions come from the TREE UNDER TEST, not from this line. A
+                    # literal here is the hand-copied string the comment above warns about: it makes
+                    # the step red on every wave until someone edits it, and green on the wave it was
+                    # written for even if the graph never moved. Reading go.mod makes the assertion
+                    # "the built graph agrees with what this tree adopts" -- which is the property a
+                    # pin advance has to have.
+                    # Both expected-side names are LOWERCASE on purpose: the check walk runs the sdk's
+                    # kit.TestVarRefPattern over this command text, and that pattern claims a BRACED,
+                    # UPPERCASE name as an unresolved template reference -- so an uppercase braced
+                    # shell variable here would be classified DEAD (sdk kit/planrun.go) before the
+                    # step ever ran. The runner's own auto-exported CHARLY_BIN stays uppercase
+                    # because the runner resolves it.
+                    decl_build=$(grep -oE 'plugin-build/candy/plugin-build v[0-9]+\.[0-9]+\.[0-9]+' "$SRC/charly/go.mod" | awk '{print $2}' | head -1 || true)
+                    decl_vm=$(grep -oE 'plugin-vm/candy/plugin-vm v[0-9]+\.[0-9]+\.[0-9]+' "$SRC/charly/go.mod" | awk '{print $2}' | head -1 || true)
+                    # Negative arm: an absent declaration must fail, never pass vacuously.
+                    [ -n "$decl_build" ] || { echo "no plugin-build pin declared in charly/go.mod"; cat "$EV"; exit 1; }
+                    [ -n "$decl_vm" ] || { echo "no plugin-vm pin declared in charly/go.mod"; cat "$EV"; exit 1; }
+                    # The readable listing reads the SAME file the assertions read: an unqualified `go.mod`
+                    # here would resolve against the step's cwd, which is the assumption this change removes.
+                    echo "declared pins: build=$decl_build vm=$decl_vm"
+                    echo "--- the declared pins this tree adopts ($SRC/charly/go.mod) ---"
+                    grep -m 4 -E 'plugin-build/candy/plugin-build|plugin-vm/candy/plugin-vm' "$SRC/charly/go.mod"
+                    # The comparison must be READABLE: the step's stdout is discarded by the framework, so the
+                    # expected-side values are written into $EV -- the one artefact this step can be sure is reachable.
+                    echo "--- expected side (read from $SRC/charly/go.mod) ---" >> "$EV"
+                    echo "SRC=$SRC" >> "$EV"
+                    echo "DECL_BUILD=$decl_build" >> "$EV"
+                    echo "DECL_VM=$decl_vm" >> "$EV"
+                    grep -q "plugin-build/candy/plugin-build ${decl_build}" "$EV" || { cat "$EV"; exit 1; }
+                    grep -q "plugin-vm/candy/plugin-vm ${decl_vm}" "$EV" || { cat "$EV"; exit 1; }
+                    grep -q 'github.com/opencharly/sdk v' "$EV" || { cat "$EV"; exit 1; }
                     cat "$EV"
                     echo WAVE-PINS-OK
                 in_container: false
