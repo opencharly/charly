@@ -74,6 +74,14 @@ func mergedChildEnv(extra map[string]string) []string {
 
 func runCliSubcommand(ctx context.Context, executable string, req spec.CliRequest) spec.CliReply {
 	cmd := exec.Command(executable, req.Argv...)
+	// A caller that runs a subcommand on behalf of an IMPORTED project passes that project's root
+	// here, because the child must read THAT project while this process stands in the importer's
+	// (opencharly/charly#819: a `kind: local` bed invoked qualified from the umbrella ran
+	// `charly task list` against the umbrella and asserted vacuously). Empty inherits the caller's
+	// cwd, which is the pre-#819 behaviour for every existing caller.
+	if req.Dir != "" {
+		cmd.Dir = req.Dir
+	}
 	cmd.Stdin = os.Stdin
 	// Merge the request's per-call env over the inherited environment: this is the
 	// placement-invariant carrier for isolation vars (CHARLY_REPO_OVERRIDE /

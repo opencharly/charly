@@ -2,8 +2,6 @@ cuelabs.dev/go/oci/ociregistry v0.0.0-20251212221603-3adeb8663819 h1:Zh+Ur3OsoWp
 cuelabs.dev/go/oci/ociregistry v0.0.0-20251212221603-3adeb8663819/go.mod h1:WjmQxb+W6nVNCgj8nXrF24lIz95AHwnSl36tpjDZSU8=
 cuelang.org/go v0.16.1 h1:iPN1lHZd2J0hjcr8hfq9PnIGk7VfPkKFfxH4de+m9sE=
 cuelang.org/go v0.16.1/go.mod h1:/aW3967FeWC5Hc1cDrN4Z4ICVApdMi83wO5L3uF/1hM=
-github.com/alecthomas/kong v1.15.0 h1:BVJstKbpO73zKpmIu+m/aLRrNmWwxXPIGTNin9VmLVI=
-github.com/alecthomas/kong v1.15.0/go.mod h1:wrlbXem1CWqUV5Vbmss5ISYhsVPkBb1Yo7YKJghju2I=
 github.com/bufbuild/protocompile v0.14.1 h1:iA73zAf/fyljNjQKwYzUHD6AD4R8KMasmwa/FBatYVw=
 github.com/bufbuild/protocompile v0.14.1/go.mod h1:ppVdAIhbr2H8asPk6k4pY7t9zB1OU5DoEw9xY/FUi1c=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
@@ -57,12 +55,10 @@ github.com/mitchellh/go-wordwrap v1.0.1 h1:TLuKupo69TCn6TQSyGxwI1EblZZEsQ0vMlAFQ
 github.com/mitchellh/go-wordwrap v1.0.1/go.mod h1:R62XHJLzvMFRBbcrT7m7WgmE1eOyTSsCt+hzestvNj0=
 github.com/oklog/run v1.1.0 h1:GEenZ1cK0+q0+wsJew9qUg/DyD8k3JzYsZAi5gYi2mA=
 github.com/oklog/run v1.1.0/go.mod h1:sVPdnTZT1zYwAJeCMu2Th4T21pA3FPOQRfWjQlk7DVU=
-github.com/opencharly/sdk v0.2026305.2312 h1:AuS/iUntrq9QwfSj5/gnTbivQqylwVYd56H5o9ZecVU=
-github.com/opencharly/sdk v0.2026305.2312/go.mod h1:JATa64xjMSgqEdOhRRm4iiptgfaetvmHOwybt9kKZko=
 github.com/opencharly/sdk v0.2026306.2235 h1:T3aWjMH0rcKncB1iUoCP7+mNdKyZLGxthH5E/cl+lY0=
 github.com/opencharly/sdk v0.2026306.2235/go.mod h1:JATa64xjMSgqEdOhRRm4iiptgfaetvmHOwybt9kKZko=
-github.com/opencharly/spec v0.2026302.327 h1:UE9YaZ29bae368JJ6X+qspO3mJWPOBj26X8Vxnku1HI=
-github.com/opencharly/spec v0.2026302.327/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/spec v0.2026307.1209 h1:Oefukt6NuRESRoCVQm5gmLIs1+dfrbCv/qAGk9A31RA=
+github.com/opencharly/spec v0.2026307.1209/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=

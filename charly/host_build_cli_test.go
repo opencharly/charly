@@ -185,3 +185,38 @@ func TestMergedChildEnv_OverridesAndInherits(t *testing.T) {
 		t.Fatal("empty env must return nil (inherit host env unchanged)")
 	}
 }
+
+// TestRunCliSubcommandHonoursRequestDir is the regression for opencharly/charly#819: a caller
+// running a subcommand on behalf of an IMPORTED project passes that project's root, so the child
+// reads THAT project instead of inheriting this process's cwd. Without the fix the child reports
+// the caller's directory — which is exactly how a qualified check bed asserted vacuously against
+// the importer's project.
+func TestRunCliSubcommandHonoursRequestDir(t *testing.T) {
+	helper := writeShellHelper(t, "pwd -P")
+	want, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(caller) // the caller stands in the importer's project
+
+	reply := runCliSubcommand(context.Background(), helper, spec.CliRequest{Capture: true, Combined: true, Dir: want})
+	if reply.ExitCode != 0 || reply.Error != "" {
+		t.Fatalf("runCliSubcommand() = %#v", reply)
+	}
+	if got := strings.TrimSpace(reply.Stdout); got != want {
+		t.Fatalf("child cwd = %q, want the request's Dir %q — the child inherited the caller's cwd", got, want)
+	}
+
+	// An empty Dir keeps the caller's cwd: the pre-#819 behaviour every existing caller relies on.
+	reply = runCliSubcommand(context.Background(), helper, spec.CliRequest{Capture: true, Combined: true})
+	if reply.ExitCode != 0 || reply.Error != "" {
+		t.Fatalf("empty Dir: runCliSubcommand() = %#v", reply)
+	}
+	if got := strings.TrimSpace(reply.Stdout); got != caller {
+		t.Fatalf("empty Dir: child cwd = %q, want the caller's cwd %q", got, caller)
+	}
+}
