@@ -25,6 +25,13 @@ import:
     # omarchy imports the `arch` namespace the same way cachyos does — its distro
     # entity `inherits: arch`, and its boxes base on arch.arch / arch.arch-builder.
     - omarchy: '@github.com/opencharly/distro-omarchy:v2026.274.2118'
+    # The `vm:` substrate. check-sidecar-pod declares a deploy-level VM member
+    # (`from: eval-vm`) and BringUpMembers dispatches `deploy add` for it, so the
+    # project that hosts the bed must compose plugin-deploy-vm or the member
+    # deploy refuses with "the vm deploy substrate is not available in this
+    # project" (charly#1083 / run 2026.308.0842). Imports walk in recursively, so
+    # this composes the substrate for the umbrella too.
+    - vmdeploy: '@github.com/opencharly/plugin-deploy-vm:v2026.296.1557'
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
