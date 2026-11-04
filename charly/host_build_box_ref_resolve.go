@@ -10,7 +10,10 @@ package main
 // identifier needs, kept for the ONE host-internal caller that cannot cross a process boundary:
 // plugin_executor_reverse.go's injected ResolveImage closure (the BuilderStep host-step dispatch,
 // plugin_executor_reverse.go:161), which closes over the in-process *Config the deploy walk
-// already holds. The former buildableShortNameForEnsure + hostBuildBoxRefResolve host-builder are
+// already holds. Since charly#968 its (registry, leaf) half is also what the pod-overlay prep
+// (build_overlay.go's hostBuildOverlay) uses to name the base image, so an overlay's BaseImage is
+// composed by the SAME rule as the box build that produced it. The former
+// buildableShortNameForEnsure + hostBuildBoxRefResolve host-builder are
 // DELETED — the plugin owns the build-fallback resolve now (buildableShortNamePlugin).
 //
 // #55 coneB-br2: this file SHEDS its deploykit import via the #8 cfg.ResolveBoxRef pattern (the
@@ -52,16 +55,32 @@ func resolveImageRefForEnsure(image string, cfg *spec.Config, projectDir string)
 	if container.LooksLikeFullRef(image) {
 		return image, nil
 	}
+	registry, name, err := resolveBoxImageRegistryName(image, cfg)
+	if err != nil {
+		return "", err
+	}
+	return container.ResolveShellImageRef(registry, name, ""), nil
+}
+
+// resolveBoxImageRegistryName resolves the (registry, repository) pair the BOX BUILD names for a
+// box ref: the box's own registry, falling back to its NAMESPACE's defaults.registry, and the
+// box's LEAF name — a namespace prefix addresses the box, it is never part of the image repo.
+//
+// This is the ONE naming rule shared by the builder venue (resolveImageRefForEnsure) and the
+// pod-overlay prep (hostBuildOverlay): an overlay BaseImage must name exactly the ref
+// `charly box build` produced, or a namespaced box hands the engine a short name it cannot
+// resolve (`short-name "charly.check-k8s-deploy-app" did not resolve ...`, charly#968).
+func resolveBoxImageRegistryName(image string, cfg *spec.Config) (registry, name string, err error) {
 	if cfg == nil {
-		return "", fmt.Errorf("short name %q requires a project directory with charly.yml", image)
+		return "", "", fmt.Errorf("short name %q requires a project directory with charly.yml", image)
 	}
 	img, nsCfg, ok := cfg.ResolveBoxRef(image)
 	if !ok {
-		return "", fmt.Errorf("resolving %q via charly.yml: not found", image)
+		return "", "", fmt.Errorf("resolving %q via charly.yml: not found", image)
 	}
-	registry := img.Registry
+	registry = img.Registry
 	if registry == "" {
 		registry = nsCfg.Defaults.Registry
 	}
-	return container.ResolveShellImageRef(registry, spec.LeafName(image), ""), nil
+	return registry, spec.LeafName(image), nil
 }

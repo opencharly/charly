@@ -25,6 +25,7 @@ func TestIsQualifiedRef(t *testing.T) {
 		{"desk-schema", false, "the bare name from charly#867"},
 		{"jupyter", false, "a bare box name"},
 		{"check-desktop", false, "a bare name with a hyphen is still bare"},
+		{"charly.check-k8s-deploy-app", false, "a namespace-qualified BOX address is not an image ref — the dot is an ADDRESS separator, not a registry/repo/tag separator (charly#968)"},
 		{"", false, "empty is not a ref at all"},
 
 		// Fully-qualified refs: these need no local CalVer resolution and are already

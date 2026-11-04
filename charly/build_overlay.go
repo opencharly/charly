@@ -104,6 +104,12 @@ func overlayBuildInputsFrom(ctx context.Context) *overlayBuildInputs {
 // name. It is a PURE shape test: it looks nothing up and fetches nothing, so it is safe
 // to ask before any resolution has been attempted.
 //
+// Only "/" and ":" qualify: they are the only separators an image ref carries. A DOT alone
+// does NOT — a namespace-qualified BOX address (`charly.check-k8s-deploy-app`) is not an
+// image repo, and the build names its image by the box's LEAF under the box/namespace
+// registry (charly#968). Counting "." here classified a namespaced box address as a
+// qualified ref, so the overlay prep handed podman a short name it cannot resolve.
+//
 // The distinction it draws is the one charly#867 turned on: a qualified ref can be tagged
 // as-is (a registry/repo/tag ref needs no local CalVer resolution), while a bare name
 // cannot — the local CalVer build is the only ref that names a real image for it.
@@ -111,7 +117,7 @@ func isQualifiedRef(ref string) bool {
 	if ref == "" {
 		return false
 	}
-	return strings.ContainsAny(ref, "/:.")
+	return strings.ContainsAny(ref, "/:")
 }
 
 // overlayBaseRefFromResolution elects the ref an untagged overlay build tags against, given
@@ -144,6 +150,26 @@ func overlayBaseRefFromResolution(base, resolved string, rerr error) (string, er
 		return "", fmt.Errorf("overlay build: no local image resolves the bare name %q (the local CalVer resolver returned no ref and no error)", base)
 	}
 	return "", rerr
+}
+
+// overlayBaseRef composes the BaseImage an overlay build tags against: the ref the box build
+// produced, from the box's (registry, repository) identity and the run's tag.
+//
+// The tagged arm asks the SAME helper the build path uses (container.ResolveShellImageRef), so
+// the ref is composed by one naming rule rather than string concatenation. For an unqualified
+// box the old `box + ":" + tag` coincided with that ref; for a namespaced box it did not
+// (charly#968).
+//
+// The untagged arm asks the local-CalVer resolver about `imageName` — the build's REPOSITORY
+// name, never a namespace-qualified box address — and defers the election to
+// overlayBaseRefFromResolution (charly#867). resolveLocal is a parameter so both arms are
+// exercisable without a container engine; production passes the host engine's resolver.
+func overlayBaseRef(registry, imageName, tag string, resolveLocal func(string) (string, error)) (string, error) {
+	if tag != "" {
+		return container.ResolveShellImageRef(registry, imageName, tag), nil
+	}
+	resolved, rerr := resolveLocal(imageName)
+	return overlayBaseRefFromResolution(imageName, resolved, rerr)
 }
 
 func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ buildEngineContext) (spec.OverlayBuildReply, error) {
@@ -182,6 +208,23 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	}
 	tag := req.Version
 
+	// BaseImage must name the IMAGE the build produced, not the box ADDRESS: a namespaced box
+	// is named by its LEAF under the box/namespace registry, so concatenating the box name with
+	// the tag hands the engine a short name it cannot resolve (charly#968). `base` itself stays
+	// the box name for collectOverlayCandies and ResolvedBox.Name below.
+	registry, imageName := "", base
+	if !isQualifiedRef(base) {
+		cfg, lerr := LoadConfig(dir)
+		if lerr != nil {
+			return spec.OverlayBuildReply{}, lerr
+		}
+		var ierr error
+		registry, imageName, ierr = resolveBoxImageRegistryName(base, cfg)
+		if ierr != nil {
+			return spec.OverlayBuildReply{}, ierr
+		}
+	}
+
 	// The overlay candy set (add_candy: refs) — threaded into the buildEngineContext below so the
 	// class:step ops.OpEmit's BuildEnv.ExtraCandyRefs widens candy/plugin-installstep's OWN independent
 	// envelope re-fetch the SAME way (dispatchOCIStep, charly/oci_step_emit.go) — this is the ONLY
@@ -190,17 +233,11 @@ func hostBuildOverlay(ctx context.Context, req spec.OverlayBuildRequest, _ build
 	// createRemoteCandyCopies, K3 host-prep move) before this seam is ever reached.
 	overlayCandies := collectOverlayCandies(plans, base)
 
-	var baseRef string
-	switch {
-	case tag != "":
-		baseRef = base + ":" + tag
-	default:
-		resolved, rerr := container.ResolveNewestLocalCalVer(hostEngineBinary(), base)
-		var berr error
-		baseRef, berr = overlayBaseRefFromResolution(base, resolved, rerr)
-		if berr != nil {
-			return spec.OverlayBuildReply{}, berr
-		}
+	baseRef, berr := overlayBaseRef(registry, imageName, tag, func(short string) (string, error) {
+		return container.ResolveNewestLocalCalVer(hostEngineBinary(), short)
+	})
+	if berr != nil {
+		return spec.OverlayBuildReply{}, berr
 	}
 
 	deployName := req.DeployName
