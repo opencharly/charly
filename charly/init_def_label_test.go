@@ -198,6 +198,16 @@ func TestEmbeddedVocab_SystemdClaimsEveryUnitTypeItInstalls(t *testing.T) {
 				t.Fatalf("%s assembly declares no mount target directory: %s", name, asm)
 			}
 			unitDir := m[1]
+			// The target must NOT sit in the top-level /system* namespace: BuildKit
+			// does not materialize such a mount target, so the bind mounts nothing and
+			// the copy silently installs no units. This is the assertion that fails if
+			// either assembly's target is reverted to /systemd — the machine init's fix
+			// is a config line with no bed of its own in this repo, so this test is the
+			// gate that catches its reversion.
+			if strings.HasPrefix(unitDir, "/system") {
+				t.Errorf("%s mounts its units at %q, inside the top-level /system* namespace "+
+					"BuildKit does not materialize, so the assembly would copy no units", name, unitDir)
+			}
 			// The copy must not be extension-specific: a claimed type the copy misses is
 			// staged into the build context and then dropped on the floor.
 			if strings.Contains(asm, "cp "+unitDir+"/*.service ") {
@@ -280,5 +290,47 @@ func TestEmbeddedVocab_SystemdContainerExtends(t *testing.T) {
 	}
 	if def.ServiceSchema.ServiceTemplate != base.ServiceSchema.ServiceTemplate {
 		t.Error("systemd-container's service_template is not the inherited systemd: template")
+	}
+}
+
+// TestEmbeddedVocab_SystemdContainerEnablesPackagedSystemUnits exercises the
+// container init's system_enable_template. It is a SECOND enable path beside
+// assembly_template: the assembly enables candy-SHIPPED unit files, while this
+// template enables a distro-PACKAGED unit a service: entry names with
+// use_packaged. A template nobody renders is dead, and an EMPTY one emits a
+// bare `RUN` that fails the build, so both are asserted here rather than left
+// to a bed whose fixture may ship no packaged units.
+func TestEmbeddedVocab_SystemdContainerEnablesPackagedSystemUnits(t *testing.T) {
+	uf, err := embeddedDefaults()
+	if err != nil {
+		t.Fatalf("embeddedDefaults: %v", err)
+	}
+	ic := spec.ProjectInitConfig(uf, resolveInitConfigViaPlugin)
+	if ic == nil || ic.Init["systemd-container"] == nil {
+		t.Fatal("embedded vocabulary missing the systemd-container init def")
+	}
+	def := ic.Init["systemd-container"]
+	if def.SystemEnableTemplate == "" {
+		t.Fatal("systemd-container declares no system_enable_template — a packaged " +
+			"system-scope service would never be enabled")
+	}
+	// Render the authored template directly: the sdk mechanism kits are for
+	// PLUGINS, never the host (the import-purity gate), and this template reads
+	// only .Units, so text/template produces the same text the SDK renderer does.
+	tmpl, err := template.New("system-enable").Parse(def.SystemEnableTemplate)
+	if err != nil {
+		t.Fatalf("system_enable_template does not parse: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, map[string]any{"Units": []string{"w38-packaged.service"}}); err != nil {
+		t.Fatalf("rendering system_enable_template: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "systemctl enable w38-packaged.service") {
+		t.Errorf("the rendered system-enable block does not enable the packaged unit:\n%s", got)
+	}
+	if strings.Contains(got, "RUN\n") {
+		t.Error("the rendered system-enable block emitted a bare RUN; an empty template " +
+			"would fail the build")
 	}
 }
