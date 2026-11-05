@@ -521,6 +521,13 @@ func ResolveTarget(node *spec.DeployNode, name string) (spec.UnifiedDeployTarget
 		return nil, fmt.Errorf("deployment %q missing required `target:` field "+
 			"(local|vm|pod|kubernetes|android)", name)
 	}
+	// Connect the deploy provider for the SUBSTRATE before looking it up. The deploy-substrate
+	// plugins are out-of-process and connected on demand; a deploy name that is NOT already a node
+	// in the merged project tree never reaches deployNodePluginContext's node-keyed scan, so
+	// without this the registry lookup below failed for every `charly deploy add <new-name>` even
+	// though `charly config` on the same binary served the identical substrate (charly#1038). This
+	// is the ONE connect step every resolution path shares (R2); it is idempotent.
+	ensureDeployProviderConnected(node.Target)
 	prov, ok := providerRegistry.ResolveDeploy(node.Target)
 	if !ok {
 		return nil, unresolvedDeployTargetError(name, node.Target)
@@ -546,9 +553,9 @@ func ResolveTarget(node *spec.DeployNode, name string) (spec.UnifiedDeployTarget
 // unresolvedDeployTargetError distinguishes the two ways ResolveDeploy(target) can fail: a
 // genuinely UNKNOWN target word (a typo — not a known substrate word at all), versus a KNOWN
 // substrate word whose deploy provider is merely NOT CONNECTED (the deploy-substrate plugins are
-// out-of-process and connected on demand via loadDeployPlugins — a target with no charly.yml entry,
-// or a plugin that failed to load, leaves the registry entry absent). The former is a user error;
-// the latter is a load/connect gap. Conflating them (the former "unknown target" text for both)
+// out-of-process and connected on demand via ensureDeployProviderConnected — a plugin that failed
+// to load, or a target no connectable candy serves, leaves the registry entry absent). The former
+// is a user error; the latter is a load/connect gap. Conflating them (the former "unknown target" text for both)
 // misdirected the operator during the check-k3s-vm RCA.
 //
 // "Known" is the UNION of the CUE resource-kind vocabulary (the canonical pod/vm/… words) and the

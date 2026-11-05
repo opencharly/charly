@@ -99,7 +99,7 @@ func canonicalProviderRef(class ProviderClass, word, parent, callerRef string) s
 // exec.InvokeProvider callback comes back here.
 //
 // The work served is HOST work, and it is invisible to the caller's progress clock by construction.
-// It runs either in THIS process (a compiled-in provider, providerPid → 0) or in a peer plugin
+// It runs either in THIS process (a compiled-in provider) or in a peer plugin
 // process whose only route to this clock is its own reverse legs — and the overlay resolve
 // (`build:generate` op=resolve) makes NONE: its whole host-FS prep (cleanStaleBuildDirs,
 // createRemoteCandyCopies, the container image-store listing — host_prep.go, zero ex. calls) is
@@ -149,12 +149,13 @@ func (s *executorReverseServer) invokeProvider(ctx context.Context, req *pb.Invo
 	// deadlock — a plugin waiting on a peer that is itself waiting) would block this
 	// goroutine in futex_wait forever. The bound is IDLE-based, not total-duration
 	// (plugin_activity.go), and its progress signal is BOTH the host reverse legs AND
-	// the PEER PLUGIN PROCESS's own CPU — the latter covers work the plugin does
-	// entirely locally (its virsh/ssh retry children), without which a legitimately
-	// long prepare-venue was false-killed (measured).
+	// CPU/I/O advance in the watched process tree — the latter covers work the plugin
+	// does entirely locally (its virsh/ssh retry children) and, for a COMPILED-IN peer,
+	// the host children that carry its work (buildctl, the engine's load), without which
+	// a legitimately long prepare-venue or cold build was false-killed (measured).
 	var activity *pluginActivity
 	if _, ok := ctx.Deadline(); !ok {
-		activity = newPluginActivity(providerPid(prov))
+		activity = newProviderActivity(prov)
 		var cancel context.CancelFunc
 		ctx, cancel = idleBoundedContext(ctx, pluginInvokeNoProgressFor(class), activity)
 		defer cancel()

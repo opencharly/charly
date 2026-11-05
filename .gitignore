@@ -36,7 +36,11 @@ profile.cov
 # compiled-in plugin candy resolves as a `require` pin in charly/go.mod from the
 # module proxy (no `use` directive), so `go build ./charly` / `go test ./...` resolve
 # the candy imports in charly/plugins_generated.go WITHOUT first running `scripts/bootstrap-charly.sh`.
-# go.work.sum is its checksum lock (committed for reproducible/offline builds). The
+# The workspace has exactly ONE member (./charly), so its build list IS that member's build
+# list, and every hash that build needs is already in charly/go.sum: the workspace has no
+# checksum lock of its own. go.work.sum is NOT committed — it is a fossil of the pre-cutover
+# multi-member workspace (opencharly/charly#1065), where 134 of its 180 lines named a version
+# no lock in this repo carries. TestWorkspaceHasOneMemberAndNoSumFile keeps it gone; the
 # reproducibility gate is TestPluginsGenReproducible.
 #
 # The DEV workspace is the opposite: `scripts/bootstrap-charly.sh --dev-plugin` makes
@@ -49,6 +53,11 @@ profile.cov
 # for a later plain build.
 /go.work.dev
 /go.work.dev.sum
+# The workspace's OWN checksum lock is never version-controlled either: the workspace has
+# ONE member, whose go.sum carries every hash, so a go.work.sum has nothing to record
+# (opencharly/charly#1065). It is ignored so it can never be re-committed, and
+# TestWorkspaceHasOneMemberAndNoSumFile keeps it from existing at all.
+/go.work.sum
 
 # env files and GPG-encrypted secrets
 .env

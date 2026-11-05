@@ -25,6 +25,13 @@ import:
     # omarchy imports the `arch` namespace the same way cachyos does — its distro
     # entity `inherits: arch`, and its boxes base on arch.arch / arch.arch-builder.
     - omarchy: '@github.com/opencharly/distro-omarchy:v2026.274.2118'
+    # The `vm:` substrate. check-sidecar-pod declares a deploy-level VM member
+    # (`from: eval-vm`) and BringUpMembers dispatches `deploy add` for it, so the
+    # project that hosts the bed must compose plugin-deploy-vm or the member
+    # deploy refuses with "the vm deploy substrate is not available in this
+    # project" (charly#1083 / run 2026.308.0842). Imports walk in recursively, so
+    # this composes the substrate for the umbrella too.
+    - vmdeploy: '@github.com/opencharly/plugin-deploy-vm:v2026.296.1557'
 # Main owns NO boxes after the 2026-06 box inversion — only the shared candy
 # library + the inline check/vm/local/kubernetes orchestration. Discover candies only.
 discover:
@@ -53,8 +60,13 @@ defaults:
     # Build-speed tunables (project-wide). Precedence: CLI flag / env wins,
     # then these defaults, then a built-in fallback. See /charly-build:build.
     jobs: 4 # outer: concurrent IMAGE builds per DAG level (--jobs / CHARLY_BUILD_JOBS)
-    podman_jobs: 0 # inner: stages per `podman build`; 0 = auto = min(NCPU, podman_jobs_cap)
-    podman_jobs_cap: 8 # ceiling for the auto calc — proven safe on podman 5.8.2 (20-run race gate)
+    stage_parallelism: 0 # inner: stages of ONE build; 0 = auto = min(NCPU, stage_parallelism_cap)
+    stage_parallelism_cap: 4 # ceiling for the auto calc. The builder is BuildKit: the resolved
+    # value is the DAEMON's [worker.oci] max-parallelism
+    # (candy/plugin-build/buildkit.go) — set at daemon START and host-global per uid, so it
+    # applies only when it matches the value the running daemon was started with. 4 is the
+    # sdk's conservative fallback (sdk/buildkit/build_helpers.go) and the value the org's
+    # builds run at today; the podman-era cap of 8 does not carry over to BuildKit.
     # Heavy directories never COPYed by any Containerfile — merged into the
     # generated .containerignore/.dockerignore on top of the built-in baseline
     # (.git, bin, charly, *.md, editor/python/node cache-bust globs).
@@ -2527,7 +2539,7 @@ check-commands-app:
             - '@github.com/opencharly/plugin-clean/candy/plugin-clean:v2026.271.2313'
             - '@github.com/opencharly/plugin-settings/candy/plugin-settings:v2026.272.0410'
             - '@github.com/opencharly/plugin-candy/candy/plugin-candy:v2026.281.0948'
-            - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.276.1843'
+            - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.301.1542'
             - '@github.com/opencharly/plugin-authoring/candy/plugin-authoring:v2026.271.2244'
             - '@github.com/opencharly/plugin-status/candy/plugin-status:v2026.272.0442'
             - '@github.com/opencharly/plugin-substrate/candy/plugin-substrate:v2026.274.0652'
@@ -4032,29 +4044,213 @@ push:
 # =============================================================================
 pins:
   task:
-    description: The pin operation over this repo's own box/* gitlinks (mode via param) — MODE=currency asks whether every pin is at the ref its intent names, and its Message IS the answer
+    description: The pin operation over this repo's own box/* gitlinks (mode via param) — MODE=bump advances EVERY pin this repo declares and does not commit, MODE=currency asks whether every pin is at the ref its intent names, and its Message IS the answer
     dir: .
     params:
       MODE:
-        description: status|bump|verify|currency (the git-submodules mode)
+        description: status|bump|verify|currency (the git-submodules mode) — bump advances EVERY pin this repo declares and does not commit
         default: verify
+      STALE_AFTER:
+        description: the OWNER's bound on its OWN bookkeeping — how long this repo may leave a pin un-advanced before it is NEGLECTED rather than merely behind (empty = no bound; only MODE=currency reads it)
+        default: ""
     plan:
       - run: run git-submodules in the selected mode
         git-submodules:
           mode: "${MODE}"
+          stale_after: "${STALE_AFTER}"
         context: [runtime]
 
 # sync — the named entry point for the advance half: a thin wrapper that SELECTS
 # the mode of the ONE definition above, so the pin operation exists exactly once.
+#
+# WHAT IT DOES, in the words a reader needs BEFORE running it: it advances EVERY
+# pin this repo declares — this repo's own six `box/*` gitlinks, which are all the
+# pins it has (there is no `pin_map`, so there is no edge) — to the tip the remote
+# serves for the ref each path's own `.gitmodules` entry names, NEVER a PR branch.
+# It is not a report: a path that HAS a checkout is ROLLED in that checkout and
+# every advance is STAGED in this repo's index, while a path with NO checkout is
+# advanced in the index alone. It does not commit and it does not open a PR, and it
+# FAILS LOUD for every path it could not advance — a sync over a tree it could not
+# fully advance must never report success.
 sync:
   task:
-    description: Advance this repo's own box/* gitlinks to each distro's default-branch HEAD (preview only; does not commit)
+    description: Advance EVERY pin this repo declares — this repo's own box/* gitlinks — to the tip the remote serves for the ref each path's own .gitmodules entry names, never a PR branch; it rolls the checkouts that exist and stages their gitlinks, and it does not commit and does not open a PR
     dir: .
     plan:
-      - run: advance the box/* pins to the refs their intent names
+      - run: advance EVERY pin this repo declares to the ref its intent names
         task:
           task: pins
           param: [MODE=bump]
+        context: [runtime]
+
+# pin-current — the named entry point for the CONTROL half: the thin wrapper that
+# SELECTS the currency mode AND this repo's own bound of the ONE definition above.
+#
+# WHY THE BOUND, and why this does not treat "a twin is behind" as a failure:
+# measured over this repo's own history, a twin is behind the ref its own
+# `.gitmodules` declares for most of the time — over the 32 days from 2026-09-22 to
+# 2026-10-23, each of the six was behind on 17 to 27 of them, and on 28 of the 32
+# (88%) at least one was behind. A busy upstream is behind between every wave, so a
+# gate on the DISTANCE would be red roughly three days out of four. That is the
+# permanently-red gate the org's own pin rule forbids: it trains every reader to
+# ignore it, and then it catches nothing.
+#
+# What separates churn from neglect is the AGE of this repo's OWN last advance of that
+# path: the distance is churn, the age is neglect.
+#
+# THE CRITERION, in the producer's own words, because "not current" is a SET of
+# classes and "behind" is only the first of them. The control fires on NEGLECT: a
+# `box/*` pin that is NOT CURRENT — `behind`, `not-on-the-served-line` (what a
+# squash-merged upstream produces: its served ref does not descend from the recorded
+# pin, so the recorded pin is not on the served line at all), or `differs` (no
+# checkout to judge it) — AND that this repo has not advanced for longer than this
+# repo's own bound. The org merges by squash in several repos, so the second class
+# is ordinary here, not exotic, and a criterion that named only the first would
+# understate the control exactly where it matters.
+#
+# The measurement below CLASSIFIES every pair, with the same ancestry test the
+# control uses, and prints the tally by class: over the 32-day window all 145
+# not-current pairs are the `behind` class, so in THIS repo's history the two
+# readings coincide — shown, not assumed.
+#
+# THE BOUND IS PLACED BY MEASUREMENT, over this repo's own advance history — the
+# gaps between the commits that recorded each twin's gitlink:
+#   - the longest gap that stayed WITHIN a 7-day bound, i.e. ordinary operation, was
+#     6.4 d (box/cachyos, 2026-07-09 -> 2026-07-16);
+#   - 25 gaps ran PAST it, from 8.0 d (the whole set, 2026-07-08 -> 2026-07-16) to
+#     25.1 d (box/debian and box/ubuntu, 2026-08-29 -> 2026-09-23) — genuine lapses.
+# The bound has to sit ABOVE the healthy maximum — during such a gap the pin is
+# behind and the age grows, so a bound at or below it would fire on ordinary
+# operation — and BELOW the shortest lapse, or it catches nothing. 168h (7 d) is the
+# ONLY whole-day bound strictly between 6.4 d and 8.0 d: 0.6 d above the healthy
+# maximum, 1.0 d below the shortest lapse.
+#
+# The bound is THIS repo's own number. The producer's knob is opt-in and carries no
+# default (unset => no bound at all), so 168 h is a choice this repo made, on this
+# repo's own evidence, and it has to be re-derived when the cadence changes.
+#
+# MEASURED, over the 9 days from 2026-10-15 (the day the leaves' intent landed) to
+# 2026-10-23: this control was red on 6 of them, and on EVERY one of those 6 the
+# twins had genuinely not been advanced — the ages were 7.5 d to 14.7 d, every one
+# of them inside a real lapse: 8.1 d (box/cachyos), 10.2 d (box/arch, box/debian,
+# box/fedora, box/ubuntu) or 15.3 d (box/omarchy). It was green on the 3 days when
+# this repo had advanced within its own cadence. There was no red day on a healthy
+# tree — which is the property the org's pin rule demands of a gate, and the reason
+# the criterion is the age and not the distance.
+#
+# The derivation is a script, not a paragraph: `scripts/measure-pin-cadence.py`
+# reproduces these numbers from this repo's own history and the twins' real remotes,
+# `--since`/`--until` name the window by its dates, and `--bound-hours` re-derives
+# them for any other bound. A chosen number that cannot be re-derived is a guess
+# wearing a measurement's clothes.
+#
+# The measurement's own classifier is proved, by `--self-test`, on a scratch twin
+# with the shapes the control has to tell apart: the proxy "the pin is not the tip,
+# so it is behind" calls a squash-advanced pin `behind`, because the two commits
+# differ, and a tally from a classifier that cannot tell the classes apart is a
+# tally of nothing.
+pin-current:
+  task:
+    description: Ask whether every box/* pin is at the ref its intent names, bounded by this repo's own neglect bound (fails only on a pin that is NOT CURRENT — behind, advanced past the served ref by a squash-merge, or unclassifiable — AND un-advanced past the bound)
+    dir: .
+    plan:
+      - run: ask whether every box/* pin is current, within this repo's own bound on neglect
+        task:
+          task: pins
+          param: [MODE=currency, STALE_AFTER=168h]
+        context: [runtime]
+
+# pin-currency-proof — the control's own proof that it CAN fail, on a scratch
+# fixture, using the wiring EXTRACTED from the two entities above (so the proof
+# cannot drift from the control it proves).
+#
+# A gate that cannot fail is not a gate: if the bound never bites, the control is a
+# green light that proves nothing, and it teaches every reader that the pin surface
+# is watched. SIX arms, in three pairs, over THREE twin shapes: a `behind` twin (the
+# served ref descends from the recorded pin), a SQUASH-shaped one (it does not) —
+# the `not-on-the-served-line` class the org's own squash merges produce — and one
+# that is NOT MATERIALIZED, where the pin is not current because there is no
+# checkout to judge it (`differs`). Within each pair the arms differ ONLY in the
+# date of the commit that recorded the pin — the same pin, the same distance from
+# the served ref, the same bound — so the verdict flips with the AGE and with
+# nothing else. That is what makes the criterion NEGLECT (the owner's own neglect)
+# rather than DISTANCE (churn). Covering all three classes is what makes the
+# criterion's own claim true: "not current" is a set, and a proof that exercised
+# one class of it would leave the rest unproven.
+pin-currency-proof:
+  task:
+    description: Prove the pin-currency control can fail — a pin that is NOT CURRENT (behind its served ref, advanced past it by a squash-merge, or with no checkout to judge it) AND un-advanced past the bound must be reported STALE and fail, while the same pin advanced recently must pass
+    dir: .
+    plan:
+      - check: the control bites on a neglected pin and stands down on a churned one
+        command: "bash scripts/check-pin-currency.sh"
+        stdout:
+          - contains: PIN-CURRENCY-PROOF-OK
+        context: [runtime]
+
+# pin-verb-scope — the control over this repo's OWN pin-advance claim.
+#
+# The `sync` task's own description used to call the advance a non-mutating
+# kind: it said the advance changed nothing, and that it did not commit. The
+# first half was FALSE — the verb advances EVERY pin this repo declares, rolls
+# the checkouts that exist and stages their gitlinks (opencharly/charly#1079) —
+# and an operator who read that line would have run a wave they believed was a
+# report.
+#
+# A claim that is wrong once is a claim that is wrong until something checks
+# it, so the claim gets a control — and the control lives HERE, because this
+# repo declares the pins and owns the wording about them. The umbrella's own
+# gate for the same rule says, in its own header, that it speaks for the
+# UMBRELLA's prose only: "a submodule is a repo of its own, with its own
+# rulebook and its own gates".
+#
+# Arms over this repo's own tracked tree:
+#   SCOPE         every claim-maker surface states that the advance touches
+#                 EVERY pin this repo declares (the CLAIM, not the keyword:
+#                 "every" alone also matches a question about currency);
+#   NO RETIRED    no tracked file calls the advance a non-mutating kind;
+#   COVERAGE      every file that NAMES the verb is classified, so a new
+#                 claim-maker surface cannot slip in unclassified;
+#   ONE HOME      the shared rule (scripts/tracked-files.txt) states its
+#                 GRAMMAR and its exempt-mode LIST in its OWN header and
+#                 nowhere else, and every reader that file NAMES still reads
+#                 it — a copy of either into a reader is a second rule, and two
+#                 rules drift (R2).
+# The surfaces are located by STRUCTURAL anchors, so a surface that MOVES is a
+# finding rather than a silent pass.
+pin-verb-scope:
+  task:
+    description: Check this repo's own pin-advance claim — every claim-maker surface must state that the advance touches EVERY pin this repo declares, no tracked file may call the advance a non-mutating kind, and the shared rule's grammar and exempt-mode list must live in the rule file's own header, with every reader it names still reading it
+    dir: .
+    plan:
+      - check: every pin-advance claim in this repo states its scope, no tracked file calls the advance a non-mutating kind, and the shared rule has one home
+        command: "python3 -I scripts/check-pin-verb-scope.py"
+        stdout:
+          - contains: PIN-VERB-SCOPE-OK
+        context: [runtime]
+
+# pin-verb-scope-proof — the control's own proof that it CAN fail.
+#
+# A gate that cannot fail is a green light that proves nothing. The self-test
+# turns each of the control's arms RED on its own mutation: a surface that
+# drops the scope, a surface whose line is gone, a tracked file that calls the
+# advance a non-mutating kind — including the EXACT wording this issue was
+# filed about — a file that names the verb without being classified, a
+# classification that has gone stale, a reader that restates the shared rule's
+# grammar, a copy of that grammar inside the rule file's own other paragraph, a
+# rule file whose header stops stating the grammar, a reader that copies the
+# exempt-mode list, and a named reader whose code stops naming the rule file.
+# The shipped tree must be GREEN in the same run, so the arms are discriminating
+# rather than merely loud.
+pin-verb-scope-proof:
+  task:
+    description: Prove the pin-verb-scope control can fail — every arm must go red on its own mutation, including the retired wording this issue is about, while the shipped tree stays green
+    dir: .
+    plan:
+      - check: the control bites on every arm it claims to cover
+        command: "python3 -I scripts/check-pin-verb-scope.py --self-test"
+        stdout:
+          - contains: 'check-pin-verb-scope --self-test: OK'
         context: [runtime]
 
 # =============================================================================
@@ -4150,7 +4346,18 @@ check-task:
           # string below can only be printed by the task entity that carries it, so
           # the bed goes RED if the surface is missing (opencharly/charly#936).
           - contains: MODE=currency asks whether every pin is at the ref its intent names
-          - contains: Advance this repo's own box/* gitlinks
+          # The advance half's own description must state its SCOPE and its TARGET:
+          # the verb advances EVERY pin this repo declares, to the tip the remote
+          # serves for the ref each path's own .gitmodules entry names
+          # (opencharly/charly#1079).
+          - contains: Advance EVERY pin this repo declares
+          - contains: to the tip the remote serves for the ref each path's own .gitmodules entry names
+          # The control's own proof must be DECLARED too: only the task that carries
+          # this description can print it, so the bed goes RED if the surface is
+          # missing (opencharly/charly#1048).
+          - contains: Prove the pin-currency control can fail
+          # And so must the SCOPE control's own proof (opencharly/charly#1079).
+          - contains: Prove the pin-verb-scope control can fail
         context:
           - runtime
         command:
@@ -4167,6 +4374,22 @@ check-task:
         task:
           task: pins
           param: [MODE=status]
+        context:
+          - runtime
+      - check: the pin-currency CONTROL's own proof runs end to end through verb:task — a neglected pin must be reported STALE and fail, the same pin advanced recently must pass
+        id: task-pin-currency-proof-runs
+        task:
+          task: pin-currency-proof
+        context:
+          - runtime
+      - check: the pin-verb-scope CONTROL itself runs green on the tree the bed just realized — every claim-maker surface in it states its scope, no tracked file calls the advance a non-mutating kind, and the shared rule's grammar and exempt-mode list live in the rule file's own header
+        id: task-pin-verb-scope-runs
+        task:
+          task: pin-verb-scope
+      - check: the pin-verb-scope CONTROL's own proof runs end to end through verb:task — every arm must go red on its own mutation, and the shipped tree must stay green
+        id: task-pin-verb-scope-proof-runs
+        task:
+          task: pin-verb-scope-proof
         context:
           - runtime
       # --- the workflow-wave additions to candy/plugin-task (B5) ---------------------
@@ -4917,7 +5140,7 @@ check-wave-pins:
         disposable: true
         lifecycle: dev
         plan:
-            - check: the module graph the binary was built from carries the adopted pins (plugin-build v0.2026286.1121, plugin-vm v0.2026286.856, and the sdk the three tools modules are aligned to)
+            - check: the module graph the binary was built from carries the pins charly/go.mod declares (derived from the tree under test, not from a literal in this step)
               id: wp-pins
               context:
                 - runtime
@@ -4929,17 +5152,51 @@ check-wave-pins:
                 command: |
                     set -eu
                     ROOT="$PWD"; mkdir -p "$ROOT/.check"; EV="$ROOT/.check/wave-pins.log"
-                    cd charly
+                    # The TREE UNDER TEST is located EXPLICITLY: the deploy does not hand this step a cwd that is
+                    # the source tree, so reading go.mod relative to $PWD is the bug this step used to have.
+                    SRC="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+                    [ -f "$SRC/charly/go.mod" ] || { echo "no charly/go.mod under the tree under test: $SRC"; exit 1; }
+                    # The graph is read FROM THE BINARY, so no working-directory assumption is made here.
                     {
                       echo "binary under test: ${CHARLY_BIN}"
                       ${CHARLY_BIN} version 2>/dev/null | tail -1
-                      go list -m github.com/opencharly/plugin-build/candy/plugin-build github.com/opencharly/plugin-vm/candy/plugin-vm github.com/opencharly/sdk
+                      # `go version -m` separates fields with TABS; normalize to spaces so the assertion below,
+                      # which greps for "path version" pairs, reads the same shape it writes.
+                      go version -m "${CHARLY_BIN}" | tr "\t" " "
                     } > "$EV" 2>&1 || { cat "$EV"; exit 1; }
                     # Assert the versions from the graph itself — a hand-copied string would pass a
                     # diff that never moved the pin.
-                    grep -q 'plugin-build/candy/plugin-build v0.2026286.1121' "$EV" || { cat "$EV"; exit 1; }
-                    grep -q 'plugin-vm/candy/plugin-vm v0.2026286.856' "$EV" || { cat "$EV"; exit 1; }
-                    grep -q '^github.com/opencharly/sdk v' "$EV" || { cat "$EV"; exit 1; }
+                    # The expected versions come from the TREE UNDER TEST, not from this line. A
+                    # literal here is the hand-copied string the comment above warns about: it makes
+                    # the step red on every wave until someone edits it, and green on the wave it was
+                    # written for even if the graph never moved. Reading go.mod makes the assertion
+                    # "the built graph agrees with what this tree adopts" -- which is the property a
+                    # pin advance has to have.
+                    # Both expected-side names are LOWERCASE on purpose: the check walk runs the sdk's
+                    # kit.TestVarRefPattern over this command text, and that pattern claims a BRACED,
+                    # UPPERCASE name as an unresolved template reference -- so an uppercase braced
+                    # shell variable here would be classified DEAD (sdk kit/planrun.go) before the
+                    # step ever ran. The runner's own auto-exported CHARLY_BIN stays uppercase
+                    # because the runner resolves it.
+                    decl_build=$(grep -oE 'plugin-build/candy/plugin-build v[0-9]+\.[0-9]+\.[0-9]+' "$SRC/charly/go.mod" | awk '{print $2}' | head -1 || true)
+                    decl_vm=$(grep -oE 'plugin-vm/candy/plugin-vm v[0-9]+\.[0-9]+\.[0-9]+' "$SRC/charly/go.mod" | awk '{print $2}' | head -1 || true)
+                    # Negative arm: an absent declaration must fail, never pass vacuously.
+                    [ -n "$decl_build" ] || { echo "no plugin-build pin declared in charly/go.mod"; cat "$EV"; exit 1; }
+                    [ -n "$decl_vm" ] || { echo "no plugin-vm pin declared in charly/go.mod"; cat "$EV"; exit 1; }
+                    # The readable listing reads the SAME file the assertions read: an unqualified `go.mod`
+                    # here would resolve against the step's cwd, which is the assumption this change removes.
+                    echo "declared pins: build=$decl_build vm=$decl_vm"
+                    echo "--- the declared pins this tree adopts ($SRC/charly/go.mod) ---"
+                    grep -m 4 -E 'plugin-build/candy/plugin-build|plugin-vm/candy/plugin-vm' "$SRC/charly/go.mod"
+                    # The comparison must be READABLE: the step's stdout is discarded by the framework, so the
+                    # expected-side values are written into $EV -- the one artefact this step can be sure is reachable.
+                    echo "--- expected side (read from $SRC/charly/go.mod) ---" >> "$EV"
+                    echo "SRC=$SRC" >> "$EV"
+                    echo "DECL_BUILD=$decl_build" >> "$EV"
+                    echo "DECL_VM=$decl_vm" >> "$EV"
+                    grep -q "plugin-build/candy/plugin-build ${decl_build}" "$EV" || { cat "$EV"; exit 1; }
+                    grep -q "plugin-vm/candy/plugin-vm ${decl_vm}" "$EV" || { cat "$EV"; exit 1; }
+                    grep -q 'github.com/opencharly/sdk v' "$EV" || { cat "$EV"; exit 1; }
                     cat "$EV"
                     echo WAVE-PINS-OK
                 in_container: false
@@ -5003,3 +5260,80 @@ check-wave-pins:
                     cat "$EV"
                     echo WAVE-VM-LIST-OK
                 in_container: false
+
+# =============================================================================
+# charly-skill-shelf — the concept candy owning the charly CLI's own skills.
+#
+# WHY IT EXISTS (opencharly/sdk#434, operator ruling): a `skill:` node's `owner:` must
+# name a CANDY. This repo's candies are the toolchain (`charly`, `charly-dev`), so a
+# skill about the CLI's own surface has no natural candy owner; this shelf is that
+# owner, the same shape opencharly/sdk and opencharly/spec use (`*-skill-shelf`).
+#
+# It ships no install content, composes no box and appears in no image, so the node
+# below adds NOTHING to any `ai.opencharly.skill` OCI label. The prose is the FILE at
+# `.agents/skills/<name>/SKILL.md`; nothing here inlines a `description:` or a
+# `content:` — an inline body that disagrees with its file is a hard error in the
+# marketplace generator.
+# =============================================================================
+charly-skill-shelf:
+    candy:
+        description: |-
+            Concept candy owning the charly CLI's own skills — the ones whose source of truth
+            is this repo's Go module at `charly/` (`main.go`, `version.go`, the Kong command
+            tree). It ships no install content and composes no image; it carries the `skill:`
+            routing nodes, and the prose lives in `.agents/skills/<name>/SKILL.md`.
+        plan:
+            - run: this documentation-only candy ships no install content (it carries the CLI's own skill entities); validate-satisfying no-op
+              command: "true"
+              context:
+                - build
+            # validate-satisfying no-op — the assertion is NOT performed by this command; the real
+            # body-existence gate is `charly box validate`, whose CollectSkills path errors with
+            # `skill "<name>": no body …` when a node's SKILL.md is missing (the PR's negative control).
+            - check: validate-satisfying no-op — the body-existence assertion is `charly box validate`, not this step
+              id: charly-skill-shelf-present
+              context:
+                - build
+              command: "true"
+charly-version-skill:
+    skill:
+        name: charly-version
+        family: core
+        owner: charly-skill-shelf
+
+# =============================================================================
+# The three `internals` contributor skills whose source of truth is THIS repo's
+# own Go module / plugin kernel — routed here from the `layer-charly-internals`
+# prose carrier, whose destination map measured `charly` for all three
+# (opencharly/opencharly#611). ROUTING ONLY: the prose is the FILE at
+# `.agents/skills/<name>/SKILL.md` (with its `references/` half where it has one),
+# copied byte-identically from the carrier at its `main`. A node carries no
+# `description:`/`content:`, because an in-line body that disagrees with its file
+# is a hard error in the marketplace generator.
+#
+# `family: internals` is carried over UNCHANGED so every
+# `/charly-internals:<name>` address survives the move.
+# =============================================================================
+go-skill:
+    skill:
+        name: go
+        family: internals
+        owner: charly-skill-shelf
+        triggers:
+            - "Go source work (adding/modifying `charly` commands)"
+            - "Editing `spec/schema/*.cue` / `charly task cue-gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike"
+go-quality-skill:
+    skill:
+        name: go-quality
+        family: internals
+        owner: charly-skill-shelf
+        triggers:
+            - "Go code-quality / AGENTS.md-compliance audit / `golangci-lint` / `dupl` / duplication or dead-code check / `.golangci.yml`"
+plugin-skill:
+    skill:
+        name: plugin
+        family: internals
+        owner: charly-skill-shelf
+        triggers:
+            - "Authoring a plugin (a candy with a `plugin:` block) / builtin vs out-of-tree plugin / per-plugin `.cue` schema (single source → `gengotypes` for dev + schema-over-`Describe` RPC at runtime) / the plugin SDK (`github.com/opencharly/sdk`, the proxy-resolved contract module — no submodule) / `sdk/**` / a compiled-in plugin candy (`compiled_plugins:`) or host-coupled kit candy / an external plugin module"
+            - "Editing `spec/schema/*.cue` / `charly task cue-gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike"

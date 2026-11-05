@@ -17,7 +17,7 @@
 # (opencharly/charly#775). <repo-checkout> is that plugin's repo root; its candy/<name>
 # must declare module github.com/opencharly/<name>/candy/<name>. pluginsgen emits the
 # go.work.dev workspace that resolves it and this build selects it with GOWORK, so the
-# committed go.work / go.work.sum are untouched and no plain build can inherit the
+# committed go.work is untouched and no plain build can inherit the
 # override. NOT a release build — never install one.
 #
 # Usage: run from the repo root (any worktree of a charly checkout).
@@ -84,7 +84,7 @@ if [ ${#dev_specs[@]} -gt 0 ]; then
   echo "bootstrap-charly: DEV BUILD — NOT A RELEASE BUILD." >&2
   echo "bootstrap-charly: resolving compiled-in plugins from LOCAL checkouts:" >&2
   for spec in "${dev_specs[@]}"; do echo "bootstrap-charly:   $spec" >&2; done
-  echo "bootstrap-charly: the committed go.work / go.work.sum are not used or touched." >&2
+  echo "bootstrap-charly: the committed go.work is not used or touched." >&2
 else
   GOWORK_PATH="$ROOT/go.work"
 fi
@@ -96,12 +96,14 @@ CALVER="$(bash scripts/calver.sh)"
 
 # pluginsgen and workspace-mode Go both REWRITE TRACKED files, so a nominally successful
 # build must not leave an unexplained dirty tree. plugins_generated.go + go.work follow from
-# charly.yml and the go.mod pins, go.work.sum is their checksum lock, and
+# charly.yml and the go.mod pins, and
 # plugins_refs_generated.go follows from each corpus plugin's default branch. The check
 # classifies what changed and acts on the CLASS: a file derived from tracked inputs is this
 # checkout's own inconsistency, so it FAILS here for review and commit; the upstream-derived
 # index is NAMED and restored, because nothing in this checkout can fix it and in a detached
 # umbrella submodule the commit remedy is forbidden (opencharly/charly#792).
+# There is no go.work.sum in that set, and there is no longer a go.work.sum at all: the
+# workspace has ONE member, whose go.sum carries every hash (opencharly/charly#1065).
 # The class list lives in the check, not here — it is the ONE definition (run it with
 # --list). Exit 2 means there is no git lineage to compare against (a source export): the
 # check has already said so, and it is not a build failure.

@@ -17,6 +17,7 @@ import (
 // goroutine in futex_wait forever (the recurring deploy-del VM-member hang that
 // #468's host→plugin guard did not cover).
 func TestInvokeProvider_FailsFastOnHungPeer(t *testing.T) {
+	withoutDaemonDiscovery(t)
 	old := pluginInvokeNoProgressOverride
 	pluginInvokeNoProgressOverride = 100 * time.Millisecond
 	defer func() { pluginInvokeNoProgressOverride = old }()
@@ -74,6 +75,7 @@ func (legFreeHostWorkProvider) Invoke(ctx context.Context, _ *Operation) (*Resul
 // reverse leg, exactly the deploy-pod plugin in that measured kill — because a pid-0 clock would
 // not be a faithful stand-in and would make the failure report ambiguous.
 func TestInvokeProvider_ServedHostWorkHeartbeatsTheCallerClock(t *testing.T) {
+	withoutDaemonDiscovery(t)
 	old := pluginInvokeNoProgressOverride
 	pluginInvokeNoProgressOverride = 200 * time.Millisecond
 	defer func() { pluginInvokeNoProgressOverride = old }()

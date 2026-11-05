@@ -21,10 +21,13 @@ import (
 // external `target: local` deploy's own --verify path RELOCATED to candy/plugin-fleet's
 // verify_local.go (#55 W3 B3 remainder) — it no longer lives here.
 
-// The `charly check` exit-code contract (2 = checks failed, 3 = prereq skip) lives in
+// The `charly check` exit-code contract (2 = checks failed, 3 = not a verdict) lives in
 // the sdk (exitcode.CheckFailExitCode / exitcode.CheckSkippedExitCode); the plugin/main signal it
-// across the module boundary via *exitcode.ExitCodeError. The `charly check` CLI + its
-// exit-code plumbing live in command:check (candy/plugin-check).
+// across the module boundary via *exitcode.ExitCodeError. 3 covers BOTH "the bed could not run"
+// (a required host prerequisite is absent) AND "the bed RAN and proved NOTHING" (a declared
+// check resolved to SKIP): the plugin's three-state verdict gives the second case the same
+// code, so a reader that stops at "prereq skip" reads exit 3 as narrower than it is.
+// The `charly check` CLI + its exit-code plumbing live in command:check (candy/plugin-check).
 
 // resolveCheckRunnerContext computes the committed-APK anchoring + loads the OUT-OF-TREE plugin
 // candies a live baked-plan runner needs, so `charly check live` and `charly check feature run`

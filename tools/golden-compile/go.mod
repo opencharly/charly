@@ -3,8 +3,8 @@ module github.com/opencharly/charly/tools/golden-compile
 go 1.26.8
 
 require (
-	github.com/opencharly/sdk v0.2026296.8
-	github.com/opencharly/spec v0.2026295.2356
+	github.com/opencharly/sdk v0.2026308.652
+	github.com/opencharly/spec v0.2026308.344
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1
 )

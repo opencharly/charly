@@ -2206,8 +2206,11 @@ systemd-container:
             status: status {{.Service}}
             stop: stop {{.Service}}
         label_key: ai.opencharly.service.systemdcontainer
-        service_schema:
-            supports_packaged: true
-            # System scope only: there is no user manager in the container.
-            unit_path_template: /etc/systemd/system/{{.Name}}.service
-            # service_template is INHERITED from systemd: via extends — one source.
+        # service_schema is INHERITED WHOLE from systemd: via extends — the
+        # service_template, supports_packaged and unit_path_template stay ONE
+        # authored source. The merge is per FIELD of the resolved init, so a child
+        # that declares ANY part of service_schema wins the WHOLE field and the
+        # inherited service_template is silently lost (every custom service entry
+        # then fails to render). The inherited unit path already resolves a
+        # system-scope service to /etc/systemd/system; a container has no user
+        # manager, so user scope is not supported by this init.
