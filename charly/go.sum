@@ -203,8 +203,6 @@ github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026272.145 h1:P1wm
 github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026272.145/go.mod h1:mYwb9qlrjfrLsl8CZ3xz5a7WidvimQz9yYLuJ8AeDqI=
 github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142 h1:0WIDu4JhHj5FjY85l6H5efRCAGgnivHqt5YLfRnDtsU=
 github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142/go.mod h1:rDRPywq16JlcG1R3bAI0JspWH4L4eCpkl6fWFlWCGSY=
-github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026286.700 h1:XstEHVgLHPuGY/MtHuW7xIIuVhiGfTpz2KV6yyNcnY0=
-github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026286.700/go.mod h1:d0Q5Njlav0kQqEh1a/uH+q8zvfdayKg6XmGYfVMLEaA=
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026309.1933 h1:mhLrotwseVuhkN7I1RFl027SCfQevLW9WX4AQp/yG6Y=
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026309.1933/go.mod h1:vElmntdwPmHEB2JGxmS7ba5/Wg4GmvUQLGW3HLydlJE=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959 h1:JS8EX0lGEq9GVpwIGV8ZxGzPLzLq+zyhr6CIDl2c3lw=
@@ -273,12 +271,8 @@ github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424 h1:eu410toqUd
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424/go.mod h1:X+COgIvHq7NIpaK3rraNOeyDESN3R8ZhGD99sNcFZms=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356 h1:UC5l43x6WDw+HGAu7UmFLWFsmUOT6ktFzN5AB2zAWmc=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356/go.mod h1:AW+g3gtHTnRCaR+vJuqmCDMe7ExXD9VKjr2OgUfaf08=
-github.com/opencharly/sdk v0.2026308.652 h1:54xdl6TEZv+BjVP0aZwiHMyWEnqQ1Ub79JbrysmwDCs=
-github.com/opencharly/sdk v0.2026308.652/go.mod h1:JATa64xjMSgqEdOhRRm4iiptgfaetvmHOwybt9kKZko=
 github.com/opencharly/sdk v0.2026309.1926 h1:DLhLwsT5E17bEYh6iGVRs+BYz6r1bUQ04zq5UgnlExw=
 github.com/opencharly/sdk v0.2026309.1926/go.mod h1:r8zMVnKjFjkOaIlRTmlRA/jCtDhRn1doLR0PedHhDgs=
-github.com/opencharly/spec v0.2026308.344 h1:76L6nufutdk+vgsgW25WGRH3LBECFqdIXKN0OFoDoBQ=
-github.com/opencharly/spec v0.2026308.344/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencharly/spec v0.2026309.1917 h1:DHjf0t7TloPeG44PNSxqlZBvxWv1ssEZ+4UnQZi94E0=
 github.com/opencharly/spec v0.2026309.1917/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
