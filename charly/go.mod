@@ -13,7 +13,7 @@ require (
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244
 	github.com/opencharly/plugin-box/candy/plugin-box v0.2026301.1542
-	github.com/opencharly/plugin-build/candy/plugin-build v0.2026308.2205
+	github.com/opencharly/plugin-build/candy/plugin-build v0.2026309.2032
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026271.2248
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319
@@ -35,7 +35,7 @@ require (
 	github.com/opencharly/plugin-examplerunverb/candy/plugin-examplerunverb v0.2026272.139
 	github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026272.145
 	github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142
-	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026286.700
+	github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026309.1933
 	github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959
 	github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026288.1214
 	github.com/opencharly/plugin-http/candy/plugin-http v0.2026272.235
@@ -68,7 +68,7 @@ require (
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424
 	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356
-	github.com/opencharly/sdk v0.2026308.652
+	github.com/opencharly/sdk v0.2026309.1926
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -139,7 +139,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026300.951
-	github.com/opencharly/spec v0.2026308.344
+	github.com/opencharly/spec v0.2026309.1917
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect

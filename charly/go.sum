@@ -159,8 +159,8 @@ github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244 h1
 github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244/go.mod h1:75qGMGoV+CKerAkpOQQlRggw/4oNg66nI3EtUhQDq4w=
 github.com/opencharly/plugin-box/candy/plugin-box v0.2026301.1542 h1:OrUGBJJsZXAkG15k4ec4WUl8TmcbM50E2fG7KJgHnvE=
 github.com/opencharly/plugin-box/candy/plugin-box v0.2026301.1542/go.mod h1:+TD+jCQZuhlHmqES5rO7S8clL716jWKBOMoVehKUhTo=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026308.2205 h1:qfFdPlnXsX3QQHnWVJJP9NwYjTpN09dg/KP7xdJqyEg=
-github.com/opencharly/plugin-build/candy/plugin-build v0.2026308.2205/go.mod h1:I7fEQZcfQyvWP7Qk0BmCXA2MrvLzKP9lRDQBgyV7yPI=
+github.com/opencharly/plugin-build/candy/plugin-build v0.2026309.2032 h1:dOYaeCWRbsvLoACulwmvvKd5jdO64fXh1GjwBCznan8=
+github.com/opencharly/plugin-build/candy/plugin-build v0.2026309.2032/go.mod h1:I7fEQZcfQyvWP7Qk0BmCXA2MrvLzKP9lRDQBgyV7yPI=
 github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026271.2248 h1:zEKZqarHnFcVrj9SbHpraAEtnvtjmbc6QPwDhqtInPY=
 github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026271.2248/go.mod h1:C8X1kX6oD+ONgrGGCTpGj9a1albGAqe2YGFkOzH2pK4=
 github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314 h1:HHTlqU2GSnUOwZgCIAvw9ztURs9akOr6z1LmcbGjddA=
@@ -203,8 +203,8 @@ github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026272.145 h1:P1wm
 github.com/opencharly/plugin-feature/candy/plugin-feature v0.2026272.145/go.mod h1:mYwb9qlrjfrLsl8CZ3xz5a7WidvimQz9yYLuJ8AeDqI=
 github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142 h1:0WIDu4JhHj5FjY85l6H5efRCAGgnivHqt5YLfRnDtsU=
 github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142/go.mod h1:rDRPywq16JlcG1R3bAI0JspWH4L4eCpkl6fWFlWCGSY=
-github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026286.700 h1:XstEHVgLHPuGY/MtHuW7xIIuVhiGfTpz2KV6yyNcnY0=
-github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026286.700/go.mod h1:d0Q5Njlav0kQqEh1a/uH+q8zvfdayKg6XmGYfVMLEaA=
+github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026309.1933 h1:mhLrotwseVuhkN7I1RFl027SCfQevLW9WX4AQp/yG6Y=
+github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026309.1933/go.mod h1:vElmntdwPmHEB2JGxmS7ba5/Wg4GmvUQLGW3HLydlJE=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959 h1:JS8EX0lGEq9GVpwIGV8ZxGzPLzLq+zyhr6CIDl2c3lw=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959/go.mod h1:UEARhUMGngvey1RFumqMwia2WUspmlKlXORZGId+8Kc=
 github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026288.1214 h1:o17GMgkXjYQMQAA6NZjTct4jrO2nvRU630JTZ92EdLY=
@@ -271,10 +271,10 @@ github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424 h1:eu410toqUd
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424/go.mod h1:X+COgIvHq7NIpaK3rraNOeyDESN3R8ZhGD99sNcFZms=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356 h1:UC5l43x6WDw+HGAu7UmFLWFsmUOT6ktFzN5AB2zAWmc=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356/go.mod h1:AW+g3gtHTnRCaR+vJuqmCDMe7ExXD9VKjr2OgUfaf08=
-github.com/opencharly/sdk v0.2026308.652 h1:54xdl6TEZv+BjVP0aZwiHMyWEnqQ1Ub79JbrysmwDCs=
-github.com/opencharly/sdk v0.2026308.652/go.mod h1:JATa64xjMSgqEdOhRRm4iiptgfaetvmHOwybt9kKZko=
-github.com/opencharly/spec v0.2026308.344 h1:76L6nufutdk+vgsgW25WGRH3LBECFqdIXKN0OFoDoBQ=
-github.com/opencharly/spec v0.2026308.344/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/sdk v0.2026309.1926 h1:DLhLwsT5E17bEYh6iGVRs+BYz6r1bUQ04zq5UgnlExw=
+github.com/opencharly/sdk v0.2026309.1926/go.mod h1:r8zMVnKjFjkOaIlRTmlRA/jCtDhRn1doLR0PedHhDgs=
+github.com/opencharly/spec v0.2026309.1917 h1:DHjf0t7TloPeG44PNSxqlZBvxWv1ssEZ+4UnQZi94E0=
+github.com/opencharly/spec v0.2026309.1917/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
