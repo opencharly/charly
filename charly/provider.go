@@ -155,7 +155,7 @@ type Result struct {
 // PluginSchema is a plugin unit's CUE contract, obtained THROUGH the transport
 // (gRPC Describe for an external, an in-proc handoff for a builtin) — never read
 // from a candy's schema/ dir. CueSource is the package-less, SELF-CONTAINED .cue
-// body the host splices onto its base schema (base ++ plugin) to validate authored
+// body the host splices onto its base schema (base & plugin) to validate authored
 // plugin_input; InputDefs maps each provider key ("verb:externalprobe") to the CUE
 // def that validates its plugin_input ("#ExternalprobeInput").
 type PluginSchema struct {

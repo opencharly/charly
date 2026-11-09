@@ -53,7 +53,7 @@ type ProvidedCap struct {
 // servedSet is the set of plugin UNITS a `__plugin serve` process exposes over
 // gRPC: their providers, the union of their structured capabilities, and the
 // concatenation of their self-contained CUE schemas (shipped over Describe so the
-// host validates plugin_input against base ++ served — identical to an external).
+// host validates plugin_input against base & served — identical to an external).
 type servedSet struct {
 	calver    string
 	byKey     map[string]Provider // capability identity → provider

@@ -16,27 +16,27 @@ import (
 	"cuelang.org/go/cue"
 
 	"github.com/opencharly/sdk/buildcache"
-	sdkschema "github.com/opencharly/spec/schema"
-	"github.com/opencharly/spec/schemaconcat"
 )
 
-// compileBasePlusServed compiles charly's BASE schema concatenated with served
-// plugin schema source (base ++ served) — the unified value a plugin's authored
-// plugin_input validates against. servedCUE is the package-less, SELF-CONTAINED
-// .cue body a plugin shipped over the Describe channel (for a builtin, its
-// embedded schema; for an external, the gRPC schema_cue) — NEVER read from a candy
-// schema/ dir. Same concatenation contract as the runtime sharedCueSchema (R3).
+// compileBasePlusServed unifies served plugin schema source onto charly's BASE schema
+// — the value a plugin's authored plugin_input validates against. servedCUE is the
+// package-less, SELF-CONTAINED .cue body a plugin shipped over the Describe channel
+// (for a builtin, its embedded schema; for an external, the gRPC schema_cue) — NEVER
+// read from a candy schema/ dir. Self-containment is what makes this a value UNIFY
+// rather than a text splice: the base is a composed module instance
+// (cue_schema.go), and a served schema references no base def, so it only has to
+// merge with the base's declarations — which is exactly what Unify does.
 func compileBasePlusServed(servedCUE string) (cue.Value, error) {
-	baseBody, _, err := schemaconcat.ConcatSchema(sdkschema.FS, ".", nil)
-	if err != nil {
-		return cue.Value{}, fmt.Errorf("base schema: %w", err)
+	served := cueSchemaCtx().CompileString(servedCUE)
+	if err := served.Err(); err != nil {
+		return cue.Value{}, fmt.Errorf("served schema: %w", err)
 	}
-	v := cueSchemaCtx().CompileString(baseBody + "\n" + servedCUE)
+	v := sharedCueSchema().Unify(served)
 	return v, v.Err()
 }
 
-// pluginSchemaSet is the process-wide compiled plugin schema: base ++ Σ(every
-// loaded unit's self-contained schema). Each plugin (builtin at process start,
+// pluginSchemaSet is the process-wide compiled plugin schema: the base schema &
+// Σ(every loaded unit's self-contained schema). Each plugin (builtin at process start,
 // external at connect) adds its served schema through registerPluginUnitSchema,
 // which recompiles the unified value. validateAuthoredPluginInput reads from it.
 //
@@ -97,9 +97,9 @@ var pluginSchemas = &pluginSchemaSet{
 // registerPluginUnitSchema is THE plugin schema load gate — byte-identical for a
 // builtin (in-proc) and an external (out-of-proc) unit (the zero-distinction
 // requirement). It rejects an empty schema, a schema that will not splice onto the
-// base (base ++ plugin), and a declared input def the schema does not define. On
+// base (base & plugin), and a declared input def the schema does not define. On
 // success it commits the unit's schema into the process-wide set and recompiles
-// base ++ Σ. (directive: a proper schema is evaluated every time a plugin loads.)
+// base & Σ. (directive: a proper schema is evaluated every time a plugin loads.)
 func registerPluginUnitSchema(name string, s PluginSchema) error {
 	if strings.TrimSpace(s.CueSource) == "" {
 		// NO SCHEMA-LESS PLUGINS (the former stub-gate relaxation is DELETED). Every
@@ -158,7 +158,7 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 	}
 	v, err := compileBasePlusServed(strings.Join(merged, "\n"))
 	if err != nil {
-		return fmt.Errorf("plugin %q: schema does not splice onto the base (base ++ plugin): %w", name, err)
+		return fmt.Errorf("plugin %q: schema does not splice onto the base (base & plugin): %w", name, err)
 	}
 	for key, def := range s.InputDefs {
 		d := v.LookupPath(cue.ParsePath(def))
