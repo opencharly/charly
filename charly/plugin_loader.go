@@ -16,29 +16,36 @@ import (
 	"cuelang.org/go/cue"
 
 	"github.com/opencharly/sdk/buildcache"
+
+	"github.com/opencharly/spec/schemacompose"
 )
 
-// compileBasePlusServed unifies served plugin schema source onto charly's BASE schema
-// — the value a plugin's authored plugin_input validates against. servedCUE is the
-// package-less, SELF-CONTAINED .cue body a plugin shipped over the Describe channel
-// (for a builtin, its embedded schema; for an external, the gRPC schema_cue) — NEVER
-// read from a candy schema/ dir. Self-containment is what makes this a value UNIFY
-// rather than a text splice: the base is a composed module instance
-// (cue_schema.go), and a served schema references no base def, so it only has to
-// merge with the base's declarations — which is exactly what Unify does.
-func compileBasePlusServed(servedCUE string) (cue.Value, error) {
-	served := cueSchemaCtx().CompileString(servedCUE)
-	if err := served.Err(); err != nil {
-		return cue.Value{}, fmt.Errorf("served schema: %w", err)
-	}
-	v := sharedCueSchema().Unify(served)
+// compileBasePlusServed unifies a COMPOSED unit onto charly's BASE-and-units value — the
+// value a plugin's authored plugin_input validates against.
+//
+// Each element is already a CUE MODULE INSTANCE (schemacompose.ServedText, built in this
+// package's cueSchemaCtx), never source text. The unit boundary is what makes a plugin
+// able to IMPORT `github.com/opencharly/spec/schema` at all: a served unit may now carry
+// an import clause (opencharly/spec#294 made spec a CUE package in a module; sdk#490
+// made every compile site module-aware), and N units joined into ONE compilation unit
+// put N import clauses in one file — which is not CUE ("expected label or ':', found
+// 'STRING'"), so the joined-text shape fails before resolution is even attempted.
+// Composing each unit on its own and unifying the VALUES keeps the unit boundary where
+// CUE's own package boundary is: one package per plugin.
+// It unifies ONE unit at a time onto the RUNNING value, never the whole set from scratch:
+// a registration that re-unified N units onto the base made loading quadratic in the number
+// of plugins (measured: 63 builtin units took 26 s against 1.4 s before), while one unify per
+// registration is linear and lands at the same value.
+func compileBasePlusServed(prev cue.Value, unit cue.Value) (cue.Value, error) {
+	v := prev.Unify(unit)
 	return v, v.Err()
 }
 
 // pluginSchemaSet is the process-wide compiled plugin schema: the base schema &
-// Σ(every loaded unit's self-contained schema). Each plugin (builtin at process start,
-// external at connect) adds its served schema through registerPluginUnitSchema,
-// which recompiles the unified value. validateAuthoredPluginInput reads from it.
+// Σ(every loaded unit's COMPOSED schema, one module instance per unit). Each plugin
+// (builtin at process start, external at connect) adds its served schema through
+// registerPluginUnitSchema, which grows the unified value by one unify per registration.
+// validateAuthoredPluginInput reads from it.
 //
 // defOwners + srcSeen are the DECLARATION-IDENTITY index the collision gate consults.
 // CUE UNIFIES same-name definitions across sources in one package, so the splice
@@ -53,11 +60,11 @@ func compileBasePlusServed(servedCUE string) (cue.Value, error) {
 // and srcSeen is the set of exact source strings already spliced.
 type pluginSchemaSet struct {
 	mu        sync.Mutex
-	sources   []string
+	units     []cue.Value            // each unit's composed schema, in registration order
+	unified   cue.Value              // base & Σ(units), grown one unify per registration
 	defOwners map[string]defDeclarer // top-level def name → the declaring unit
 	srcSeen   map[string]bool        // exact served-schema source strings already spliced
 	inputDefs map[string]string      // provKey → def
-	unified   cue.Value
 }
 
 // defDeclarer is the unit that declared a top-level def: identity is the unit's
@@ -116,17 +123,18 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 	}
 	pluginSchemas.mu.Lock()
 	defer pluginSchemas.mu.Unlock()
-	// SELF-CONTAINMENT is a precondition of the collision gate below, and the documented
-	// per-plugin contract in its own right (marketplace plugin skill "Why self-contained
-	// schemas": a plugin's #<Word>Input references NO base def, so it compiles STANDALONE —
-	// the property `cue exp gengotypes` and the SDK serve-side check both need). A schema
-	// that only compiles once spliced is exactly a schema whose def names cannot be read per
-	// source, i.e. one the gate cannot protect; it is a hard error here, never a silent skip.
-	standalone := cueSchemaCtx().CompileString(s.CueSource)
-	if err := standalone.Err(); err != nil {
-		return fmt.Errorf("plugin %q: served schema does not compile STANDALONE (a plugin schema is self-contained and references no base def; it must compile alone AND splice onto the base): %w", name, err)
+	// PER-UNIT COMPOSE is a precondition of the collision gate below, and the contract in its
+	// own right: the gate reads a unit's declared def names PER SOURCE, so a unit must compose
+	// as a unit — on its own, before it is unified onto the base. It is composed EXACTLY as the
+	// serve side composes it (schemacompose.ServedText: one CUE module instance, with the plugin's own
+	// module declaration when it ships one and the derived one otherwise), so the host and the
+	// serve side judge the same schema with the same code. A unit that references a def nobody
+	// declares does not compose, and that is a hard error here, never a silent skip.
+	unit, err := schemacompose.ServedText(cueSchemaCtx(), s.CueSource)
+	if err != nil {
+		return fmt.Errorf("plugin %q: served schema does not compose on its own (a plugin schema is ONE CUE module package; it must compose alone AND unify onto the base): %w", name, err)
 	}
-	newDefs, err := topLevelDefNames(standalone)
+	newDefs, err := topLevelDefNames(unit)
 	if err != nil {
 		return fmt.Errorf("plugin %q: served schema defs: %w", name, err)
 	}
@@ -152,13 +160,19 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 			}
 		}
 	}
-	merged := pluginSchemas.sources
+	merged := pluginSchemas.units
+	v := pluginSchemas.unified
 	if !replay {
-		merged = append(append([]string(nil), pluginSchemas.sources...), s.CueSource)
-	}
-	v, err := compileBasePlusServed(strings.Join(merged, "\n"))
-	if err != nil {
-		return fmt.Errorf("plugin %q: schema does not splice onto the base (base & plugin): %w", name, err)
+		merged = append(append([]cue.Value(nil), pluginSchemas.units...), unit)
+		if len(pluginSchemas.units) == 0 {
+			// The base is composed LAZILY (cue_schema.go): a command that never loads a plugin
+			// must not pay for it, so the first unit is what materializes it.
+			v = sharedCueSchema()
+		}
+		v, err = compileBasePlusServed(v, unit)
+		if err != nil {
+			return fmt.Errorf("plugin %q: schema does not splice onto the base (base & plugin): %w", name, err)
+		}
 	}
 	for key, def := range s.InputDefs {
 		d := v.LookupPath(cue.ParsePath(def))
@@ -176,7 +190,7 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 			}
 		}
 	}
-	pluginSchemas.sources = merged
+	pluginSchemas.units = merged
 	pluginSchemas.srcSeen[s.CueSource] = true
 	identity := unitSchemaIdentity(name, s)
 	for _, d := range newDefs {

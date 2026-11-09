@@ -36,12 +36,12 @@ func TestRunPluginVerb_GatesBuiltinSchemaBeforeAuthoredInputValidation(t *testin
 	// neither, and leaving a stale index behind would make the re-registration below look
 	// like a second declaration by a different source.
 	pluginSchemas.mu.Lock()
-	savedSources := pluginSchemas.sources
+	savedUnits := pluginSchemas.units
 	savedDefs := pluginSchemas.inputDefs
 	savedDefOwners := pluginSchemas.defOwners
 	savedSrcSeen := pluginSchemas.srcSeen
 	savedUnified := pluginSchemas.unified
-	pluginSchemas.sources = nil
+	pluginSchemas.units = nil
 	pluginSchemas.inputDefs = map[string]string{}
 	pluginSchemas.defOwners = map[string]defDeclarer{}
 	pluginSchemas.srcSeen = map[string]bool{}
@@ -56,7 +56,7 @@ func TestRunPluginVerb_GatesBuiltinSchemaBeforeAuthoredInputValidation(t *testin
 		// (re-armed to a fresh Once that the next dispatch spends), which matches
 		// the TestMain-completed state the rest of the suite expects.
 		pluginSchemas.mu.Lock()
-		pluginSchemas.sources = savedSources
+		pluginSchemas.units = savedUnits
 		pluginSchemas.inputDefs = savedDefs
 		pluginSchemas.defOwners = savedDefOwners
 		pluginSchemas.srcSeen = savedSrcSeen
