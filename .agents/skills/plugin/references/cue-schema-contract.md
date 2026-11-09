@@ -16,8 +16,9 @@ SELF-CONTAINED (package-less, references no base def) and used two ways — the 
    `plugin_input` into that TYPED struct — never a hand-parsed `map[string]any`, never a hand-written struct.
 2. **RUNTIME → schema-over-RPC.** The plugin SERVES its `.cue` source over the Provider **`Describe`**
    channel (the proto `Capabilities.schema_cue` field + structured `ProvidedCapability{class,word,input_def}`).
-   The host splices it onto charly's base schema (`base ++ plugin`, via the public `spec/schemaconcat` — the SAME
-   concat contract as the runtime `sharedCueSchema`, R2) and validates every authored verb input (the
+   The host splices it onto charly's base schema (`base & plugin`: a self-contained text body unified onto
+   `sharedCueSchema`, which charly composes as a CUE module instance of `github.com/opencharly/spec/schema` —
+   see `/charly-internals:go`) and validates every authored verb input (the
    desugared internal `plugin_input`) against the plugin's def (e.g. `#MyprobeInput`). The host **never reads a candy's `schema/` dir from disk** — the
    schema travels WITH the plugin.
 
@@ -76,7 +77,7 @@ schema-handling one.
 
 A plugin's `#<Word>Input` references NO base def, so it compiles STANDALONE — the exact property
 `cue exp gengotypes` needs to generate Go params, AND the property that lets the SDK compile it serve-side.
-The host's `base ++ plugin` splice therefore exists to detect a def-name **collision** with the base, not to
+The host's `base & plugin` splice therefore exists to detect a def-name **collision** with the base, not to
 resolve base references. (`TestExternalSchemaSelfContained` proves a base-referencing schema fails a standalone
 compile.)
 

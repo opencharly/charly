@@ -124,7 +124,7 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.C
 		return res
 	}
 	// Validate the authored plugin_input against the plugin's SERVED CUE schema
-	// (base ++ plugin) BEFORE dispatch — a typo / missing / empty marker is a hard
+	// (base & plugin) BEFORE dispatch — a typo / missing / empty marker is a hard
 	// failure here, never a silent runtime surprise. Transport-invisible: the def
 	// comes from the process-wide schema set the load gate filled, identically for a
 	// builtin and an external plugin.
