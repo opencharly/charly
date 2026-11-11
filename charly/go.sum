@@ -169,6 +169,8 @@ github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319 
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319/go.mod h1:sJZfp6ovCsj1LzQAzq/RFw5FmtzBbnWZk8IPvyK/v+c=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948 h1:becOqUxBQxNBTMwazoqmF24b4ApCfDHAQmzOfVwUTWg=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948/go.mod h1:UC/PfR3DaB6yXAeqWPUwpqn/hpvOh3YhWjiay5zJW+U=
+github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445 h1:sue43HFANxzL/bfd6diij/B4pV7YP4n017TuZqpKOi8=
+github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445/go.mod h1:Adnw/r+VqulE3m26DKB530+cGciLdlbW4snLwdk9q+c=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026298.205 h1:leWRuk9/n0+GSJEaqFrkmX8QTdQ2kyefxXLjiBswZDg=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026298.205/go.mod h1:1IWFD+Sjy/R3PU+XCCPQXQyNer1N43pNLHJxlkDXJZU=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026287.2341 h1:7HvWdgnWjmKl6XdU7TbUrAlGju+XGRgG3ub72Vc4mpw=
@@ -275,6 +277,10 @@ github.com/opencharly/sdk v0.2026309.2334 h1:L0BESj6cg190VNzykDL1IYyDnCX7n1mN3Z3
 github.com/opencharly/sdk v0.2026309.2334/go.mod h1:r8zMVnKjFjkOaIlRTmlRA/jCtDhRn1doLR0PedHhDgs=
 github.com/opencharly/spec v0.2026313.453 h1:k1ss6+IyOUSl/kSYry2EWs8dUy2MGMWu0y+mvUQRlHs=
 github.com/opencharly/spec v0.2026313.453/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/spec v0.2026313.1428 h1:Kx0UB8igG/H3aEPTouEImt60uGyZsPxW99HO/SE1UvU=
+github.com/opencharly/spec v0.2026313.1428/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/spec v0.2026315.2118 h1:yf8t+2/DBhUjmtiIc8V0dnJdH29vIj1GGEgEpCWkYR0=
+github.com/opencharly/spec v0.2026315.2118/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=

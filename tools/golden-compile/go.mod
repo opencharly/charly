@@ -4,7 +4,7 @@ go 1.26.8
 
 require (
 	github.com/opencharly/sdk v0.2026309.2334
-	github.com/opencharly/spec v0.2026313.453
+	github.com/opencharly/spec v0.2026315.2118
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1
 )
