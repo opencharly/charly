@@ -14,6 +14,7 @@ import (
 
 	"github.com/opencharly/spec/ops"
 	pb "github.com/opencharly/spec/proto"
+	"github.com/opencharly/spec/storeroot"
 )
 
 // withoutDaemonDiscovery isolates a test from any real charly daemon on the developer's
@@ -612,14 +613,42 @@ func TestIdleBoundedContext_CompiledInPeerNoDescendantWorkTrips(t *testing.T) {
 // TestCharlyDaemonPids_FindsProcessesUnderTheCharlyCacheRoot pins the discovery itself: a
 // process whose argv names a path under charly's own cache root is a charly-owned daemon
 // root. This is deliberately kind-agnostic (the argv path is the only signal), which is what
-// lets a detached `buildkitd` be followed without a core kind word.
+// lets a detached `buildkitd` be followed without a core kind word. The probe path comes from
+// the SAME resolver the discovery uses, so the two cannot disagree about where the cache is.
 func TestCharlyDaemonPids_FindsProcessesUnderTheCharlyCacheRoot(t *testing.T) {
-	cache, err := os.UserCacheDir()
+	cache, err := storeroot.CacheDir()
 	if err != nil {
 		t.Skipf("no user cache dir: %v", err)
 	}
-	probe := filepath.Join(cache, "charly", "watchdog-probe-daemon")
-	cmd := exec.Command("sh", "-c", `while :; do sleep 1; done`, "sh", probe)
+	assertDaemonFound(t, filepath.Join(cache, "watchdog-probe-daemon"))
+}
+
+// TestCharlyDaemonPids_FollowsTheCacheDirOverride is the arm that FAILS without the change: a
+// relocated store (`CHARLY_CACHE_DIR`) is where this charly puts its daemons, so a daemon whose
+// argv names a path under the RELOCATED root must be found. The pre-change discovery composed
+// `$XDG_CACHE_HOME/charly` by hand and ignored the override, so it saw only the default root —
+// and on a relocated install it was blind to the very `buildkitd` its idle guard exists to
+// follow. Both other candidate roots are pinned to unrelated temp dirs here, so the arm cannot
+// pass by coincidence.
+func TestCharlyDaemonPids_FollowsTheCacheDirOverride(t *testing.T) {
+	base := t.TempDir()
+	relocated := filepath.Join(base, "relocated-store")
+	t.Setenv("CHARLY_CACHE_DIR", relocated)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(base, "xdg-cache"))
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(base, "xdg-run"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(base, "xdg-state"))
+
+	if got, err := storeroot.CacheDir(); err != nil || got != relocated {
+		t.Fatalf("premise: storeroot.CacheDir() = %q, %v; want the override %q", got, err, relocated)
+	}
+	assertDaemonFound(t, filepath.Join(relocated, "watchdog-probe-daemon"))
+}
+
+// assertDaemonFound starts a process whose argv carries probePath and requires
+// charlyDaemonPids to report its pid.
+func assertDaemonFound(t *testing.T, probePath string) {
+	t.Helper()
+	cmd := exec.Command("sh", "-c", `while :; do sleep 1; done`, "sh", probePath)
 	startInOwnGroup(t, cmd)
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -631,7 +660,7 @@ func TestCharlyDaemonPids_FindsProcessesUnderTheCharlyCacheRoot(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("charlyDaemonPids did not find a process whose argv names %s", probe)
+	t.Fatalf("charlyDaemonPids did not find a process whose argv names %s", probePath)
 }
 
 // TestIdleBoundedContext_CompiledInPeerDetachedDaemonTreeIsProgress is the second R7 arm

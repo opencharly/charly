@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/opencharly/spec/storeroot"
 )
 
 // plugin_activity.go — the per-call PLUGIN IDLE guard. It replaces the former
@@ -771,17 +772,24 @@ func treeWork(procs []procInfo, excludePID int) (procWork, int) {
 // deliberately kind-agnostic: it knows only where charly puts its daemons, never a daemon's
 // name, so a new detached charly daemon is covered without a core kind word.
 //
+// THE TWO ROOTS COME FROM THE ONE RESOLVER (`spec/storeroot`), never a hand-built path: this
+// site composed `$XDG_CACHE_HOME/charly` and `$XDG_RUNTIME_DIR/charly` itself, so a daemon a
+// `CHARLY_CACHE_DIR` relocation moved was invisible here and the idle guard could kill a
+// running install as WEDGED (opencharly/charly#1119). Resolving through the contract module
+// also gives the runtime root its documented fallback to the state root when there is no
+// `XDG_RUNTIME_DIR` — a WIDER daemon set, never a narrower one: a path that is not matched
+// today still is not, and a daemon whose argv names the state root now becomes visible.
+//
 // A daemon is SHARED by every charly call in this user's store. Summing it can therefore
 // mask a wedged call while another call keeps the daemon busy; that is the correct trade
 // here — a false kill destroys real work, and the daemon's work is real work — and the
 // genuine-hang arm (no descendant, no daemon) still trips.
 func charlyDaemonPids() []int {
 	var roots []string
-	if cache, err := os.UserCacheDir(); err == nil {
-		roots = append(roots, filepath.Join(cache, "charly"))
-	}
-	if rt := os.Getenv("XDG_RUNTIME_DIR"); rt != "" {
-		roots = append(roots, filepath.Join(rt, "charly"))
+	for _, root := range []storeroot.Root{storeroot.RootCache, storeroot.RootRuntime} {
+		if dir, err := storeroot.Dir(root); err == nil {
+			roots = append(roots, dir)
+		}
 	}
 	if len(roots) == 0 {
 		return nil
