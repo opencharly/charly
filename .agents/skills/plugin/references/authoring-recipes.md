@@ -130,8 +130,10 @@ that a plugin CANNOT re-decode soundly from `op.Params` nor validate with a self
 candy/plugin-substrate AND candy/plugin-candy-kind use the `spec.StructuralKindLoadEnv.Standalone` channel: the
 HOST pre-decodes the WHOLE CANONICAL node via the core loader (`buildDeployNode` deploy / `decodeNodeValue`
 template for substrate; `candyIsImage` + `buildCandy` for candy — the bootstrap-critical routing that STAYS
-core), validates its value host-side against the KEPT `#<Kind>Value` / `#CandyValue` def
-(`validateKindValueCUE`), and threads the canonical result via `op.Env`; the plugin is a PURE ECHO
+core), validates its value host-side against the `#<Kind>Value` / `#CandyValue` def its capability
+declares (`validateKindValueCUE`, which resolves that def through the COMPOSED schema — base plus
+every served plugin unit — so a kind body may live in the owning plugin's own CUE module), and
+threads the canonical result via `op.Env`; the plugin is a PURE ECHO
 (`InputDef:""`, no `validateAuthoredPluginInput`), and the host folds the echo into `uf.Deploy` (deploy) / the
 typed template map `uf.Pod`/`uf.VM`/… (template) / `uf.Box` (candy-image) / `uf.Candy` (candy-layer).
 Byte-equivalence over ALL shapes: `TestSubstrateKind_BothShapesByteEquivalent` +

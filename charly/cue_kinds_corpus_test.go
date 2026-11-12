@@ -150,13 +150,14 @@ func TestCueKinds_Corpus(t *testing.T) {
 	// stays lazy (no spurious concrete "incomplete value" artifact).
 	// C2-candy: every authoring kind is externalized — #Node is an OPEN struct with NO arms, so
 	// KindWords is EMPTY and the #NodeDoc per-entity grammar is structural-only (validating a node
-	// against it is now vacuous). The corpus VALUE gate moved to the KEPT per-kind value defs
-	// (spec.KindValueDefs: candy → #CandyValue, pod/vm/kubernetes/local/android/kindcluster/kubevirt → #<Kind>Value) — the SAME
-	// host-side gate the loader runs (validateKindValueCUE). So this corpus test validates each
-	// node's inline discriminator value against its kept value def (non-concrete closedness),
-	// proving the whole real corpus passes the host-side gate. Plugin kinds without a kept value
-	// def (group/agent/module/…) are validated via their served plugin schema at runPluginKind and
-	// skipped here (nodeHasPluginKindDisc).
+	// against it is now vacuous). The corpus VALUE gate moved to the per-kind value defs the
+	// PROVIDER declares (kindValueDefPath: candy → #CandyValue, pod/vm/kubernetes/local/android/
+	// kindcluster/kubevirt → #<Kind>Value, falling back to spec.KindValueDefs while a body still
+	// lives in the base) — the SAME host-side gate the loader runs (validateKindValueCUE). So this
+	// corpus test validates each node's inline discriminator value against its declared value def
+	// (non-concrete closedness), proving the whole real corpus passes the host-side gate. Plugin
+	// kinds that declare a self-contained input def instead (agent/init/distro/…) are validated by
+	// their served plugin schema at runPluginKind and skipped here.
 	kinds := make([]string, 0, len(spec.KindValueDefs))
 	for k := range spec.KindValueDefs {
 		kinds = append(kinds, k)
@@ -177,20 +178,19 @@ func TestCueKinds_Corpus(t *testing.T) {
 		// test covers (the same exemption plugin KIND nodes get).
 		prescanDeclaredPluginWords(data, filepath.Dir(f))
 		for _, gn := range parseCorpusDocs(t, f, data) {
-			if _, hasDef := spec.KindValueDefs[gn.Disc]; !hasDef {
-				// A PLUGIN kind (agent/module/package-group/group/…) or an external
-				// deploy substrate — validated by the plugin's served schema at
-				// runPluginKind / the loader path, not by a kept core value def, so
-				// skip it here (the loader parse already hard-rejected any node with NO
-				// recognized discriminator).
+			prov, _ := providerRegistry.ResolveKind(gn.Disc)
+			if _, gated := kindValueDefPath(prov, gn.Disc); !gated {
+				// A PLUGIN kind declaring a self-contained input def (agent/distro/init/…)
+				// or an external deploy substrate — validated by the plugin's served schema
+				// at runPluginKind / the loader path, not by a kind value def, so skip it
+				// here (the loader parse already hard-rejected any node with NO recognized
+				// discriminator).
 				continue
 			}
-			// Validate the node's (desugared) inline discriminator value against its
-			// KEPT value def (#CandyValue / #<Kind>Value) — the SAME host-side
-			// closedness gate the loader runs (validateKindValueCUE) over the real
-			// corpus.
-			pn := gn
-			if verr := validateKindValueCUE(pn); verr != nil {
+			// Validate the node's (desugared) inline discriminator value against the value
+			// def its provider declares (#CandyValue / #<Kind>Value) — the SAME host-side
+			// closedness gate the loader runs (validateKindValueCUE) over the real corpus.
+			if verr := validateKindValueCUE(gn, prov); verr != nil {
 				t.Errorf("FAIL %s:%s.%s: %v", f, gn.Disc, gn.Name, verr)
 				continue
 			}

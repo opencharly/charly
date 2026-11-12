@@ -3,9 +3,10 @@ package main
 // cue_schema.go — the KERNEL's composed document schema, kept for exactly two in-core mechanisms:
 // the plugin-schema SPLICE (plugin_loader.go unifies each plugin's served `schema_cue` onto this
 // base to gate its authored input) and the structural-kind VALUE gate (provider_kind_invoke.go's
-// validateKindValueCUE, which types a substrate/candy node's rich authored value against the kept
-// #<Kind>Value def before threading it to the plugin). Both are clause-M kernel mechanisms —
-// plugin loading and prescan-dispatch — so the schema they consume stays here with them.
+// validateKindValueCUE, which types a substrate/candy node's rich authored value against the
+// #<Kind>Value def its provider declares, read from the COMPOSED base & units value, before
+// threading it to the plugin). Both are clause-M kernel mechanisms — plugin loading and
+// prescan-dispatch — so the schema they consume stays here with them.
 //
 // Everything ELSE this file used to hold left in K-wave 2, cone R1 (ruling 1): the kind→def table
 // (registerCueKind / cueKindDefs / cueKindDef, fed by nine per-kind cue_kind_<name>.go init()

@@ -19,14 +19,16 @@ import (
 // capMeta is the shared capability metadata every Provider carries regardless of placement — the
 // fields + carrier methods that are identical for grpcProvider and inprocProvider. Both EMBED it,
 // so the carrier interfaces (spec.StepContractCarrier / spec.StructuralKindCarrier /
-// spec.ValidatingKindCarrier / spec.PhaseCarrier / primaryCarrier) are satisfied ONCE for both
-// placements via method promotion. The carrier interfaces + StepContract live in sdk/spec (K4-C
-// relocation, provider_carriers.go) — an interface with an unexported method can only be
-// satisfied by a type in the SAME package as the interface, so capMeta's carrier methods below
-// are EXPORTED to satisfy them from across the package boundary.
+// spec.ValidatingKindCarrier / spec.PhaseCarrier / primaryCarrier, plus the package-local
+// kindInputDefCarrier) are satisfied ONCE for both placements via method promotion. The carrier
+// interfaces + StepContract live in sdk/spec (K4-C relocation, provider_carriers.go) — an
+// interface with an unexported method can only be satisfied by a type in the SAME package as the
+// interface, so capMeta's carrier methods below are EXPORTED to satisfy them from across the
+// package boundary.
 type capMeta struct {
 	class            ProviderClass
 	word             string
+	inputDef         string                   // the CUE def a class:kind capability DECLARES for the entity body it serves (ProvidedCapability.input_def); "" for every non-kind class and for a kind declaring none
 	contract         *spec.StepContract       // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
 	structural       bool                     // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
 	validates        bool                     // set ONLY for a class:kind capability serving a deep ops.OpValidate check (F7/C8)
@@ -42,6 +44,14 @@ type capMeta struct {
 
 func (m capMeta) Reserved() string     { return m.word }
 func (m capMeta) Class() ProviderClass { return m.class }
+
+// DeclaredKindInputDef implements kindInputDefCarrier — the CUE def a class:kind
+// capability DECLARES for the entity body it serves. For a FLAT plugin kind that is the
+// capability's own self-contained input def (`#<Word>Input`); for a host-value-gated kind it
+// names the body's value def (`#<Word>Value`), the shape the host validates and folds. Both
+// placements answer identically: the value comes from the DECLARED wire capability (set by
+// buildCapMeta), never from plugin Go.
+func (m capMeta) DeclaredKindInputDef() string { return m.inputDef }
 
 // CommandParent returns the parent command word this command nests UNDER (e.g. "box" for
 // `charly box generate`), or "" for a top-level command. Both provider twins EMBED capMeta, so
@@ -120,6 +130,12 @@ func (m capMeta) declaredSubcommands() []climodel.CLISubcommand { return m.subcm
 // already validated the class + word are well-formed.
 func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	m := capMeta{class: ProviderClass(c.GetClass()), word: c.GetWord()}
+	if m.class == ClassKind {
+		// The DECLARED body def: a flat plugin kind names its self-contained input def, and a
+		// host-value-gated kind names its value def. kindValueDefPath reads it to follow the
+		// provider's declared shape instead of a host-side kind list.
+		m.inputDef = c.GetInputDef()
+	}
 	if raw := c.GetCommandModelJson(); len(raw) > 0 {
 		if m.class != ClassCommand {
 			return capMeta{}, fmt.Errorf("capability %s:%s carries command_model_json outside class=command", m.class, m.word)
