@@ -42,8 +42,8 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	// HOST-SIDE (its rich core-referencing value cannot ride op.Params nor a self-contained
 	// plugin schema — see foldSubstrateKind) and folds into acc.Deploy (deploy) or the typed
 	// template map (template). It does NOT use the op.Params + plugin-schema validation the
-	// group-style / flat kinds below take — its value is validated host-side against the KEPT
-	// #<Kind>Value def.
+	// group-style / flat kinds below take — its value is validated host-side against the
+	// #<Kind>Value def its provider declares (kindValueDefPath).
 	if requireProjectLoader().IsStandaloneResourceKind(pn.Disc, loaderThreaded()) {
 		return foldSubstrateKind(prov, pn, acc)
 	}
@@ -51,8 +51,9 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	// bootstrap-critical candyIsImage + buildCandy (which STAY core — the discovered-candy
 	// pre-check calls them directly), then folded into acc.Box (IMAGE) or acc.Candy (LAYER).
 	// Like substrate, its rich core-referencing value can neither ride op.Params nor a
-	// self-contained plugin schema, so it is host-validated against the KEPT #CandyValue def
-	// and the plugin (candy/plugin-candy) is a pure ECHO. See foldCandyKind.
+	// self-contained plugin schema, so it is host-validated against the #CandyValue def its
+	// provider declares, read from the composed schema, and the plugin (candy/plugin-candy) is a
+	// pure ECHO. See foldCandyKind.
 	// F3.1: the WORD-KEYED CAPABILITY CARRIER (spec.CandyKindCarrier, the same pattern as the
 	// structural/validating carriers above) — the kernel asks the PROVIDER, never compares
 	// pn.Disc to the "candy" literal.
@@ -60,18 +61,19 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 		return foldCandyKind(prov, pn, acc)
 	}
 	// GENERIC host-value-gated kind: a kind whose authored value is RICH +
-	// core-referencing (so it is validated HOST-SIDE against a KEPT #<Kind>Value
-	// def, auto-derived into spec.KindValueDefs) but which is NEITHER a deploy
-	// substrate (no DeployTraits) NOR the candy box⊻layer factory — the two
-	// rich-value cases handled above. Its decoded body folds opaquely into
-	// acc.PluginKinds[disc][name] (the same map every templated kind uses). The
-	// gate is DATA-DRIVEN off spec.KindValueDefs (CUE-derived, clause D): a new
-	// #<Kind>Value def joins this path with NO core edit, exactly as the
-	// substrate/candy dispatch reads registry-provided data rather than a
-	// kind-word switch. The current member is `task` (#TaskValue, whose
-	// plan: [...#Step] references the base grammar and so cannot be a
-	// self-contained plugin schema).
-	if _, gated := spec.KindValueDefs[pn.Disc]; gated {
+	// core-referencing (so it is validated HOST-SIDE against the #<Kind>Value
+	// def) but which is NEITHER a deploy substrate (no DeployTraits) NOR the candy
+	// box⊻layer factory — the two rich-value cases handled above. Its decoded body
+	// folds opaquely into acc.PluginKinds[disc][name] (the same map every templated
+	// kind uses). WHICH kinds take this path follows the SHAPE THE PROVIDER DECLARES
+	// (kindValueDefPath): a class:kind capability naming a `#<Word>Value` body def is
+	// host-value-gated, exactly as a substrate capability naming DeployTraits is a
+	// substrate and one answering CandyKindCarrier owns the candy factory; the
+	// base's spec.KindValueDefs is only the compatibility fallback for kinds whose
+	// body has not moved into its owning plugin's CUE module yet. The current
+	// fallback member is `task` (#TaskValue, whose plan: [...#Step] references the
+	// base grammar and so cannot be a self-contained plugin schema).
+	if _, gated := kindValueDefPath(prov, pn.Disc); gated {
 		return foldHostValueGatedKind(prov, pn, acc)
 	}
 	paramsJSON, err := requireProjectLoader().EntityBodyJSON(pn)
@@ -194,12 +196,14 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 	return nil
 }
 
-// The word→#<Kind>Value CUE-def map the host value gate consults is spec.KindValueDefs
-// — CUE-DERIVED from the #<X>Value defs (schema/node.cue) by schemagen (clause D of the
-// kernel/plugin boundary law: kind-recognition data loaded from CUE, NOT a compiled-in
-// per-kind Go map). It is the HOST-SIDE closedness gate replacing the removed #Node arm:
-// a plugin cannot serve a self-contained schema for these rich core-referencing values,
-// so the host validates the authored value against the KEPT def in-core. Covers the 5
+// The word→#<Kind>Value CUE-def resolution the host value gate consults is
+// kindValueDefPath: the PROVIDER's declared `#<Word>Value` InputDef when it has one, and the
+// base's spec.KindValueDefs only as the compatibility fallback for a kind whose body has not
+// moved into its owning plugin's CUE module yet. Either way it is kind-recognition data, never a
+// compiled-in per-kind Go switch (clause D of the kernel/plugin boundary law). It is the
+// HOST-SIDE closedness gate replacing the removed #Node arm: a plugin cannot serve a
+// self-contained schema for these rich core-referencing values, so the host validates the
+// authored value against the declared def in-core, read from the composed unit. Covers the 5
 // substrate kinds (C2-substrate, #<Kind> | #DeployValue) AND candy (C2-candy, #CandyValue
 // = *#Candy | #Image); keep the #<Kind>Value defs in lockstep with isStandaloneResourceKind
 // + the foldSubstrateKind/foldCandyKind branches.
@@ -209,8 +213,9 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 // value is rich + core-referencing (#Vm/#Deploy/#LibvirtDomain/… with host-canonicalized
 // shorthand like tunnel:/port:), so — unlike group's scalar #GroupInput value — it cannot be
 // re-decoded soundly from the raw op.Params by a plugin nor validated by a self-contained
-// plugin schema. So the host: (1) validates the authored value against the KEPT #<Kind>Value
-// def (the closedness the removed #Node arm gave); (2) detects the shape via
+// plugin schema. So the host: (1) validates the authored value against the #<Kind>Value def
+// the provider declares, read from the composed schema (the closedness the removed #Node arm
+// gave); (2) detects the shape via
 // sdk/loaderkit.IsDeployShape (reached through the ProjectLoader seam on pn
 // directly, K1 unit 3b, parser consolidation F1.2/F1.4 — no genericNode
 // reconstruction needed here); (3) pre-decodes the
@@ -222,7 +227,7 @@ func dispatchKindOpValidate(prov Provider, pn spec.ParsedNode, paramsJSON json.R
 // the canonical value round-trips through JSON byte-faithfully, so this is byte-equivalent to
 // the former in-proc standaloneKind decode (buildDeployNodeInto / buildStandaloneResource).
 func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
-	if err := validateKindValueCUE(pn); err != nil {
+	if err := validateKindValueCUE(pn, prov); err != nil {
 		return fmt.Errorf("node %q: %w", pn.Name, err)
 	}
 	// F7/C8: dispatch the substrate's declared deep ops.OpValidate check (today ONLY the "vm"
@@ -293,7 +298,8 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 // into acc.Box (a full IMAGE — base:/from:) or acc.Candy (a LAYER fragment) (C2-candy). The candy
 // value is rich + core-referencing (#Candy/#Box with host-canonicalized shorthand), so — like
 // substrate — it can neither ride op.Params nor be validated by a self-contained plugin schema.
-// So the host: (1) validates the authored value against the KEPT #CandyValue def; (2) runs the
+// So the host: (1) validates the authored value against the #CandyValue def, read from the
+// composed schema; (2) runs the
 // box⊻layer routing CandyIsImage + BuildCandy — restated on the PARSED node in sdk/loaderkit
 // (parser consolidation F2.1), reached through the loader seam; the discovered-candy pre-check
 // (materializeDiscoveredNode) calls the SAME seam funcs, so this is the ONE decode source (R3);
@@ -303,7 +309,7 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 // F2.4). RDD proved a canonical spec.Box / spec.Candy round-trips through JSON byte-faithfully,
 // so this is byte-equivalent to the former in-proc candyKind decode.
 func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
-	if err := validateKindValueCUE(pn); err != nil {
+	if err := validateKindValueCUE(pn, prov); err != nil {
 		return fmt.Errorf("node %q: %w", pn.Name, err)
 	}
 	pl := requireProjectLoader()
@@ -350,22 +356,22 @@ func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	return nil
 }
 
-// foldHostValueGatedKind decodes a HOST-VALUE-GATED kind node — a kind with a KEPT
-// #<Kind>Value def (auto-derived into spec.KindValueDefs) that is neither a deploy
-// substrate nor the candy factory. Its authored value is rich + core-referencing
-// (e.g. `task`'s #Task, whose `plan: [...#Step]` references the base grammar), so it
-// is validated HOST-SIDE against the kept def and its decoded body folds opaquely
-// into acc.PluginKinds[disc][name] — the SAME map every templated kind uses. The
-// dispatch is DATA-DRIVEN off spec.KindValueDefs (CUE-derived; clause D / the
-// kind-blind boundary law), so a new #<Kind>Value def joins this path with no core
-// edit. The host: (1) closedness-gates the authored value against the kept def
-// (typo rejection); (2) dispatches the plugin's declared deep OpValidate
+// foldHostValueGatedKind decodes a HOST-VALUE-GATED kind node — a kind whose provider declares
+// a #<Kind>Value body def and which is neither a deploy substrate nor the candy factory. Its
+// authored value is rich + core-referencing (e.g. `task`'s #Task, whose `plan: [...#Step]`
+// references the base grammar), so it is validated HOST-SIDE against the declared def (read
+// from the composed schema) and its decoded body folds opaquely into acc.PluginKinds[disc][name]
+// — the SAME map every templated kind uses. The dispatch follows the PROVIDER's declared shape
+// (kindValueDefPath: a `#<Word>Value` InputDef, or the base's spec.KindValueDefs while the body
+// still lives there), so a kind that moves its #<Kind>Value def into its owning plugin's CUE
+// module joins this path with no core edit. The host: (1) closedness-gates the authored value
+// against the declared def (typo rejection); (2) dispatches the plugin's declared deep OpValidate
 // (Validates:true) — the CONCRETE gate the closedness-only check cannot express
 // (missing required fields); (3) Invokes OpLoad and folds the echoed body into
 // PluginKinds. Members are rejected (a non-structural host-value-gated kind has no
 // member tree — the flat-arm contract).
 func foldHostValueGatedKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProject) error {
-	if err := validateKindValueCUE(pn); err != nil {
+	if err := validateKindValueCUE(pn, prov); err != nil {
 		return fmt.Errorf("node %q: %w", pn.Name, err)
 	}
 	paramsJSON, err := requireProjectLoader().EntityBodyJSON(pn)
@@ -394,32 +400,111 @@ func foldHostValueGatedKind(prov Provider, pn spec.ParsedNode, acc *spec.Materia
 	return nil
 }
 
+// kindInputDefCarrier is satisfied by both provider placements (capMeta promotes the method
+// for grpcProvider and inprocProvider alike) and answers the CUE def a class:kind capability
+// DECLARES for the entity body it serves. It is a package-local carrier, not a spec one, so the
+// answer travels on the wire capability that already carries it (ProvidedCapability.input_def)
+// with no contract change.
+type kindInputDefCarrier interface {
+	DeclaredKindInputDef() string
+}
+
+// isKindValueDefName reports whether a declared def names a kind BODY value def — the
+// `#<Word>Value` shape spec/schema/init.cue derives spec.KindValueDefs from (the shared
+// #DeployValue disjunct, which is a deploy arm rather than a kind body, is excluded exactly as
+// that derivation excludes it). A flat plugin kind's own input def is `#<Word>Input`, so the two
+// shapes are disjoint by construction.
+func isKindValueDefName(def string) bool {
+	return strings.HasPrefix(def, "#") && strings.HasSuffix(def, "Value") && def != "#DeployValue"
+}
+
+// kindValueDefPath resolves the #<Kind>Value def a kind node's authored VALUE is gated against,
+// following the SHAPE THE PROVIDER DECLARES: a class:kind capability that names a `#<Word>Value`
+// def in its InputDef is declaring that its body is a host-value def — rich, base-referencing,
+// host-validated and host-folded — exactly as a capability naming DeployTraits declares itself a
+// deploy substrate and one answering CandyKindCarrier declares the candy factory. A kind whose
+// provider has not moved its body into its own CUE module yet falls back to the base's
+// spec.KindValueDefs, which is why every kind in use today resolves to the same def it always
+// did. Once the body moves, the base entry is deleted (the twins go with it) and the provider's
+// declaration is what carries the kind forward.
+func kindValueDefPath(prov Provider, disc string) (string, bool) {
+	if prov != nil && prov.Class() == ClassKind && prov.Reserved() == disc {
+		if kc, ok := prov.(kindInputDefCarrier); ok {
+			if def := kc.DeclaredKindInputDef(); isKindValueDefName(def) {
+				return def, true
+			}
+		}
+	}
+	def, ok := spec.KindValueDefs[disc]
+	return def, ok
+}
+
+// kindValueDefValue looks a kind body def up in the COMPOSED schema — the base & every served
+// plugin unit. That is the value a plugin's authored input is validated against, so it is the
+// only place a definition a PLUGIN declares can be seen; the base alone stops carrying a kind
+// body the moment that body moves into its owning plugin's CUE module.
+//
+// The lookup is lazy in the same way the composed schema itself is: nothing is composed before
+// the first unit registers, and the base answers until then (measured equal to the composed
+// value for every kind the base still declares). A def the base does NOT declare can only come
+// from a served unit, so the builtin units are materialized then and the composed lookup retried
+// once — the same lazy gate a flat plugin kind already pays (runPluginKind), never an eager
+// startup cost on a project that loads no plugin schema.
+func kindValueDefValue(defPath string) (cue.Value, error) {
+	if composed, ok := composedSchema(); ok {
+		if d := composed.LookupPath(cue.ParsePath(defPath)); d.Err() == nil {
+			return d, nil
+		}
+	}
+	if d := sharedCueSchema().LookupPath(cue.ParsePath(defPath)); d.Err() == nil {
+		return d, nil
+	}
+	if err := loadBuiltinPluginUnits(); err != nil {
+		return cue.Value{}, err
+	}
+	composed, ok := composedSchema()
+	if !ok {
+		return cue.Value{}, fmt.Errorf("kind value def %s not found: no plugin unit schema is composed and the base does not declare it", defPath)
+	}
+	d := composed.LookupPath(cue.ParsePath(defPath))
+	if d.Err() != nil {
+		return cue.Value{}, fmt.Errorf("kind value def %s not found: %w", defPath, d.Err())
+	}
+	return d, nil
+}
+
 // validateKindValueCUE validates an externalized structural kind node's authored VALUE against
-// the KEPT #<Kind>Value def — the host-side replacement for the removed #Node arm's closedness
-// (a typo'd field in a `vm:`/`pod:`/`candy:` value is a hard load error, exactly as before).
-// Only a MAPPING value is gated: a SCALAR value is a cross-ref (`pod: coder`), which carries no
-// authored fields to typo-check (it is resolved at deploy). The RAW authored value is validated
-// (shorthand intact) since #<Kind>Value accepts the same shorthand the arm did. Covers the 5
-// substrate kinds (#<Kind>Value) AND candy (#CandyValue).
+// the #<Kind>Value def its PROVIDER declares — the host-side replacement for the removed #Node
+// arm's closedness (a typo'd field in a `vm:`/`pod:`/`candy:` value is a hard load error, exactly
+// as before). Only a MAPPING value is gated: a SCALAR value is a cross-ref (`pod: coder`), which
+// carries no authored fields to typo-check (it is resolved at deploy). The RAW authored value is
+// validated (shorthand intact) since #<Kind>Value accepts the same shorthand the arm did. Covers
+// the substrate kinds (#<Kind>Value), candy (#CandyValue) and every other host-value-gated kind.
+//
+// The def is resolved through the COMPOSED schema (base & every served plugin unit), not the
+// base alone: a kind body that has moved into its owning plugin's CUE module is declared there
+// and NOWHERE the base can see, so a base-only lookup would stop finding it the moment the move
+// lands. Before anything is composed the two values are the same document — measured equal for
+// every kind still declared by the base (kind_value_composed_test.go pins that equality).
 //
 // The shape check + the CUE ingest read the CANONICAL JSON body (pn.Body, the F1.5
 // canonicalisation) directly: the deleted genericNode discValue walk and the
 // gn→yaml.Marshal→CueDocFromYAML round trip are gone — CueDocFromJSON ingests the same raw
 // authored value over JSON (parser consolidation F2.1/F2.3).
-func validateKindValueCUE(pn spec.ParsedNode) error {
+func validateKindValueCUE(pn spec.ParsedNode, prov Provider) error {
 	// Only a MAPPING value is gated: a scalar cross-ref (or an empty node) carries no authored
 	// fields to typo-check — decoded straight off the canonical JSON body.
 	var body map[string]json.RawMessage
 	if len(pn.Body) == 0 || json.Unmarshal([]byte(pn.Body), &body) != nil {
 		return nil
 	}
-	defPath, ok := spec.KindValueDefs[pn.Disc]
+	defPath, ok := kindValueDefPath(prov, pn.Disc)
 	if !ok {
 		return nil
 	}
-	def := sharedCueSchema().LookupPath(cue.ParsePath(defPath))
-	if def.Err() != nil {
-		return fmt.Errorf("kind value def %s not found: %w", defPath, def.Err())
+	def, err := kindValueDefValue(defPath)
+	if err != nil {
+		return err
 	}
 	// Gate the node's OWN kind value only: a parser-classified member child carried in the
 	// authored body (its tree-position channel) is not a kind-value field. Strip it exactly as

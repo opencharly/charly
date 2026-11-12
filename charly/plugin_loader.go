@@ -255,6 +255,22 @@ func validateAuthoredPluginInput(class ProviderClass, word string, inputJSON []b
 	return nil
 }
 
+// composedSchema returns the process-wide COMPOSED schema — the base & Σ(every registered
+// unit) value registerPluginUnitSchema grows — and whether ANY unit has been registered
+// yet. Before the first registration the base has not been materialized for this purpose,
+// so the caller gets ok=false and may fall back to sharedCueSchema(); with at least one
+// unit composed the returned value IS the composed unit, and reading a def from it is how
+// a consumer sees a definition a PLUGIN declares rather than only one the base declares.
+// The value is immutable once returned (cue.Value), so the snapshot needs no held lock.
+func composedSchema() (cue.Value, bool) {
+	pluginSchemas.mu.Lock()
+	defer pluginSchemas.mu.Unlock()
+	if !pluginSchemas.unified.Exists() {
+		return cue.Value{}, false
+	}
+	return pluginSchemas.unified, true
+}
+
 // builtinGateOnce + loadBuiltinPluginUnits gate EVERY in-tree builtin plugin unit's
 // schema at process start (directive: a schema is evaluated every time a plugin is
 // loaded — a builtin is "loaded" at process start). It obtains each unit through
