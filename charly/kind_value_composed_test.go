@@ -140,8 +140,9 @@ func servedRefUnit(t *testing.T) Provider {
 // resolves the def through the ENTITY's runtime and fails; `def.Unify(entity)` resolves it
 // through the unit's, and succeeds.
 //
-// Red without the order flip (measured, paste in the PR): "args.prs: cannot find package
-// \"github.com/opencharly/spec/schema\"".
+// Red without the order flip, with THIS fixture's own diagnostic (pasted red in the PR):
+// `servedref: llm: cannot find package "github.com/opencharly/spec/schema"` — the node's
+// discriminator, the field that forced the reference, and the module it could not resolve.
 func TestKindValueGate_ValidatesAServedDefCarryingAContractReference(t *testing.T) {
 	prov := servedRefUnit(t)
 
