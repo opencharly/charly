@@ -20,11 +20,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"sort"
 	"strings"
 	"testing"
 
 	"cuelang.org/go/cue"
 
+	pb "github.com/opencharly/spec/proto"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -140,7 +144,13 @@ func TestKindValueDefs_ComposedEqualsBase(t *testing.T) {
 	if len(spec.KindValueDefs) == 0 {
 		t.Fatal("the base declares no kind value defs — the derivation changed")
 	}
-	for disc, defPath := range spec.KindValueDefs {
+	discs := make([]string, 0, len(spec.KindValueDefs))
+	for disc := range spec.KindValueDefs {
+		discs = append(discs, disc)
+	}
+	sort.Strings(discs)
+	for _, disc := range discs {
+		defPath := spec.KindValueDefs[disc]
 		baseDef := sharedCueSchema().LookupPath(cue.ParsePath(defPath))
 		if baseDef.Err() != nil {
 			t.Errorf("%s: base does not declare %s: %v", disc, defPath, baseDef.Err())
@@ -157,4 +167,93 @@ func TestKindValueDefs_ComposedEqualsBase(t *testing.T) {
 		}
 		t.Logf("%s %s: composed == base", disc, defPath)
 	}
+}
+
+// TestCapMeta_DeclaredKindInputDefLiftedFromTheWireCapability proves the PRODUCTION chain that
+// makes the provider-declared path active at all: the declared `input_def` travels on the wire
+// capability, buildCapMeta lifts it, and kindValueDefPath follows it. The earlier test builds
+// capMeta directly, so without this one a broken buildCapMeta would leave every kind on the
+// spec.KindValueDefs fallback with no test failing.
+func TestCapMeta_DeclaredKindInputDefLiftedFromTheWireCapability(t *testing.T) {
+	kindCap, err := buildCapMeta(&pb.ProvidedCapability{Class: "kind", Word: "wireprobe", InputDef: "#WireprobeValue"})
+	if err != nil {
+		t.Fatalf("buildCapMeta(kind:wireprobe): %v", err)
+	}
+	if got := kindCap.DeclaredKindInputDef(); got != "#WireprobeValue" {
+		t.Fatalf("a kind capability declaring input_def %q must expose it; got %q", "#WireprobeValue", got)
+	}
+	if def, gated := kindValueDefPath(gateProbeProvider{capMeta: kindCap}, "wireprobe"); !gated || def != "#WireprobeValue" {
+		t.Fatalf("the wire-lifted declaration must route kind:wireprobe to the host-value gate; got %q,%v", def, gated)
+	}
+
+	// A non-kind class never exposes the field as a kind body def.
+	verbCap, err := buildCapMeta(&pb.ProvidedCapability{Class: "verb", Word: "wireprobe", InputDef: "#WireprobeInput"})
+	if err != nil {
+		t.Fatalf("buildCapMeta(verb:wireprobe): %v", err)
+	}
+	if got := verbCap.DeclaredKindInputDef(); got != "" {
+		t.Fatalf("a non-kind capability must not carry a kind body def; got %q", got)
+	}
+
+	// A kind declaring no input_def exposes "" and stays on the fallback.
+	plainCap, err := buildCapMeta(&pb.ProvidedCapability{Class: "kind", Word: "plainprobe"})
+	if err != nil {
+		t.Fatalf("buildCapMeta(kind:plainprobe): %v", err)
+	}
+	if got := plainCap.DeclaredKindInputDef(); got != "" {
+		t.Fatalf("a kind declaring no input_def must expose %q; got %q", "", got)
+	}
+	if _, gated := kindValueDefPath(gateProbeProvider{capMeta: plainCap}, "plainprobe"); gated {
+		t.Fatal("a kind with no declared body def and no base entry must not be host-value-gated")
+	}
+}
+
+// TestKindValueDefValue_MaterializesBuiltinUnitsOnMiss exercises the lazy-materialization branch
+// of kindValueDefValue: a def that the BASE does not declare and that no unit has composed yet
+// (because the builtin gate has not run) must materialize the builtin units once and resolve.
+// In THIS process TestMain has already registered the 63 units, so the branch cannot be reached
+// here — the helper re-executes the test binary with CHARLY_TEST_SKIP_BUILTIN_GATE=1, where
+// nothing is composed at all.
+func TestKindValueDefValue_MaterializesBuiltinUnitsOnMiss(t *testing.T) {
+	// Control in this process: the def is already composed, so a plain lookup succeeds.
+	if _, err := kindValueDefValue("#SubstratePlugin"); err != nil {
+		t.Fatalf("#SubstratePlugin must resolve once the builtin units are composed: %v", err)
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestKindValueDefValueMissHelperProcess$")
+	cmd.Env = append(os.Environ(),
+		"CHARLY_TEST_SKIP_BUILTIN_GATE=1",
+		"CHARLY_TEST_MISS_HELPER=1",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("miss-path helper process failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "MISS-PATH-OK") {
+		t.Fatalf("helper did not reach the miss path:\n%s", out)
+	}
+}
+
+// TestKindValueDefValueMissHelperProcess runs only in the re-executed child above.
+func TestKindValueDefValueMissHelperProcess(t *testing.T) {
+	if os.Getenv("CHARLY_TEST_MISS_HELPER") != "1" {
+		t.Skip("helper process only")
+	}
+	if _, ok := composedSchema(); ok {
+		t.Fatal("the builtin gate ran before the helper — the miss path cannot be exercised")
+	}
+	if d := sharedCueSchema().LookupPath(cue.ParsePath("#SubstratePlugin")); d.Err() == nil {
+		t.Fatal("#SubstratePlugin is declared by the base — the fixture no longer isolates the miss")
+	}
+	def, err := kindValueDefValue("#SubstratePlugin")
+	if err != nil {
+		t.Fatalf("the miss path must materialize the builtin units and resolve the def: %v", err)
+	}
+	if def.Err() != nil {
+		t.Fatalf("resolved def is erroneous: %v", def.Err())
+	}
+	if _, ok := composedSchema(); !ok {
+		t.Fatal("the miss path resolved the def but left the composed schema unmaterialized")
+	}
+	fmt.Println("MISS-PATH-OK")
 }
