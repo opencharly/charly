@@ -66,8 +66,6 @@ github.com/docker/distribution v2.8.3+incompatible h1:AtKxIZ36LoNK51+Z6RpzLpddBi
 github.com/docker/distribution v2.8.3+incompatible/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
 github.com/docker/docker-credential-helpers v0.9.3 h1:gAm/VtF9wgqJMoxzT3Gj5p4AqIjCBS4wrsOh9yRqcz8=
 github.com/docker/docker-credential-helpers v0.9.3/go.mod h1:x+4Gbw9aGmChi3qTLZj8Dfn0TD20M/fuWy0E5+WDeCo=
-github.com/emicklei/dot v1.11.0 h1:zsrhCuFHAJge/aZIC4N4LdHy5tqYu4tWEaUzIwdYj4Y=
-github.com/emicklei/dot v1.11.0/go.mod h1:DeV7GvQtIw4h2u73RKBkkFdvVAz0D9fzeJrgPW6gy/s=
 github.com/emicklei/proto v1.14.3 h1:zEhlzNkpP8kN6utonKMzlPfIvy82t5Kb9mufaJxSe1Q=
 github.com/emicklei/proto v1.14.3/go.mod h1:rn1FgRS/FANiZdD2djyH7TMA9jdRDcYQ9IEN9yvjX0A=
 github.com/expr-lang/expr v1.17.8 h1:W1loDTT+0PQf5YteHSTpju2qfUfNoBt4yw9+wOEU9VM=
@@ -167,8 +165,6 @@ github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314 h1:HHTlqU2
 github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314/go.mod h1:uc+GYQHzkwvpLRrggKkBQK8c/kKvdTNsaYlYGbLSTcc=
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319 h1:l/zq4M/T5/eNYMp2e1QKmdmh8ev/SVPRlhMJeQWhUHA=
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319/go.mod h1:sJZfp6ovCsj1LzQAzq/RFw5FmtzBbnWZk8IPvyK/v+c=
-github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948 h1:becOqUxBQxNBTMwazoqmF24b4ApCfDHAQmzOfVwUTWg=
-github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026281.948/go.mod h1:UC/PfR3DaB6yXAeqWPUwpqn/hpvOh3YhWjiay5zJW+U=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445 h1:sue43HFANxzL/bfd6diij/B4pV7YP4n017TuZqpKOi8=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445/go.mod h1:Adnw/r+VqulE3m26DKB530+cGciLdlbW4snLwdk9q+c=
 github.com/opencharly/plugin-check/candy/plugin-check v0.2026298.205 h1:leWRuk9/n0+GSJEaqFrkmX8QTdQ2kyefxXLjiBswZDg=
@@ -273,14 +269,10 @@ github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424 h1:eu410toqUd
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424/go.mod h1:X+COgIvHq7NIpaK3rraNOeyDESN3R8ZhGD99sNcFZms=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356 h1:UC5l43x6WDw+HGAu7UmFLWFsmUOT6ktFzN5AB2zAWmc=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356/go.mod h1:AW+g3gtHTnRCaR+vJuqmCDMe7ExXD9VKjr2OgUfaf08=
-github.com/opencharly/sdk v0.2026309.2334 h1:L0BESj6cg190VNzykDL1IYyDnCX7n1mN3Z3Cd3XWSxU=
-github.com/opencharly/sdk v0.2026309.2334/go.mod h1:r8zMVnKjFjkOaIlRTmlRA/jCtDhRn1doLR0PedHhDgs=
-github.com/opencharly/spec v0.2026313.453 h1:k1ss6+IyOUSl/kSYry2EWs8dUy2MGMWu0y+mvUQRlHs=
-github.com/opencharly/spec v0.2026313.453/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
-github.com/opencharly/spec v0.2026313.1428 h1:Kx0UB8igG/H3aEPTouEImt60uGyZsPxW99HO/SE1UvU=
-github.com/opencharly/spec v0.2026313.1428/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
-github.com/opencharly/spec v0.2026315.2118 h1:yf8t+2/DBhUjmtiIc8V0dnJdH29vIj1GGEgEpCWkYR0=
-github.com/opencharly/spec v0.2026315.2118/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/sdk v0.2026316.1848 h1:Gwbnr06Yp0jIEfNVxsMRxy1fXSAZLaL/C77m7eDLJwg=
+github.com/opencharly/sdk v0.2026316.1848/go.mod h1:na20ivz1FqfQ/VirRyfelZaQmlH3ePrU1smzNokTzts=
+github.com/opencharly/spec v0.2026316.1928 h1:vZtYqbfS0h7V2Jri0o7RZSuAWQu7LjdDzYdC/bhTcMo=
+github.com/opencharly/spec v0.2026316.1928/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=

@@ -17,6 +17,15 @@ package main
 // exactly and is never production code; it exists so "before vs after" is two runs of ONE file on
 // ONE tree, not two trees that could differ in something else.
 //
+// SELECTION follows the PRODUCTION resolver. A body is judged when the route the loader uses
+// answers with a `#<Kind>Value` def name — the provider's declared InputDef first, the base's
+// spec.KindValueDefs as the compatibility fallback (kindValueDefPath) — and the provider is
+// connected the way the loader connects a referenced plugin kind (gatedKindProvider). That is
+// what keeps a moved kind in the sweep: `kind: pipeline`'s body is plugin-pipeline's CUE now,
+// so it has no base entry left, and a selection keyed on spec.KindValueDefs alone would drop
+// its bodies silently. The `base` arm remains the pre-change oracle for the BASE source and
+// skips — visibly, and counted — a def the base no longer declares.
+//
 // Opt-in because the corpus lives in the umbrella, not in this repo: with CHARLY_CORPUS_ROOT
 // unset the test SKIPS VISIBLY, the same contract the box corpus tests use. CHARLY_CORPUS_OUT
 // chooses where the verdict list lands (default: <tmp>/kind-value-corpus.txt).
@@ -39,6 +48,37 @@ import (
 	"github.com/opencharly/spec/spec"
 	"gopkg.in/yaml.v3"
 )
+
+// gatedKindProvider resolves the provider that serves `disc`, through the SAME route the gate
+// uses: the registry first and, when `connect` is set, the on-demand connect
+// (`connectPluginByWord`) the loader uses for a referenced plugin kind — it host-builds and
+// registers that plugin's unit. This is what lets a corpus witness see a PLUGIN-DECLARED gate
+// def: `kind: pipeline`'s body lives in plugin-pipeline's CUE module and its `kind` capability
+// declares `InputDef: "#PipelineValue"`, so its provider is the only thing that can name the def.
+//
+// `connect` is false for the DEFAULT-suite corpus test (a plain `go test ./...` must never
+// build a plugin or hit the network), true for the opt-in sweep. A miss is cached only when a
+// connect was actually attempted, so the default suite cannot poison the sweep's resolution.
+var gatedKindProviders = map[string]Provider{}
+
+func gatedKindProvider(disc string, connect bool) (Provider, bool) {
+	if p, seen := gatedKindProviders[disc]; seen {
+		return p, p != nil
+	}
+	p, ok := providerRegistry.ResolveKind(disc)
+	if !ok && connect {
+		p, ok = connectPluginByWord(ClassKind, disc)
+		if !ok {
+			gatedKindProviders[disc] = nil
+			return nil, false
+		}
+	}
+	if !ok {
+		return nil, false
+	}
+	gatedKindProviders[disc] = p
+	return p, true
+}
 
 // corpusNodes parses a YAML stream the way the loader does (the active loader parser, so plugin
 // verb sugar is desugared in place) and returns every entity node, or an error when the file is
@@ -94,6 +134,39 @@ func baseOnlyKindValueVerdict(pn spec.ParsedNode) string {
 	return "OK"
 }
 
+// TestSweepSelectionResolvesAPluginDeclaredGateDef is the sweep's own R7 witness for the
+// selection: a kind whose `#<Kind>Value` def exists ONLY in a served plugin unit must still be
+// selected, and the def path must come from the provider's DECLARATION rather than the base map.
+//
+// The fixture is unit 0's `gateprobe` unit (a def the base does not declare) registered into the
+// real provider registry, so this drives the production resolver — `gatedKindProvider` plus
+// `kindValueDefPath` — with no connect attempt (the registry hit is the whole resolution).
+func TestSweepSelectionResolvesAPluginDeclaredGateDef(t *testing.T) {
+	if _, inBase := spec.KindValueDefs["gateprobe"]; inBase {
+		t.Fatal("the BASE already declares gateprobe — this fixture no longer discriminates")
+	}
+	prov := gateProbeUnit(t)
+	if err := providerRegistry.register(prov, "test"); err != nil {
+		t.Fatalf("register the gateprobe provider: %v", err)
+	}
+
+	got, ok := gatedKindProvider("gateprobe", false)
+	if !ok {
+		t.Fatal("the sweep's resolver did not find the registered kind provider")
+	}
+	defPath, gated := kindValueDefPath(got, "gateprobe")
+	if !gated {
+		t.Fatalf("a kind whose def is declared by a served unit must be GATED by the sweep's selection; got none")
+	}
+	if defPath != "#GateprobeValue" {
+		t.Fatalf("def path = %q, want the provider's declared %q", defPath, "#GateprobeValue")
+	}
+	// The def must then RESOLVE through the composed unit, which is what makes the body judgeable.
+	if _, err := kindValueDefValue(defPath); err != nil {
+		t.Fatalf("the declared def does not resolve in the composed unit: %v", err)
+	}
+}
+
 // TestKindValueCorpusSweep judges every real entity body of a host-value-gated kind through the
 // gate and writes the verdict list. Run it twice (CHARLY_KIND_VALUE_GATE=base and
 // =composed) and diff the two files: a non-empty diff is a moved verdict.
@@ -145,7 +218,7 @@ func TestKindValueCorpusSweep(t *testing.T) {
 	}
 
 	var out strings.Builder
-	parseErrs, judged := 0, 0
+	parseErrs, judged, baseSkips := 0, 0, 0
 	counts := map[string]int{}
 	for _, f := range files {
 		data, rerr := os.ReadFile(f)
@@ -164,19 +237,29 @@ func TestKindValueCorpusSweep(t *testing.T) {
 			continue
 		}
 		for _, pn := range nodes {
-			// SELECTION is the pre-change set so both arms judge the same bodies; the arm only
-			// changes WHERE the def is resolved (base alone vs the composed unit).
-			if _, gated := spec.KindValueDefs[pn.Disc]; !gated {
+			// SELECTION follows the PRODUCTION resolver, not the base map: a kind is gated
+			// when the route the loader uses answers with a `#<Kind>Value` def name —
+			// the provider's declared InputDef first, the base's spec.KindValueDefs as the
+			// compatibility fallback (kindValueDefPath). A kind whose body moved into its
+			// owning plugin's CUE module has NO base entry any more; resolving it through
+			// spec.KindValueDefs alone would silently drop every one of its bodies from the
+			// sweep, which is exactly the loss this selection exists to prevent.
+			prov, _ := gatedKindProvider(pn.Disc, true)
+			if _, gated := kindValueDefPath(prov, pn.Disc); !gated {
 				continue
 			}
 			verdict := "OK"
 			if mode == "base" {
 				verdict = baseOnlyKindValueVerdict(pn)
 				if verdict == "SKIP" {
+					// The base arm is the PRE-CHANGE oracle: it resolves the def in the base
+					// alone, so a kind whose def has MOVED out of the base cannot be judged
+					// through it and is skipped VISIBLY (the composed arm, which is the
+					// production gate, still judges it).
+					baseSkips++
 					continue
 				}
 			} else {
-				prov, _ := providerRegistry.ResolveKind(pn.Disc)
 				if verr := validateKindValueCUE(pn, prov); verr != nil {
 					verdict = "FAIL " + strings.Join(strings.Fields(verr.Error()), " ")
 				}
@@ -199,7 +282,7 @@ func TestKindValueCorpusSweep(t *testing.T) {
 		kinds = append(kinds, k)
 	}
 	sort.Strings(kinds)
-	t.Logf("gate=%s: judged %d entity bodies (%d files unparsable) -> %s", mode, judged, parseErrs, outPath)
+	t.Logf("gate=%s: judged %d entity bodies (%d files unparsable, %d bodies the base arm cannot judge) -> %s", mode, judged, parseErrs, baseSkips, outPath)
 	for _, k := range kinds {
 		t.Logf("  %-12s %d", k, counts[k])
 	}
