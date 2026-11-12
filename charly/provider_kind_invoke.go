@@ -540,7 +540,21 @@ func validateKindValueCUE(pn spec.ParsedNode, prov Provider) error {
 	// exists for — see candy/plugin-substrate's "vm" capability (validate_vm.go), dispatched
 	// kind-blindly from foldSubstrateKind via dispatchKindOpValidate. This gate therefore
 	// stays closedness-only, unchanged, forever — concreteness lives in the plugin.
-	merged := entity.Unify(def)
+	//
+	// THE DEF IS THE RECEIVER, not the authored entity. `cue.Value.Unify` resolves every
+	// reference it meets through the RECEIVER's runtime, and the two sides carry different ones:
+	// `def` comes from the COMPOSED unit, whose runtime carries the plugin unit's IMPORT GRAPH,
+	// while `entity` is built from the authored JSON by the project loader and has no import
+	// clause anywhere in it. `entity.Unify(def)` therefore resolves a `schema.#…` reference a
+	// SERVED def cites through a runtime that cannot see the module (`llm: cannot find package
+	// "github.com/opencharly/spec/schema"`), while `def.Unify(entity)` resolves it through the
+	// unit's own runtime and yields the actual verdict. Same two values, same process, only the
+	// receiver differs. `validateAuthoredPluginInput` has always unified in this direction, which
+	// is why a `#<Word>Input` citing `schema.#LLMSpec` has worked since plugin-pipeline#60; this
+	// gate never needed it before only because every def it resolved came from the BASE (one
+	// package, no import clause), and unit 0 moved the LOOKUP to the composed value while leaving
+	// the ORDER.
+	merged := def.Unify(entity)
 	if verr := merged.Validate(); verr != nil {
 		return fmt.Errorf("%s: %s", pn.Disc, errors.Details(verr, nil))
 	}

@@ -99,6 +99,97 @@ func TestKindValueGate_ReadsAPluginDeclaredDefFromTheComposedUnit(t *testing.T) 
 	}
 }
 
+// servedRefUnitSource is a served unit in the shape a MOVED kind body takes once its owning
+// plugin carries it: the body def cites a CONTRACT def through the unit's own import of the
+// spec CUE module (`schema.#LLMSpec`), exactly as plugin-pipeline's `#PipelineValue` does for
+// `steps[].plan[].llm` (opencharly/plugin-pipeline#60). The import clause is the whole point:
+// it makes the def resolvable ONLY in a runtime that carries a module graph.
+const servedRefUnitSource = `import "github.com/opencharly/spec/schema"
+
+#ServedrefValue: {
+	label: string
+	llm?:   schema.#LLMSpec
+}
+`
+
+// servedRefNode is an authored body of the kind that unit serves. (gateProbeNode is hardcoded to
+// the gateprobe discriminator, so this fixture needs its own.)
+func servedRefNode(t *testing.T, body string) spec.ParsedNode {
+	t.Helper()
+	return spec.ParsedNode{Name: "probe", Disc: "servedref", Body: spec.RawBody(body)}
+}
+
+// servedRefUnit registers that unit and returns the provider that DECLARES its def — the shape
+// a kind declares once its body has moved into its plugin's CUE module.
+func servedRefUnit(t *testing.T) Provider {
+	t.Helper()
+	if err := registerPluginUnitSchema("servedref", PluginSchema{
+		CueSource: servedRefUnitSource,
+		InputDefs: map[string]string{provKey(ClassKind, "servedref"): "#ServedrefValue"},
+	}); err != nil {
+		t.Fatalf("register the servedref unit: %v", err)
+	}
+	return gateProbeProvider{capMeta: capMeta{class: ClassKind, word: "servedref", inputDef: "#ServedrefValue"}}
+}
+
+// TestKindValueGate_ValidatesAServedDefCarryingAContractReference is the witness unit 0 was
+// missing: its own fixture proved a served def is FOUND, but no def it served carried a
+// `schema.#…` contract reference, so nothing judged a body against a def whose resolution needs
+// the unit's IMPORT GRAPH. That is the case the gate's unification ORDER breaks — the authored
+// entity is built by the project loader (no import clause anywhere in it), so `entity.Unify(def)`
+// resolves the def through the ENTITY's runtime and fails; `def.Unify(entity)` resolves it
+// through the unit's, and succeeds.
+//
+// Red without the order flip, with THIS fixture's own diagnostic (pasted red in the PR):
+// `servedref: llm: cannot find package "github.com/opencharly/spec/schema"` — the node's
+// discriminator, the field that forced the reference, and the module it could not resolve.
+func TestKindValueGate_ValidatesAServedDefCarryingAContractReference(t *testing.T) {
+	prov := servedRefUnit(t)
+
+	// The base cannot serve this def at all, so a pass below can only come from the composed
+	// unit's value — never from the fallback.
+	if d := sharedCueSchema().LookupPath(cue.ParsePath("#ServedrefValue")); d.Err() == nil {
+		t.Fatal("the BASE already declares #ServedrefValue — this fixture no longer discriminates")
+	}
+	if def, ok := kindValueDefPath(prov, "servedref"); !ok || def != "#ServedrefValue" {
+		t.Fatalf("kindValueDefPath(provider-declared) = %q,%v; want #ServedrefValue,true", def, ok)
+	}
+
+	// The MECHANISM, pinned: the def reaches into an imported package, and the authored entity's
+	// own runtime has no module graph — so the entity-as-receiver order is the failing one. If
+	// this ever stops failing, the served-def case is no longer the reason the order matters and
+	// the flip should be re-derived rather than assumed.
+	entity, err := requireProjectLoader().CueDocFromJSON("node probe", []byte(`{"label":"ok","llm":{"model":"deepseek-v4.1-flash:cloud"}}`))
+	if err != nil {
+		t.Fatalf("ingest the probe body: %v", err)
+	}
+	def, err := kindValueDefValue("#ServedrefValue")
+	if err != nil {
+		t.Fatalf("resolve #ServedrefValue: %v", err)
+	}
+	if verr := entity.Unify(def).Validate(); verr == nil {
+		t.Fatal("entity.Unify(def) resolved a served `schema.#…` reference — the runtime the entity carries is no longer import-less, so re-derive why the gate's order matters")
+	} else if !strings.Contains(verr.Error(), "cannot find package") {
+		t.Fatalf("entity.Unify(def) must fail by IMPORT resolution (the entity's runtime has no module graph); got: %v", verr)
+	}
+
+	// ACCEPT: a conforming body validates through the served def, INCLUDING the field that
+	// forces the contract reference.
+	body := `{"label":"ok","llm":{"model":"deepseek-v4.1-flash:cloud","timeout":"10m"}}`
+	if err := validateKindValueCUE(servedRefNode(t, body), prov); err != nil {
+		t.Fatalf("a conforming servedref body must pass the served def (its schema.#LLMSpec reference resolved): %v", err)
+	}
+
+	// REJECT: a typo'd field is a hard load error raised BY that served def.
+	err = validateKindValueCUE(servedRefNode(t, `{"label":"ok","bogus":1}`), prov)
+	if err == nil {
+		t.Fatal("a typo'd servedref field must be rejected by the served def")
+	}
+	if !strings.Contains(err.Error(), "bogus") {
+		t.Fatalf("the rejection must name the field, got: %v", err)
+	}
+}
+
 // TestKindValueDefPath_FollowsTheProviderDeclaredShape pins the ROUTING contract: a kind
 // capability naming a `#<Word>Value` body def is host-value-gated, while a flat plugin kind
 // naming its self-contained `#<Word>Input` is NOT — the provider's declaration, never a host
