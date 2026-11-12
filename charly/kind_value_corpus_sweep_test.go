@@ -56,9 +56,12 @@ import (
 // def: `kind: pipeline`'s body lives in plugin-pipeline's CUE module and its `kind` capability
 // declares `InputDef: "#PipelineValue"`, so its provider is the only thing that can name the def.
 //
-// `connect` is false for the DEFAULT-suite corpus test (a plain `go test ./...` must never
-// build a plugin or hit the network), true for the opt-in sweep. A miss is cached only when a
-// connect was actually attempted, so the default suite cannot poison the sweep's resolution.
+// `connect` is FALSE for `TestSweepSelectionResolvesAPluginDeclaredGateDef` (a plain
+// `go test ./...` must never build a plugin or hit the network — that witness registers its
+// provider directly), and TRUE for the corpus sweep's loop (`runCorpusSweep`), which is opt-in
+// and must resolve a kind whose body lives in a plugin the process has not connected. A miss is
+// cached only when a connect was actually attempted, so the false caller cannot poison the
+// loop's resolution.
 var gatedKindProviders = map[string]Provider{}
 
 func gatedKindProvider(disc string, connect bool) (Provider, bool) {
@@ -167,6 +170,40 @@ func TestSweepSelectionResolvesAPluginDeclaredGateDef(t *testing.T) {
 	}
 }
 
+// TestSweepLoopJudgesAPluginDeclaredGateDef drives the sweep's OWN LOOP (runCorpusSweep) over a
+// fixture corpus that authors one body of a kind whose `#<Kind>Value` def exists only in a served
+// unit, and asserts the body is JUDGED. This is the call site, not the helper: reverting the
+// loop's selection to `spec.KindValueDefs[pn.Disc]` makes it judge nothing and this test red —
+// which is exactly the silent loss the selection change prevents (measured on the real corpus:
+// 431 -> 418 bodies, 13 pipeline bodies -> 0, with TestKindValueCorpusSweep still passing).
+func TestSweepLoopJudgesAPluginDeclaredGateDef(t *testing.T) {
+	if _, inBase := spec.KindValueDefs["gateprobe"]; inBase {
+		t.Fatal("the BASE already declares gateprobe — this fixture no longer discriminates")
+	}
+	prov := gateProbeUnit(t)
+	if err := providerRegistry.register(prov, "test"); err != nil {
+		t.Fatalf("register the gateprobe provider: %v", err)
+	}
+	// The parse-time prescan the loader runs for a PLUGIN-declared kind word.
+	registerDeclaredKind("gateprobe")
+
+	root := t.TempDir()
+	const doc = "probe-entity:\n  gateprobe:\n    label: hello\n"
+	if err := os.WriteFile(filepath.Join(root, "probe.yml"), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := runCorpusSweep(t, root, "composed", filepath.Join(t.TempDir(), "verdicts.txt"))
+	if res.judged != 1 {
+		t.Fatalf("the sweep loop judged %d bodies (counts=%v), want the ONE authored gateprobe body", res.judged, res.counts)
+	}
+	if res.counts["gateprobe"] != 1 {
+		t.Fatalf("counts = %v, want one gateprobe body — the loop did not SELECT a provider-declared kind", res.counts)
+	}
+	if res.parseErrs != 0 {
+		t.Fatalf("%d fixture files were unparsable — the fixture is not exercising the loop", res.parseErrs)
+	}
+}
+
 // TestKindValueCorpusSweep judges every real entity body of a host-value-gated kind through the
 // gate and writes the verdict list. Run it twice (CHARLY_KIND_VALUE_GATE=base and
 // =composed) and diff the two files: a non-empty diff is a moved verdict.
@@ -179,6 +216,28 @@ func TestKindValueCorpusSweep(t *testing.T) {
 	if mode == "" {
 		mode = "composed"
 	}
+	outPath := os.Getenv("CHARLY_CORPUS_OUT")
+	if outPath == "" {
+		outPath = filepath.Join(os.TempDir(), "kind-value-corpus-"+mode+".txt")
+	}
+	runCorpusSweep(t, root, mode, outPath)
+}
+
+// corpusSweepResult is what one sweep run measured, returned so a witness can assert on the
+// LOOP rather than on the helpers it calls.
+type corpusSweepResult struct {
+	judged    int
+	parseErrs int
+	baseSkips int
+	counts    map[string]int
+}
+
+// runCorpusSweep is the sweep LOOP itself: walk root, parse the authored documents, SELECT each
+// body through the production resolver, judge it, and write one verdict line per body. Extracted
+// from the test so `TestSweepLoopJudgesAPluginDeclaredGateDef` can drive the loop over a fixture
+// corpus and assert that a provider-declared kind is JUDGED — the call site, not just the helper.
+func runCorpusSweep(t *testing.T, root, mode, outPath string) corpusSweepResult {
+	t.Helper()
 	if mode != "base" && mode != "composed" {
 		t.Fatalf("CHARLY_KIND_VALUE_GATE=%q: want base or composed", mode)
 	}
@@ -270,10 +329,6 @@ func TestKindValueCorpusSweep(t *testing.T) {
 		}
 	}
 
-	outPath := os.Getenv("CHARLY_CORPUS_OUT")
-	if outPath == "" {
-		outPath = filepath.Join(os.TempDir(), "kind-value-corpus-"+mode+".txt")
-	}
 	if werr := os.WriteFile(outPath, []byte(out.String()), 0o644); werr != nil {
 		t.Fatal(werr)
 	}
@@ -286,4 +341,5 @@ func TestKindValueCorpusSweep(t *testing.T) {
 	for _, k := range kinds {
 		t.Logf("  %-12s %d", k, counts[k])
 	}
+	return corpusSweepResult{judged: judged, parseErrs: parseErrs, baseSkips: baseSkips, counts: counts}
 }
