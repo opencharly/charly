@@ -2721,6 +2721,77 @@ check-commands-local:
                 command: ${CHARLY_BIN} reap-orphans
                 in_container: false
 # =================================================================
+# check-idle-guard-starved — the fresh-rebuild R10 bed for charly#926 / #924: the plugin-call
+# idle guard must not read a STARVED producer as a wedged plugin.
+#
+# The changed code is charly/plugin_activity.go: touch() counts an ATTEMPT before its
+# non-blocking send, and observe() treats a grown count as a third progress source beside the
+# drained host-leg event and the tree-work advance. The production interleaving it addresses —
+# a producer that has counted an attempt and has not yet completed its send — lasts two
+# adjacent instructions, so it is NOT reachable through load (measured: nine shapes, 20-100
+# trials, non-monotone 0-vs-1) and NOT reached by any dispatch this binary has today (every
+# guarded dispatch runs on a COMPILED-IN clock, whose watched tree never goes flat during real
+# work — measured arming points are recorded on #924).
+#
+# So the bed drives the REAL guard — touch / observe / idleBoundedContext, no
+# re-implementation — through the ONE thing that makes that interleaving reachable:
+# CHARLY_PLUGIN_TOUCH_GATE, a TEST SEAM that is ZERO in production and only ever DEFERS a
+# send. It removes progress evidence, so it can only make the guard kill EARLIER, never later;
+# it cannot mask a wedged plugin or authorize anything. The step runs the shipped test
+# TestIdleGuardStarvedProducerArm on the venue against the worktree-built binary, and the
+# NEGATIVE CONTROL is the same step re-run against a tree with ONLY the attempt-source hunk
+# reverted from observe() — a real mutation of the product, not a test double — which must
+# FAIL this step.
+# =================================================================
+check-idle-guard-starved-app:
+    local:
+        description: |-
+            Minimal kind:local template for the check-idle-guard-starved bed: NO install
+            content (candy: []). The bed's subject is the binary's OWN plugin-call idle guard,
+            driven through its controllable-interleaving seam, so there is nothing to install
+            on the venue.
+        candy: []
+check-idle-guard-starved:
+    local:
+        from: check-idle-guard-starved-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            R10 for charly#926 / #924 — the idle guard's ATTEMPTED-TOUCH confirmation, proven on a
+            disposable venue in BOTH directions. A disposable kind:local deploy on host: local whose one
+            check step runs the shipped TestIdleGuardStarvedProducerArm on the venue, against the
+            worktree-built binary, with the seam that makes the starved-producer interleaving reachable
+            (CHARLY_PLUGIN_TOUCH_GATE defers a touch's SEND while the producer keeps ATTEMPTING; ZERO in
+            production). The arm drives the real touch/observe/idleBoundedContext code against the #913
+            shape — peer pid=0, a parked peer with no attributable tree, whose only progress source is the
+            real heartbeat producer — and asserts the call SURVIVES every trial, because a grown attempt
+            count at expiry is a live producer. The negative control is this same step re-run against a
+            tree with only the attempt-source hunk reverted from observe(), which must FAIL ten trials of
+            ten. The bed wraps the full R10 contract: it is realized, checked, rebuilt fresh with `charly
+            update`, checked again, and removed.
+        plan:
+            - check: command=the guard SURVIVES a producer that ATTEMPTED progress while nothing was delivered and its watched tree was flat — 10 of 10 trials — so a starved producer is not read as a wedged plugin (the #913 defect, and the assertion the mutated tree fails)
+              id: starved-producer-survives
+              exit_status: 0
+              stdout:
+                - contains: '--- PASS: TestIdleGuardStarvedProducerArm'
+              timeout: 900s
+              context:
+                - runtime
+              command:
+                command: |
+                  set -eu
+                  # The venue's own tree, derived from the binary the check runtime stamped:
+                  # ${CHARLY_BIN} is <repo>/bin/charly, so two levels up is the checkout whose
+                  # charly/ module carries the changed code.
+                  repo=$(cd "$(dirname "${CHARLY_BIN}")/.." && pwd)
+                  cd "$repo/charly"
+                  tmp=$(mktemp -d)
+                  trap 'rm -rf "$tmp"' EXIT
+                  GOTMPDIR=$tmp TMPDIR=$tmp go test . -run '^TestIdleGuardStarvedProducerArm$' -count=1 -v
+                in_container: false
+# =================================================================
 # check-loader-flat-import-local — R10 witness for the FLAT-import plugin PRESCAN path.
 #
 # The changed code is the import leg of `prescanDeclaredPluginWords` (charly/plugin_prescan.go):
