@@ -204,6 +204,44 @@ func TestPluginActivity_ConfirmationAcceptsAnAttemptedTouch(t *testing.T) {
 	}
 }
 
+// TestIdleGuardStarvedProducerArm is the live-arm witness for #924, and the step the
+// `check-idle-guard-starved` bed runs on its venue. It drives the REAL guard — touch(),
+// observe() and idleBoundedContext() — through the controllable interleaving the seam
+// provides (CHARLY_PLUGIN_TOUCH_GATE defers the SEND while the producer keeps ATTEMPTING),
+// against the shape the #913 kill report describes: `peer pid=0`, a parked peer with no
+// attributable tree, whose only progress source is the real heartbeat producer.
+//
+// The state it enters: an expiry at which there is NO drainable token, NO tree-work advance,
+// and a GROWN attempt count. With the attempt source present the call SURVIVES every trial;
+// with that one hunk reverted from observe() every trial is KILLED. The bed asserts both
+// directions by re-running this same test against the mutated tree, so a bed that still
+// passed with the mechanism removed would be caught rather than quoted.
+func TestIdleGuardStarvedProducerArm(t *testing.T) {
+	const window = 60 * time.Millisecond
+	oldWindow, oldGate := pluginInvokeNoProgressOverride, pluginActivityTouchGate
+	pluginInvokeNoProgressOverride = window
+	pluginActivityTouchGate = 2 * window
+	defer func() { pluginInvokeNoProgressOverride = oldWindow; pluginActivityTouchGate = oldGate }()
+
+	const trials = 10
+	for i := 0; i < trials; i++ {
+		a := newPluginActivity(0)
+		stopBeat := startPluginActivityHeartbeat(a)
+		ctx, stop := idleBoundedContext(context.Background(), pluginInvokeNoProgress(), a)
+		select {
+		case <-ctx.Done():
+			stopBeat()
+			stop()
+			t.Fatalf("trial %d: a producer that ATTEMPTED progress while nothing was delivered was read as a wedged plugin (attempts=%d): %v",
+				i, a.touchAttempts(), context.Cause(ctx))
+		case <-time.After(3 * window):
+			// survived: the attempts carried the call
+		}
+		stopBeat()
+		stop()
+	}
+}
+
 // TestPluginActivity_TouchGateIsInertByDefault pins the SAFETY property of the instrument:
 // the send gate is zero unless someone sets it, so a production binary's touch() is the same
 // single non-blocking send it always was, with no wait and no goroutine.
