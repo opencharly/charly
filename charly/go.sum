@@ -167,8 +167,8 @@ github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319 
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319/go.mod h1:sJZfp6ovCsj1LzQAzq/RFw5FmtzBbnWZk8IPvyK/v+c=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445 h1:sue43HFANxzL/bfd6diij/B4pV7YP4n017TuZqpKOi8=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445/go.mod h1:Adnw/r+VqulE3m26DKB530+cGciLdlbW4snLwdk9q+c=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026298.205 h1:leWRuk9/n0+GSJEaqFrkmX8QTdQ2kyefxXLjiBswZDg=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026298.205/go.mod h1:1IWFD+Sjy/R3PU+XCCPQXQyNer1N43pNLHJxlkDXJZU=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026317.744 h1:rFklEy7J3cCDOFIUlFJeZSVLxmTtfsvoDFc4ZbwkbnU=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026317.744/go.mod h1:Lvm4KKGY4G8ZRECioOZ1im0TxiSi1/yUvG4hT8NpJBU=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026287.2341 h1:7HvWdgnWjmKl6XdU7TbUrAlGju+XGRgG3ub72Vc4mpw=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026287.2341/go.mod h1:JvMqAl8jecSWVscrP51vWx2aeDxP9ui1fcXecR3HkwA=
 github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039 h1:gVsGunNwjAjPTX/rTXFzqFwwaEs5FKKZRhTFeO+RR0I=
@@ -255,8 +255,8 @@ github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026272.430 h1:kHW3v6aJXaOP
 github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026272.430/go.mod h1:mQ18blHUPvd8ibP5WBW/g5w3yJOo3TUBzUk31bOpisU=
 github.com/opencharly/plugin-status/candy/plugin-status v0.2026272.442 h1:wJohcUkrbq71QCzusPRsN+jg1u6sqXgsROiB3TuKSpc=
 github.com/opencharly/plugin-status/candy/plugin-status v0.2026272.442/go.mod h1:4aEG/4DA+PLpTArGfZjBD9WT6Vd80lh8/BoTG9up+Hk=
-github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026274.652 h1:2s40q3pqbLQeS+zsBX+fCNOAW/GGyWkFn5vhu4Zj9io=
-github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026274.652/go.mod h1:JJay4CByWmaImazbPVBqOhqnWxAaBA1Y8lvbwIo0qfY=
+github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026317.614 h1:4wMf1glJB3raihAG4T0QeLtJjfR2Yu1/hC2sbenXmyk=
+github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026317.614/go.mod h1:ssydjp2WwRteaa5+7VDu6AzuwqvtuTQtlpgqA9iM/8s=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347 h1:V53hvW7MDUEAP2CCOT1OP9Y+x2OiUmBlP97DOUE3+RY=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347/go.mod h1:BPbZsO1SrO6TLIseVrVG+jC9R1zrnLWxvd9qgmNZIic=
 github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422 h1:Gp6VfQpixzrAZKeL8i7rs7YCLtSqJJSZzoIHo7eDivU=
@@ -269,10 +269,10 @@ github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424 h1:eu410toqUd
 github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424/go.mod h1:X+COgIvHq7NIpaK3rraNOeyDESN3R8ZhGD99sNcFZms=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356 h1:UC5l43x6WDw+HGAu7UmFLWFsmUOT6ktFzN5AB2zAWmc=
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356/go.mod h1:AW+g3gtHTnRCaR+vJuqmCDMe7ExXD9VKjr2OgUfaf08=
-github.com/opencharly/sdk v0.2026317.18 h1:gzttowSwJ7nfkqzQIbVSHMqGI+uyHaiKJREV7QEu21Y=
-github.com/opencharly/sdk v0.2026317.18/go.mod h1:na20ivz1FqfQ/VirRyfelZaQmlH3ePrU1smzNokTzts=
-github.com/opencharly/spec v0.2026317.51 h1:OJM45gEdyGBHQt9FOcp7uTnFfGe3GI+E6V8LRko1zHc=
-github.com/opencharly/spec v0.2026317.51/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/sdk v0.2026317.712 h1:w+kQJ0++85dZ/6N1QMAIvF6/1ljmgqlOAIadjDq8pgA=
+github.com/opencharly/sdk v0.2026317.712/go.mod h1:q3RH72zJ1cWgGTuOr5y/mzIanyCxqgrcvVoh80I0+RQ=
+github.com/opencharly/spec v0.2026317.703 h1:cdefTqeJUVu7OvZEp/FLD3pBJ5epScJpow82ljg6MiA=
+github.com/opencharly/spec v0.2026317.703/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=

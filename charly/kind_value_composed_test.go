@@ -219,10 +219,14 @@ func TestKindValueDefPath_FollowsTheProviderDeclaredShape(t *testing.T) {
 	}
 
 	// ...and the MOVED kinds are no longer in the fallback at all: after
-	// opencharly/spec#304 unit 2 the `task` body is plugin-task's CUE, so a provider-less
-	// resolution must find nothing. This is the deletion's own witness in the host.
+	// opencharly/spec#304 unit 2 the `task` body is plugin-task's CUE and after unit 3 the
+	// `pod` body is plugin-substrate's, so a provider-less resolution must find nothing for
+	// either. This is the deletion's own witness in the host.
 	if def, ok := kindValueDefPath(nil, "task"); ok {
 		t.Fatalf("nil provider resolved %q for `task` — the body moved to plugin-task's CUE (spec#304 unit 2) and must not fall back to this module's map", def)
+	}
+	if def, ok := kindValueDefPath(nil, "pod"); ok {
+		t.Fatalf("nil provider resolved %q for `pod` — the body moved to plugin-substrate's CUE (spec#304 unit 3) and must not fall back to this module's map", def)
 	}
 
 	if _, ok := kindValueDefPath(nil, "agent"); ok {
