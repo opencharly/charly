@@ -971,7 +971,7 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 	// (opencharly/charly#1131). It is what lets a step act on the PATH it was told instead of
 	// re-deriving "which binary is this plugin" from a name — see plugin_connected_set.go.
 	// Recorded AFTER registration on purpose: a unit that failed to register is not served.
-	recordConnectedPluginFromLoad(name, bin, srcDir)
+	recordConnectedPluginFromLoad(name, bin, srcDir, unitProviderKeys(unit))
 	return nil
 }
 

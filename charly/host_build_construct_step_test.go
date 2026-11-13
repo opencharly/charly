@@ -77,6 +77,7 @@ func TestConstructStepInjectsTheConnectedPluginSetForAnOptedInStep(t *testing.T)
 		"plugin-firecracker",
 		"/cache/plugin-build/views/plugin-firecracker-0123456789abcdef",
 		"/src/plugin-firecracker",
+		[]string{"command:firecracker"},
 	)
 
 	fields := constructedPayload(t, "plugin-tree-fake", map[string]any{
@@ -107,6 +108,12 @@ func TestConstructStepInjectsTheConnectedPluginSetForAnOptedInStep(t *testing.T)
 	if entry["src_dir"] != "/src/plugin-firecracker" {
 		t.Errorf("entry src_dir = %v, want the candy source dir", entry["src_dir"])
 	}
+	// The injected entry carries the WORDS too, which is what a delivering step turns into the
+	// `<leaf>.providers` manifest (opencharly/charly#1131).
+	providers, ok := entry["providers"].([]any)
+	if !ok || len(providers) != 1 || providers[0] != "command:firecracker" {
+		t.Errorf("entry providers = %v, want the words the unit registered", entry["providers"])
+	}
 }
 
 // TestConstructStepInjectsIntoAStepWithNoAuthoredInput covers the NIL-MAP case: a step that opts
@@ -125,7 +132,7 @@ func TestConstructStepInjectsIntoAStepWithNoAuthoredInput(t *testing.T) {
 	if err := providerRegistry.register(fake, originBuiltin); err != nil {
 		t.Fatalf("register the fake class:step provider: %v", err)
 	}
-	recordConnectedPluginFromLoad("plugin-firecracker", "/cache/views/plugin-firecracker-abc", "")
+	recordConnectedPluginFromLoad("plugin-firecracker", "/cache/views/plugin-firecracker-abc", "", []string{"command:firecracker"})
 
 	fields := constructedPayload(t, "no-input-fake", nil)
 	raw, ok := fields[spec.ConnectedPluginsInputKey]
@@ -148,7 +155,7 @@ func TestConstructStepLeavesANonOptedInStepInputUntouched(t *testing.T) {
 	if err := providerRegistry.register(fake, originBuiltin); err != nil {
 		t.Fatalf("register the fake class:step provider: %v", err)
 	}
-	recordConnectedPluginFromLoad("plugin-firecracker", "/cache/views/plugin-firecracker-abc", "")
+	recordConnectedPluginFromLoad("plugin-firecracker", "/cache/views/plugin-firecracker-abc", "", []string{"command:firecracker"})
 
 	fields := constructedPayload(t, "closed-input-fake", map[string]any{"marker": "hello"})
 	if _, injected := fields[spec.ConnectedPluginsInputKey]; injected {
