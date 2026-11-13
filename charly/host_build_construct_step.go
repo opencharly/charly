@@ -104,15 +104,21 @@ func stepInputPayload(op *spec.Op, sc spec.StepContract) (json.RawMessage, error
 	if !sc.PluginPaths {
 		return payload, nil
 	}
-	// A JSON object is the only shape this can add a key to. `null`/empty (no authored input)
-	// is an object-less payload and starts empty; anything else is the step's own shape and is
-	// refused BY NAME rather than silently dropped, because dropping it would hand the step an
-	// input that says nothing about the paths it opted in for.
+	// A JSON object is the only shape this can add a key to. `null` — which is what
+	// marshalJSON(nil) produces for a step with NO authored input — decodes to a NIL map without
+	// an error, so the map is re-created before the assignment below; assuming the literal
+	// initializer survived would panic "assignment to entry in nil map" on exactly that step.
+	// Any other non-object shape is the step's own and is refused BY NAME rather than silently
+	// dropped, because dropping it would hand the step an input that says nothing about the paths
+	// it opted in for.
 	fields := map[string]json.RawMessage{}
 	if len(payload) > 0 {
 		if err := json.Unmarshal(payload, &fields); err != nil {
 			return nil, fmt.Errorf("step %q declares plugin_paths but its input is not a JSON object: %w", op.Plugin, err)
 		}
+	}
+	if fields == nil {
+		fields = map[string]json.RawMessage{}
 	}
 	set, err := marshalJSON(connectedPluginSet.snapshot())
 	if err != nil {

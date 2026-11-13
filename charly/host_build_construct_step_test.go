@@ -109,6 +109,34 @@ func TestConstructStepInjectsTheConnectedPluginSetForAnOptedInStep(t *testing.T)
 	}
 }
 
+// TestConstructStepInjectsIntoAStepWithNoAuthoredInput covers the NIL-MAP case: a step that opts
+// in and authors NO input marshals to `null`, which decodes to a nil map without an error. The
+// assignment then panics unless the map is re-created — measured (opencharly/charly#1134 review):
+// the first version of this function panicked with "assignment to entry in nil map".
+func TestConstructStepInjectsIntoAStepWithNoAuthoredInput(t *testing.T) {
+	isolateProviderRegistry(t)
+	connectedPluginSet.forget()
+	t.Cleanup(connectedPluginSet.forget)
+
+	fake := connectedStepFake{word: "no-input-fake", contract: spec.StepContract{
+		Scope: spec.ScopeSystem, Venue: spec.VenueHostNative, Gate: spec.GateNone,
+		PluginPaths: true,
+	}}
+	if err := providerRegistry.register(fake, originBuiltin); err != nil {
+		t.Fatalf("register the fake class:step provider: %v", err)
+	}
+	recordConnectedPluginFromLoad("plugin-firecracker", "/cache/views/plugin-firecracker-abc", "")
+
+	fields := constructedPayload(t, "no-input-fake", nil)
+	raw, ok := fields[spec.ConnectedPluginsInputKey]
+	if !ok {
+		t.Fatalf("a step with no authored input received no connected set: %v", fields)
+	}
+	if entries, ok := raw.([]any); !ok || len(entries) != 1 {
+		t.Fatalf("%q = %v, want one connected-plugin entry", spec.ConnectedPluginsInputKey, raw)
+	}
+}
+
 func TestConstructStepLeavesANonOptedInStepInputUntouched(t *testing.T) {
 	isolateProviderRegistry(t)
 	connectedPluginSet.forget()

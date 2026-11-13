@@ -30,6 +30,11 @@ func (f declaredPluginFake) IsPluginCandy() bool          { return f.plugin }
 func (f declaredPluginFake) GetPluginSource() string      { return f.source }
 func (f declaredPluginFake) GetPluginProviders() []string { return f.words }
 
+// The plan-scoping half reads these two on EVERY scanned candy, so a fake used across both
+// halves must answer them: no external builder, no plan steps.
+func (f declaredPluginFake) GetExternalBuilder() string { return "" }
+func (f declaredPluginFake) PlanSteps() []spec.Step     { return nil }
+
 func TestAddDeclaredDeployPluginWordsAddsOnlyDeclaredOutOfTreePluginCandies(t *testing.T) {
 	candyMap := map[string]spec.CandyReader{
 		"github.com/org/plugin-a/candy/plugin-a": declaredPluginFake{
@@ -62,6 +67,27 @@ func TestAddDeclaredDeployPluginWordsAddsOnlyDeclaredOutOfTreePluginCandies(t *t
 	}
 	if len(refs) != 3 {
 		t.Fatalf("refs = %v, want exactly the three declared words", refs)
+	}
+}
+
+// TestDeployConnectRefsJoinsBothHalves is the coverage the WIRING needs: the two halves are
+// useless apart, so this asserts the JOINED set. Deleting either half from deployConnectRefs turns
+// exactly one of the two arms red — a test on either half alone would stay green.
+func TestDeployConnectRefsJoinsBothHalves(t *testing.T) {
+	candyMap := map[string]spec.CandyReader{
+		"planned-plugin":  declaredPluginFake{plugin: true, source: "github.com/org/planned/candy/planned-plugin", words: []string{"verb:planned"}},
+		"declared-plugin": declaredPluginFake{plugin: true, source: "github.com/org/declared/candy/declared-plugin", words: []string{"command:venuecli"}},
+	}
+	// refWords is what the PLAN references; the declared list is what the deploy CARRIES.
+	refs := deployConnectRefs(&spec.Config{}, candyMap, []string{"planned"}, []spec.ExtraCandyRef{{Ref: "declared-plugin"}})
+
+	for _, want := range []string{"planned", "venuecli"} {
+		if _, ok := refs[want]; !ok {
+			t.Errorf("word %q missing from the deploy connect's reference set", want)
+		}
+	}
+	if len(refs) != 2 {
+		t.Fatalf("refs = %v, want exactly the plan word plus the declared plugin's word", refs)
 	}
 }
 

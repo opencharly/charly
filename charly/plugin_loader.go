@@ -1345,12 +1345,24 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []spec.ExtraCandyRe
 	if candyMap == nil {
 		return nil
 	}
-	refs := collectReferencedPluginWords(candyMap, cfg.Box, refWords)
-	addDeclaredDeployPluginWords(candyMap, extra, refs)
+	refs := deployConnectRefs(cfg, candyMap, refWords, extra)
 	if perr := loadProjectPlugins(context.Background(), candyMap, refs); perr != nil {
 		return fmt.Errorf("load deploy plugins: %w", perr)
 	}
 	return nil
+}
+
+// deployConnectRefs is the COMPLETE reference set a deploy's connect is scoped on: the words the
+// deploy's PLAN references, plus the provider words of the plugin candies the deploy DECLARES
+// (addDeclaredDeployPluginWords — the venue-shell case the plan cannot see).
+//
+// A pure function of its inputs on purpose: the two halves are useless apart, so this is the unit
+// a test can assert. A test that only exercised the second half would stay green if the call were
+// removed from here, which is exactly the coverage gap this refactor closes.
+func deployConnectRefs(cfg *spec.Config, candyMap map[string]spec.CandyReader, refWords []string, declared []spec.ExtraCandyRef) map[string]struct{} {
+	refs := collectReferencedPluginWords(candyMap, cfg.Box, refWords)
+	addDeclaredDeployPluginWords(candyMap, declared, refs)
+	return refs
 }
 
 // addDeclaredDeployPluginWords adds the provider words of every PLUGIN candy the deployment
