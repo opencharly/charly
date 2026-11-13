@@ -18,7 +18,7 @@ require (
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319
 	github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445
-	github.com/opencharly/plugin-check/candy/plugin-check v0.2026298.205
+	github.com/opencharly/plugin-check/candy/plugin-check v0.2026317.744
 	github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026287.2341
 	github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039
 	github.com/opencharly/plugin-command/candy/plugin-command v0.2026277.738
@@ -62,13 +62,13 @@ require (
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026272.438
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026272.430
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026272.442
-	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026274.652
+	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026317.614
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026272.423
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424
 	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356
-	github.com/opencharly/sdk v0.2026317.18
+	github.com/opencharly/sdk v0.2026317.712
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -141,7 +141,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347
-	github.com/opencharly/spec v0.2026317.51
+	github.com/opencharly/spec v0.2026317.703
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
