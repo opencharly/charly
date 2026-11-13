@@ -325,7 +325,7 @@ func TestCollectRemoteRefsLocalTemplate(t *testing.T) {
 				},
 			},
 		}),
-		Local: rawTemplateMap(map[string]*LocalSpec{
+		Local: rawTemplateMap(map[string]*spec.ResolvedLocal{
 			"workstation": {
 				Candy: []string{
 					"@github.com/opencharly/charly/layers/nvidia:v1.0.0",
