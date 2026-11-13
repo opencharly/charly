@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -966,6 +967,11 @@ func loadPluginUnit(ctx context.Context, name string, source string, srcDir stri
 		_ = closer.Close()
 		return fmt.Errorf("plugin %q: register: %w", name, err)
 	}
+	// The unit is SERVED: record the mapping this function resolved and would otherwise discard
+	// (opencharly/charly#1131). It is what lets a step act on the PATH it was told instead of
+	// re-deriving "which binary is this plugin" from a name — see plugin_connected_set.go.
+	// Recorded AFTER registration on purpose: a unit that failed to register is not served.
+	recordConnectedPluginFromLoad(name, bin, srcDir)
 	return nil
 }
 
@@ -1121,7 +1127,39 @@ func resolveMergedDeployTree(dir string) (map[string]spec.DeployNode, error) {
 // Best-effort: (nil, nil) on any load failure or unknown name (the caller still
 // collects candy + box references; a genuinely missing reference fails loudly at
 // dispatch, never silently mis-deploys).
-func deployNodePluginContext(dir, name string) (addCandy []spec.ExtraCandyRef, refWords []string) {
+// templateCandyRefs returns the `candy:` refs a `from:` template chain declares, following
+// further `from:` links (a local template may itself come from another), cycle-guarded. A `from:`
+// that names no LOCAL template (a vm/pod/box reference) yields nothing: those closures are not a
+// candy list.
+func templateCandyRefs(cfg *spec.Config, from string) []string {
+	if cfg == nil || from == "" {
+		return nil
+	}
+	var out []string
+	seen := map[string]struct{}{}
+	for from != "" {
+		if _, dup := seen[from]; dup {
+			return out
+		}
+		seen[from] = struct{}{}
+		raw, ok := cfg.Local[from]
+		if !ok {
+			return out
+		}
+		var tpl struct {
+			Candy []string `json:"candy"`
+			From  string   `json:"from"`
+		}
+		if err := json.Unmarshal(raw, &tpl); err != nil {
+			return out
+		}
+		out = append(out, tpl.Candy...)
+		from = tpl.From
+	}
+	return out
+}
+
+func deployNodePluginContext(cfg *spec.Config, dir, name string) (addCandy []spec.ExtraCandyRef, refWords []string) {
 	tree, err := resolveMergedDeployTree(dir)
 	if err != nil || tree == nil {
 		return nil, nil
@@ -1162,6 +1200,12 @@ func deployNodePluginContext(dir, name string) (addCandy []spec.ExtraCandyRef, r
 		// label here is the #739 collision (~724 false conflicts); a bare string cannot carry the
 		// scope at all, which is why the field is typed (spec#188).
 		addCandy = append(addCandy, spec.ScopedExtraCandyRefs(spec.BoxScope(name), n.AddCandy...)...)
+		// AND the `from:` template's `candy:` list, which the merge does NOT copy onto the node
+		// (MEASURED on `local: {from: <template>}`: the node carries an EMPTY AddCandy while the
+		// template's candies are what the deployment installs). Those refs are part of this
+		// deploy's DECLARED composition, so they belong in the same typed list the scan and the
+		// plugin-connect reference set are built from (opencharly/charly#1131).
+		addCandy = append(addCandy, spec.ScopedExtraCandyRefs(spec.BoxScope(name), templateCandyRefs(cfg, n.From)...)...)
 		if n.Target != "" {
 			// The substrate WORD is the reference the loader scopes on; its PROVIDER is connected
 			// by ensureDeployProviderConnected at ResolveTarget, the ONE connect step every deploy
@@ -1292,7 +1336,7 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []spec.ExtraCandyRe
 	if cerr != nil {
 		return fmt.Errorf("load plugin configuration: %w", cerr)
 	}
-	addCandy, refWords := deployNodePluginContext(dir, deployName)
+	addCandy, refWords := deployNodePluginContext(cfg, dir, deployName)
 	extra := append(append([]spec.ExtraCandyRef(nil), extraAddCandy...), addCandy...)
 	candyMap, scanErr := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{ExtraCandyRefs: extra})
 	if scanErr != nil {
@@ -1302,10 +1346,55 @@ func loadDeployPlugins(dir, deployName string, extraAddCandy []spec.ExtraCandyRe
 		return nil
 	}
 	refs := collectReferencedPluginWords(candyMap, cfg.Box, refWords)
+	addDeclaredDeployPluginWords(candyMap, extra, refs)
 	if perr := loadProjectPlugins(context.Background(), candyMap, refs); perr != nil {
 		return fmt.Errorf("load deploy plugins: %w", perr)
 	}
 	return nil
+}
+
+// addDeclaredDeployPluginWords adds the provider words of every PLUGIN candy the deployment
+// DECLARES to the connect's reference set (opencharly/charly#1131).
+//
+// WHY THIS EXISTS. collectReferencedPluginWords scopes the connect to words a PLAN STEP
+// references. That is the right question for a word the registry will DISPATCH — and the wrong one
+// for a deploy, whose venue ALSO dispatches through a SHELL no prescan can read:
+// `charly firecracker image build` inside a `command:` step references no plan word at all.
+// MEASURED: a deployment composing plugin-firecracker never connected it, so the plugin tree a
+// step was told to deliver could not name it, and the step refused — correctly, because the set it
+// was handed was INCOMPLETE. The step's own fill-first refusal is what made the gap visible
+// instead of delivering a tree missing a member.
+//
+// A deploy's candy list IS its intent: the deployment declares the candies it carries, so the
+// plugin candies among them are served. Three bounds keep this from becoming "every plugin in the
+// project":
+//   - ONLY the refs the deploy node declares — its `add_candy:` plus a `from:` template's `candy:`
+//     list (the loader merges it into that same list) plus its nested children, which is exactly
+//     the `extra` slice the scan already received;
+//   - ONLY candies carrying a `plugin:` block, so a non-plugin candy gains no build;
+//   - ONLY out-of-tree sources (a compiled-in plugin is already served in-proc).
+//
+// Over-load is harmless here — an unconsumed connect costs one content-addressed, cached build —
+// while under-load is not, because a step that delivers a plugin tree must receive a COMPLETE set
+// or refuse.
+func addDeclaredDeployPluginWords(candyMap map[string]spec.CandyReader, declared []spec.ExtraCandyRef, refs map[string]struct{}) {
+	for _, ref := range declared {
+		if ref.Ref == "" {
+			continue
+		}
+		candy, ok := candyMap[spec.CandyRefEntry{Raw: ref.Ref}.Bare()]
+		if !ok || candy == nil || !candy.IsPluginCandy() {
+			continue
+		}
+		if src := candy.GetPluginSource(); src == "" || src == "builtin" {
+			continue
+		}
+		for _, capability := range candy.GetPluginProviders() {
+			if _, word, _, ok := splitCapability(capability); ok {
+				refs[word] = struct{}{}
+			}
+		}
+	}
 }
 
 func loadProjectPlugins(ctx context.Context, candies map[string]spec.CandyReader, refs map[string]struct{}) error {

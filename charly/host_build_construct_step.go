@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/opencharly/spec/spec"
 )
@@ -63,7 +65,10 @@ func hostBuildConstructStep(_ context.Context, req spec.ConstructStepRequest, _ 
 		// Scope/Venue/Gate come from the plugin's declared contract.
 		if carrier, ok := sp.(spec.StepContractCarrier); ok {
 			if sc, ok := carrier.DeclaredStepContract(); ok {
-				payload, _ := marshalJSON(op.PluginInput)
+				payload, perr := stepInputPayload(op, sc)
+				if perr != nil {
+					return spec.ConstructStepReply{}, perr
+				}
 				return constructStepReplyFor(&spec.ExternalStep{
 					Word:      op.Plugin,
 					ScopeV:    sc.Scope,
@@ -76,6 +81,49 @@ func hostBuildConstructStep(_ context.Context, req spec.ConstructStepRequest, _ 
 		}
 	}
 	return spec.ConstructStepReply{}, nil
+}
+
+// stepInputPayload renders a class:step op's opaque input — the AUTHORED `plugin_input`
+// verbatim, plus the CONNECTED PLUGIN SET when the step's declared contract opts in with
+// PluginPaths (opencharly/charly#1131).
+//
+// Why opt-in and not always: a step's input is validated against the plugin's own served CUE
+// schema, which is usually closed, so an injected key would be a hard "field not allowed" for
+// every step that did not ask for it. A step that opts in declares the key in its own schema.
+//
+// Why the WHOLE set and not "the names this step mentions": which plugins a step needs is the
+// step's authored input, and core does not decode a plugin's input shape (the kernel/plugin
+// boundary law). The set is over-load safe — a step selects the entries it was authored with by
+// LEAF — so handing it everything this process connected costs nothing and keeps core blind to
+// the per-plugin schema.
+func stepInputPayload(op *spec.Op, sc spec.StepContract) (json.RawMessage, error) {
+	payload, err := marshalJSON(op.PluginInput)
+	if err != nil {
+		return nil, fmt.Errorf("step %q: marshal the authored input: %w", op.Plugin, err)
+	}
+	if !sc.PluginPaths {
+		return payload, nil
+	}
+	// A JSON object is the only shape this can add a key to. `null`/empty (no authored input)
+	// is an object-less payload and starts empty; anything else is the step's own shape and is
+	// refused BY NAME rather than silently dropped, because dropping it would hand the step an
+	// input that says nothing about the paths it opted in for.
+	fields := map[string]json.RawMessage{}
+	if len(payload) > 0 {
+		if err := json.Unmarshal(payload, &fields); err != nil {
+			return nil, fmt.Errorf("step %q declares plugin_paths but its input is not a JSON object: %w", op.Plugin, err)
+		}
+	}
+	set, err := marshalJSON(connectedPluginSet.snapshot())
+	if err != nil {
+		return nil, fmt.Errorf("step %q: marshal the connected plugin set: %w", op.Plugin, err)
+	}
+	fields[spec.ConnectedPluginsInputKey] = set
+	merged, err := marshalJSON(fields)
+	if err != nil {
+		return nil, fmt.Errorf("step %q: marshal its input with the connected plugin set: %w", op.Plugin, err)
+	}
+	return merged, nil
 }
 
 // constructStepReplyFor projects a constructed InstallStep to its wire view — the SAME
