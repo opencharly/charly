@@ -70,9 +70,10 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	// host-value-gated, exactly as a substrate capability naming DeployTraits is a
 	// substrate and one answering CandyKindCarrier owns the candy factory; the
 	// base's spec.KindValueDefs is only the compatibility fallback for kinds whose
-	// body has not moved into its owning plugin's CUE module yet. The current
-	// fallback member is `task` (#TaskValue, whose plan: [...#Step] references the
-	// base grammar and so cannot be a self-contained plugin schema).
+	// body has NOT moved into its owning plugin's CUE module yet — after
+	// opencharly/spec#304 units 1 and 2 that is every substrate/candy kind, whose body
+	// still lives in the base. `pipeline` and `task` are the two that moved, and each
+	// routes through the InputDef its own provider declares.
 	if _, gated := kindValueDefPath(prov, pn.Disc); gated {
 		return foldHostValueGatedKind(prov, pn, acc)
 	}

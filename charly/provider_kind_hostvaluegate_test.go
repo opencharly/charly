@@ -11,8 +11,10 @@ import (
 )
 
 // hvgTestProv is a minimal HOST-VALUE-GATED kind provider for `task`: it echoes the
-// OpLoad body and honours OpValidate. It stands in for the not-yet-pinned
-// candy/plugin-task provider so this test exercises the DISPATCH ARM in runPluginKind.
+// OpLoad body and honours OpValidate. It stands in for candy/plugin-task's provider so
+// this test exercises the DISPATCH ARM in runPluginKind with a CONTROLLED OpValidate —
+// the real plugin is compiled in and owns the registry key, so the double is passed to
+// runPluginKind directly rather than registered.
 type hvgTestProv struct{ reject bool }
 
 func (p *hvgTestProv) Reserved() string     { return "task" }
@@ -21,6 +23,13 @@ func (p *hvgTestProv) Class() ProviderClass { return ClassKind }
 // IsValidatingKind makes the double declare the deep OpValidate capability the host
 // dispatches at load (the real candy/plugin-task declares Validates:true too).
 func (p *hvgTestProv) IsValidatingKind() bool { return true }
+
+// DeclaredKindInputDef makes the double declare the gate def name the REAL
+// candy/plugin-task declares (`{Class:"kind", Word:"task", InputDef:"#TaskValue"}`,
+// opencharly/spec#304 unit 2), so this test drives the POST-MOVE route: the host
+// resolves the def from the PROVIDER'S DECLARATION and looks it up in the composed unit
+// (base & every served plugin unit), never from the base map fallback.
+func (p *hvgTestProv) DeclaredKindInputDef() string { return "#TaskValue" }
 
 func (p *hvgTestProv) Invoke(_ context.Context, op *Operation) (*Result, error) {
 	switch op.Op {
@@ -45,7 +54,8 @@ func (p *hvgTestProv) Invoke(_ context.Context, op *Operation) (*Result, error) 
 //
 //   - a valid `task:` node dispatches through the arm and folds opaquely into
 //     acc.PluginKinds["task"] (NOT acc.Deploy — it is not a deploy substrate);
-//   - a typo'd field FAILS the closedness gate (the kept #TaskValue def is CLOSED);
+//   - a typo'd field FAILS the closedness gate (the plugin-declared #TaskValue def is
+//     CLOSED, resolved through the provider's InputDef from the composed unit);
 //   - a task missing its required `description` FAILS via the deep OpValidate (the
 //     CONCRETE gate the closedness-only host check cannot express).
 func TestRunPluginKind_HostValueGatedTask(t *testing.T) {
@@ -75,7 +85,7 @@ func TestRunPluginKind_HostValueGatedTask(t *testing.T) {
 		t.Fatal("a host-value-gated kind must NOT fold into acc.Deploy")
 	}
 
-	// closedness: a typo'd task field is rejected by the kept #TaskValue def.
+	// closedness: a typo'd task field is rejected by the plugin-declared #TaskValue def.
 	typo := singleParsedNode(t, "badtask:\n  task:\n    description: x\n    bogus: 1\n")
 	var acc2 spec.MaterializedProject
 	if err := runPluginKind(prov, typo, &acc2); err == nil {

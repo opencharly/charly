@@ -4419,10 +4419,11 @@ check-task:
         command:
           command: ${CHARLY_BIN} task check-task-smoke --output --json
           in_container: false
-      # The param/closure helpers MOVED to sdk/workflowkit in this wave; these three
-      # steps pin that the behaviour the plugin had before the move is the behaviour
-      # it has after. Both halves are asserted: the resolution actually happens, and
-      # a broken one is still a NAMED error rather than a silent empty value.
+      # The param/closure helpers are THIS plugin's again (opencharly/spec#304 unit 2
+      # moved them home from sdk/workflowkit, whose pipeline lowering was their only
+      # other caller); these three steps pin that the behaviour is unchanged across the
+      # move. Both halves are asserted: the resolution actually happens, and a broken
+      # one is still a NAMED error rather than a silent empty value.
       - check: a task's params — the defaulted one AND the supplied one — resolve through the task env (the same self-check FAILS on a wrong value and SKIPS on an unresolved name, so a pass is never vacuous)
         id: task-params-resolved
         exit_status: 0
@@ -4431,7 +4432,7 @@ check-task:
         command:
           command: ${CHARLY_BIN} task task-params-fixture --param WHO=world
           in_container: false
-      - check: a MISSING required param is still the NAMED error the moved workflowkit helper produces (never a silent empty value the step runs with)
+      - check: a MISSING required param is still the NAMED error the plugin's own param resolver produces (never a silent empty value the step runs with)
         id: task-params-required-named
         exit_status: 1
         stderr:
@@ -4441,7 +4442,7 @@ check-task:
         command:
           command: ${CHARLY_BIN} task task-params-fixture
           in_container: false
-      - check: a depends_on CYCLE is still the NAMED error naming the WHOLE chain (the moved workflowkit closure helper) — never a hang, never a silent truncation to a shorter order
+      - check: a depends_on CYCLE is still the NAMED error naming the WHOLE chain (the plugin's own closure helper) — never a hang, never a silent truncation to a shorter order
         id: task-helpers-cycle-named
         exit_status: 1
         stderr:

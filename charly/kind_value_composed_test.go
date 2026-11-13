@@ -214,8 +214,15 @@ func TestKindValueDefPath_FollowsTheProviderDeclaredShape(t *testing.T) {
 		t.Fatal("the shared #DeployValue disjunct is not a kind body def and must not be gated as one")
 	}
 
-	if def, ok := kindValueDefPath(nil, "task"); !ok || def != spec.KindValueDefs["task"] {
+	if def, ok := kindValueDefPath(nil, "candy"); !ok || def != spec.KindValueDefs["candy"] {
 		t.Fatalf("nil provider must fall back to the base map for an unmoved kind; got %q,%v", def, ok)
+	}
+
+	// ...and the MOVED kinds are no longer in the fallback at all: after
+	// opencharly/spec#304 unit 2 the `task` body is plugin-task's CUE, so a provider-less
+	// resolution must find nothing. This is the deletion's own witness in the host.
+	if def, ok := kindValueDefPath(nil, "task"); ok {
+		t.Fatalf("nil provider resolved %q for `task` — the body moved to plugin-task's CUE (spec#304 unit 2) and must not fall back to this module's map", def)
 	}
 
 	if _, ok := kindValueDefPath(nil, "agent"); ok {
