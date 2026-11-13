@@ -9,6 +9,5 @@ import "github.com/opencharly/spec/spec"
 // no concrete-kind substrate type.
 type (
 	KubernetesSpec = spec.KubernetesSpec
-	LocalSpec      = spec.LocalSpec
 	AndroidSpec    = spec.AndroidSpec
 )
