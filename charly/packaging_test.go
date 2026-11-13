@@ -91,11 +91,11 @@ func TestPackagingSectionWellFormed(t *testing.T) {
 	}
 }
 
-// TestPackagingDeclaresTheNerdctlEngineStack — the nerdctl engine stack
-// (plan/nerdctl-integration.md Phase 5) is a hard dependency on the distros that
-// HAVE a nerdctl package (archlinux + apk; cachyos/omarchy inherit archlinux),
-// and NOT on rpm/deb/ipk where no such package exists.
-func TestPackagingDeclaresTheNerdctlEngineStack(t *testing.T) {
+// TestPackagingDeclaresTheContainerdEngineStack — the containerd engine stack
+// (the nerdctl CLI, CNI plugins, rootlesskit and buildkit) is a hard dependency
+// on the distros that HAVE a nerdctl package (archlinux + apk; cachyos/omarchy
+// inherit archlinux), and NOT on rpm/deb/ipk where no such package exists.
+func TestPackagingDeclaresTheContainerdEngineStack(t *testing.T) {
 	pkg := loadPackaging(t)
 	stack := []string{"nerdctl", "cni-plugins", "rootlesskit", "buildkit"}
 	for _, distro := range []string{"archlinux", "apk"} {
@@ -105,7 +105,7 @@ func TestPackagingDeclaresTheNerdctlEngineStack(t *testing.T) {
 		}
 		for _, p := range stack {
 			if !slices.Contains(f.Depends, p) {
-				t.Errorf("%s.depends must include %q (the nerdctl engine stack)", distro, p)
+				t.Errorf("%s.depends must include %q (the containerd engine stack)", distro, p)
 			}
 		}
 	}
@@ -124,7 +124,7 @@ func TestPackagingDeclaresTheNerdctlEngineStack(t *testing.T) {
 
 // TestPackagingDeclaresTheKindClusterTool — the kind (Kubernetes-in-Docker) tool
 // is a hard dependency on archlinux (where the `kind` package exists in extra) +
-// its containerd nerdctl-engine prerequisite, and a `suggest` on rpm/deb/apk where
+// its containerd engine prerequisite, and a `suggest` on rpm/deb/apk where
 // no native package exists (kind-integration: the `kindcluster` deploy substrate).
 func TestPackagingDeclaresTheKindClusterTool(t *testing.T) {
 	pkg := loadPackaging(t)

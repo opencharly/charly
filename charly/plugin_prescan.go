@@ -243,21 +243,40 @@ func connectDeclaredKindPlugins(dir string) {
 	}
 	setKindConnectPass(true)
 	defer setKindConnectPass(false)
+	if err := connectDeclaredKindsFromProject(dir, need); err != nil {
+		recordDeclaredKindConnectError(need, err)
+	}
+	// The BAKED leg. A kind word an IMAGE ships has no candy in the project's closure —
+	// discoverBakedPluginWords records it in bakedPluginBinaries from the plugin's own .providers
+	// manifest beside the binary — and connectDeclaredKindsFromProject iterates the project's
+	// SCANNED candy map, so it can never reach one. Without this leg the pre-pass recorded
+	// "declared kind provider %q did not register during load" for a plugin the image already
+	// serves, and the materialize dispatch then warn-SKIPPED a perfectly valid entity
+	// (opencharly/charly#1006). connectBakedPlugin is the host's existing baked-first connect leg
+	// — the one connectPluginByWordRef opens with — so this adds no second mechanism, and running
+	// it after the project leg keeps the project's own source winning when it has one.
+	for w := range need {
+		connectBakedPlugin(ClassKind, w, "")
+	}
+	finalizeDeclaredKindConnections(need)
+}
+
+// connectDeclaredKindsFromProject is the PROJECT-SCANNED leg of connectDeclaredKindPlugins: it
+// loads the project and connects the plugin candies whose manifests declare one of `need`'s kind
+// words. Split out (R2) so the caller can run the BAKED leg after it whether or not this one fails
+// — a project whose own config cannot be loaded must not also deny a baked plugin its connect.
+// Each failure keeps its own causal message, which recordDeclaredKindConnectError retains for the
+// warn-skip that names it.
+func connectDeclaredKindsFromProject(dir string, need map[string]struct{}) error {
 	cfg, err := LoadConfig(dir)
 	if err != nil {
-		recordDeclaredKindConnectError(need, fmt.Errorf("load project configuration: %w", err))
-		return // config load failure → kinds stay unconnected → the materialize dispatch warn-skips them
+		return fmt.Errorf("load project configuration: %w", err)
 	}
 	candyMap, err := ScanAllCandyWithConfigOpts(dir, cfg, spec.ResolveOpts{})
 	if err != nil {
-		recordDeclaredKindConnectError(need, fmt.Errorf("scan project candies: %w", err))
-		return
+		return fmt.Errorf("scan project candies: %w", err)
 	}
-	if err := loadProjectPlugins(context.Background(), candyMap, need); err != nil {
-		recordDeclaredKindConnectError(need, err)
-		return
-	}
-	finalizeDeclaredKindConnections(need)
+	return loadProjectPlugins(context.Background(), candyMap, need)
 }
 
 // recognizedDeploySubstrate reports whether word names a deploy substrate the

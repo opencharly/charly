@@ -29,14 +29,17 @@ func invokeTyped[In, Out any](ctx context.Context, prov Provider, word, op strin
 	// host→plugin LEAF call (distro/resource/init/project/gpu/arbiter resolve) attaches
 	// NO reverse channel, so the plugin performs no host-visible work the host could use
 	// as a progress signal — a TOTAL-duration bound is therefore the only correct guard.
-	// It is the RETAINED former hardcoded 10m (pluginLeafCapDefault; this cutover must
-	// not loosen the leaf guard). The LONG, PROGRESSING case lives on the plugin→plugin
-	// path (InvokeProvider), which has the reverse channel and uses the idle bound
-	// (plugin_activity.go).
+	// It is pluginLeafCapDefault (2h — see its rationale: a cold image build is a leaf);
+	// an expiry through it NAMES the bound and the CHARLY_PLUGIN_LEAF_CAP knob instead of
+	// surfacing a bare `context canceled` from inside the plugin's children. The LONG,
+	// PROGRESSING case lives on the plugin→plugin path (InvokeProvider), which has the
+	// reverse channel and uses the precise idle bound (plugin_activity.go).
+	capped := false
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, pluginLeafCap())
 		defer cancel()
+		capped = true
 	}
 	params, err := marshalJSON(in)
 	if err != nil {
@@ -44,7 +47,7 @@ func invokeTyped[In, Out any](ctx context.Context, prov Provider, word, op strin
 	}
 	res, err := prov.Invoke(ctx, &Operation{Reserved: word, Op: op, Params: params})
 	if err != nil {
-		return out, pluginInvokeErr(ctx, "host->plugin "+word, err)
+		return out, leafCapErr(ctx, capped, "host->plugin "+word, pluginInvokeErr(ctx, "host->plugin "+word, err))
 	}
 	if res != nil && len(res.JSON) > 0 {
 		if err := json.Unmarshal(res.JSON, &out); err != nil {

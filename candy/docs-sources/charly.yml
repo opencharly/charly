@@ -1,0 +1,12 @@
+docs-sources:
+    candy:
+        description: Explicitly pinned documentation sources outside the compiled plugin corpus.
+        candy:
+            - '@github.com/opencharly/plugin-review/candy/plugin-review:v2026.278.1524'
+            - '@github.com/opencharly/plugin-pipeline/candy/plugin-pipeline:v2026.282.2329'
+            - '@github.com/opencharly/plugin-gh/candy/plugin-gh:v0.2026281.737'
+            - '@github.com/opencharly/plugin-docs/candy/plugin-docs:v2026.288.1716'
+        plan:
+            - check: prove pinned membership and deterministic generation against the consumer corpus
+              task: docs-source-proof
+              context: [runtime]

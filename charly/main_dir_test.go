@@ -97,10 +97,13 @@ func TestCharlyDir_Errors(t *testing.T) {
 // -buildvcs=false (charly#178): a linked git worktree OUTSIDE the main repo
 // path (e.g. /tmp/...) hits a deterministic Go VCS-status-walk bug ("error
 // obtaining VCS status: exit status 128") on any `go build` invocation. The
-// standing rule (see pluginBuildVCSFlagForContext) is that every charly
-// binary build — production AND test — passes -buildvcs=false unconditionally;
-// the VCS stamp has zero consumers (verified: no debug.ReadBuildInfo /
-// vcs.revision / vcs.modified / vcs.time reader anywhere in this tree).
+// standing rule is that every charly binary build — production AND test —
+// passes -buildvcs=false unconditionally; the VCS stamp has zero consumers
+// (verified: no debug.ReadBuildInfo / vcs.revision / vcs.modified / vcs.time
+// reader anywhere in this tree). The out-of-process PLUGIN build follows the
+// same rule through sdk/buildcache.Build, which hardcodes the flag — the
+// loader's own pluginBuildVCSFlagForContext, which this comment used to cite,
+// is deleted with the loader's cache cluster.
 func buildCharlyBinary(t *testing.T) string {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "charly")

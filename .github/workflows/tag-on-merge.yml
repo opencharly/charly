@@ -1,8 +1,8 @@
 # ORG-WIDE TAG-ON-MERGE DISPATCHER — installed in every opencharly repo.
 name: tag-on-merge
 
-# Event-driven — no cron (RCA of all previous trigger designs, measured in
-# this repo across 8 merges and 17 schedule runs):
+# Event-driven PRIMARY with a coarse cron BACKSTOP (RCA of all previous trigger
+# designs, measured in this repo across 8 merges and 17 schedule runs):
 #
 # 1. `on: push` / `on: pull_request: [closed]` CANNOT see auto-merge merges.
 #    Native-auto-merge squash merges (actor `app/github-actions`) fire their
@@ -14,9 +14,12 @@ name: tag-on-merge
 #    commits; no trigger selection can observe them. (Human merges and
 #    bot contents-API commits DO create runs — hence `push` is kept as a
 #    secondary trigger for those paths.)
-# 2. `schedule: */15` cron: GitHub cron delivery is best-effort with no SLA.
-#    Measured 21-44 min gaps (never the configured 15); PR #3's tag landed
-#    4+ hours late; PR #7's tag was still missing 30 min after merge.
+# 2. `schedule` cron: GitHub cron delivery is best-effort with no SLA, so it is
+#    NOT a primary trigger — measured 21-44 min gaps (never the configured 15),
+#    PR #3's tag 4+ hours late, PR #7's tag still missing 30 min after merge.
+#    It is kept at a deliberately coarse cadence as a BACKSTOP only: when the
+#    primary path below misses a merge, the recovery must not wait for the next
+#    validator completion in that repo, which on a quiet repo can be days.
 # 3. `workflow_run` on `charly/pr-validator`: the ONE trigger whose event
 #    delivery is proven (the 12:12-12:51Z 8/22 runs all received the event;
 #    they died at startup on a workflow-file issue, not on delivery).
@@ -24,9 +27,16 @@ name: tag-on-merge
 # The pr-validator run is the last actor before the merge (its final step
 # arms native auto-merge). Firing on its completion and waiting (bounded) for
 # the squash to land makes the MERGE the effective gate for tagging. The org
-# reusable sweep is idempotent and scans the last 24h of merged PRs, so any
-# PR missed by a wait timeout self-heals on the next validator completion.
-# The rulebook's add-only backfill remains the ultimate documented path.
+# reusable sweep is idempotent and scans the last 24h of merged PRs.
+#
+# ⚑ THE BOUND IS SIZED TO THE MEASURED AUTO-MERGE LATENCY, and that is an RCA
+# rather than a guess. A 5-minute bound with a single-shot sweep missed
+# charly-registry#12, whose PASS completed at 20:54:18Z and whose merge landed
+# at 21:01:59Z — 7m41s, one minute past the bound — so the run fell through,
+# swept before the merge existed, and reported SUCCESS while doing nothing;
+# #10's gap was 3m03s and it tagged. A green run that silently tagged nothing
+# is the worst shape of this defect, so the bound now carries margin over the
+# slowest observed case, and the backstop above recovers what it still misses.
 on:
   workflow_run:
     workflows: ["charly/pr-validator"]
@@ -34,6 +44,9 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "*/30 * * * *"
+
 
 permissions:
   contents: write
@@ -43,22 +56,19 @@ jobs:
   wait-for-merge:
     if: >
       github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
       github.event.workflow_run.conclusion == 'success'
-    # The org's self-hosted fleet (label `opencharly`) runs this instead of a GitHub-hosted
-    # runner, whose queue can stall a tag indefinitely: a hosted run sat `queued` for >15 min
-    # and never started (charly#806). This job fires on a push to `main` or a `workflow_run`,
-    # NOT on a pull request, so its consequence is a STALLED CalVer tag/CHANGELOG — not a red
-    # PR check (only `ci.yml`, which runs on pull_request, can gate a PR). The hosted runner
-    # remains the fallback, so an unset variable can never strand a merge.
     runs-on: ${{ vars.CI_RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - name: Wait for triggering PR to merge (bounded readiness probe)
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0, node24
         with:
           script: |
             // Push events: the merged PR is already on main — no wait needed.
+            // A scheduled backstop run carries no triggering PR either: it exists
+            // precisely to sweep for merges the primary path missed.
             if (context.eventName !== 'workflow_run') {
-              core.info('push event — merged PRs are in the sweep window');
+              core.info(`${context.eventName} event — merged PRs are in the sweep window`);
               return;
             }
             const run = context.payload.workflow_run;
@@ -72,7 +82,10 @@ jobs:
               return;
             }
             const pr = prs[0];
-            const deadline = Date.now() + 5 * 60 * 1000;
+            // Sized to the measured auto-merge latency (see the header): the
+            // worst observed PASS->merge gap was 7m41s, against a 5-minute bound
+            // that missed it and reported success having tagged nothing.
+            const deadline = Date.now() + 20 * 60 * 1000;
             while (Date.now() < deadline) {
               const { data: p } = await github.rest.pulls.get({
                 ...context.repo, pull_number: pr.number,
@@ -83,11 +96,12 @@ jobs:
               }
               await new Promise((r) => setTimeout(r, 20 * 1000));
             }
-            core.info(`PR #${pr.number} not merged within 5m — sweep still runs; next validator completion self-heals`);
+            core.info(`PR #${pr.number} not merged within 20m — sweep still runs; the scheduled backstop and the next validator completion both recover it`);
 
   tag:
     if: >
       github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
       github.event.workflow_run.conclusion == 'success'
     needs: wait-for-merge
     uses: opencharly/.github/.github/workflows/tag-on-merge.yml@main

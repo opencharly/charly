@@ -36,7 +36,7 @@ func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
 	r := hostVerbResolverFor(nil, spec.CheckModeBox)
 	fake := &fakeExternalVerb{reply: `{"status":"pass","message":"saw-op"}`}
 
-	op := &spec.Op{Plugin: "kube", PluginInput: map[string]any{"method": "apply", "namespace": "demo"}}
+	op := &spec.Op{Plugin: "kube", PluginInput: map[string]any{"method": "nodes", "namespace": "demo"}}
 	res := r.invokeVerbProvider(context.Background(), fake, "kube", op)
 	if res.Status != spec.StatusPass {
 		t.Fatalf("status=%v msg=%q, want pass", res.Status, res.Message)
@@ -54,8 +54,8 @@ func TestInvokeVerbProvider_ExternalCharlyVerb(t *testing.T) {
 	if err := json.Unmarshal(fake.gotParams, &seen); err != nil {
 		t.Fatalf("params_json is not the Op: %v", err)
 	}
-	if seen.PluginInput["method"] != "apply" || seen.PluginInput["namespace"] != "demo" {
-		t.Fatalf("plugin saw PluginInput %v, want method=apply namespace=demo — the full Op did not reach it",
+	if seen.PluginInput["method"] != "nodes" || seen.PluginInput["namespace"] != "demo" {
+		t.Fatalf("plugin saw PluginInput %v, want method=nodes namespace=demo — the full Op did not reach it",
 			seen.PluginInput)
 	}
 }

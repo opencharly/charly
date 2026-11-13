@@ -68,7 +68,7 @@ const (
 	// host keeps the fetch orchestration (override/cache/migrate). See candy/plugin-refs (P7).
 	ClassRefs ProviderClass = "refs"
 	// ClassEngine serves the container-engine PROVIDER family (engine:podman, engine:docker
-	// compiled-in; engine:nerdctl out-of-process). Each provider answers the engine op envelope
+	// compiled-in; engine:containerd out-of-process). Each provider answers the engine op envelope
 	// (spec/schema/engine.cue): describe/binary/gpu_args/start_plan/unit_emit/network_ensure.
 	// The op BODIES are pure and live once in spec/container.InvokeEngineOp, so a compiled-in
 	// provider and an out-of-process plugin serve identical behavior. Compiled-in for the same
@@ -155,7 +155,7 @@ type Result struct {
 // PluginSchema is a plugin unit's CUE contract, obtained THROUGH the transport
 // (gRPC Describe for an external, an in-proc handoff for a builtin) — never read
 // from a candy's schema/ dir. CueSource is the package-less, SELF-CONTAINED .cue
-// body the host splices onto its base schema (base ++ plugin) to validate authored
+// body the host splices onto its base schema (base & plugin) to validate authored
 // plugin_input; InputDefs maps each provider key ("verb:externalprobe") to the CUE
 // def that validates its plugin_input ("#ExternalprobeInput").
 type PluginSchema struct {

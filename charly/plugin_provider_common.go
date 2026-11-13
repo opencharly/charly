@@ -19,14 +19,16 @@ import (
 // capMeta is the shared capability metadata every Provider carries regardless of placement — the
 // fields + carrier methods that are identical for grpcProvider and inprocProvider. Both EMBED it,
 // so the carrier interfaces (spec.StepContractCarrier / spec.StructuralKindCarrier /
-// spec.ValidatingKindCarrier / spec.PhaseCarrier / primaryCarrier) are satisfied ONCE for both
-// placements via method promotion. The carrier interfaces + StepContract live in sdk/spec (K4-C
-// relocation, provider_carriers.go) — an interface with an unexported method can only be
-// satisfied by a type in the SAME package as the interface, so capMeta's carrier methods below
-// are EXPORTED to satisfy them from across the package boundary.
+// spec.ValidatingKindCarrier / spec.PhaseCarrier / primaryCarrier, plus the package-local
+// kindInputDefCarrier) are satisfied ONCE for both placements via method promotion. The carrier
+// interfaces + StepContract live in sdk/spec (K4-C relocation, provider_carriers.go) — an
+// interface with an unexported method can only be satisfied by a type in the SAME package as the
+// interface, so capMeta's carrier methods below are EXPORTED to satisfy them from across the
+// package boundary.
 type capMeta struct {
 	class            ProviderClass
 	word             string
+	inputDef         string                   // the CUE def a class:kind capability DECLARES for the entity body it serves (ProvidedCapability.input_def); "" for every non-kind class and for a kind declaring none
 	contract         *spec.StepContract       // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
 	structural       bool                     // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
 	validates        bool                     // set ONLY for a class:kind capability serving a deep ops.OpValidate check (F7/C8)
@@ -37,10 +39,19 @@ type capMeta struct {
 	subcmds          []climodel.CLISubcommand // set ONLY for a class:command capability declaring a subcommand catalog (F-CLI-NEST); empty → the flat pass-through holder
 	commandModel     *spec.CLIModel           // set ONLY for class:command; CUE-generated reflected leaf grammar
 	commandModelJSON []byte                   // exact validated transport payload, preserved across relays
+	interactive      bool                     // set ONLY for a class:command capability DECLARING it needs a real terminal (ProvidedCapability.interactive); false → the command dispatches over the broker-backed Invoke(OpRun) lane
 }
 
 func (m capMeta) Reserved() string     { return m.word }
 func (m capMeta) Class() ProviderClass { return m.class }
+
+// DeclaredKindInputDef implements kindInputDefCarrier — the CUE def a class:kind
+// capability DECLARES for the entity body it serves. For a FLAT plugin kind that is the
+// capability's own self-contained input def (`#<Word>Input`); for a host-value-gated kind it
+// names the body's value def (`#<Word>Value`), the shape the host validates and folds. Both
+// placements answer identically: the value comes from the DECLARED wire capability (set by
+// buildCapMeta), never from plugin Go.
+func (m capMeta) DeclaredKindInputDef() string { return m.inputDef }
 
 // CommandParent returns the parent command word this command nests UNDER (e.g. "box" for
 // `charly box generate`), or "" for a top-level command. Both provider twins EMBED capMeta, so
@@ -49,6 +60,12 @@ func (m capMeta) Class() ProviderClass { return m.class }
 // out-of-process alike), never from a plugin-code interface — a nested command and its
 // top-level same-word twin are distinct identities in either placement.
 func (m capMeta) CommandParent() string { return m.cmdParent }
+
+// InteractiveCommand reports whether a class:command capability DECLARED that it needs a real
+// terminal — the ONE data-driven input to the command dispatch-lane decision (dispatchCommand).
+// Both provider twins embed capMeta, so the answer is identical in either placement and comes
+// from the DECLARED wire ProvidedCapability, never from plugin code.
+func (m capMeta) InteractiveCommand() bool { return m.interactive }
 
 // CommandModel returns a defensive copy of the plugin-published generated
 // #CLIModel. It lets the host merge plugin-owned leaves into __cli-model.
@@ -113,6 +130,12 @@ func (m capMeta) declaredSubcommands() []climodel.CLISubcommand { return m.subcm
 // already validated the class + word are well-formed.
 func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	m := capMeta{class: ProviderClass(c.GetClass()), word: c.GetWord()}
+	if m.class == ClassKind {
+		// The DECLARED body def: a flat plugin kind names its self-contained input def, and a
+		// host-value-gated kind names its value def. kindValueDefPath reads it to follow the
+		// provider's declared shape instead of a host-side kind list.
+		m.inputDef = c.GetInputDef()
+	}
 	if raw := c.GetCommandModelJson(); len(raw) > 0 {
 		if m.class != ClassCommand {
 			return capMeta{}, fmt.Errorf("capability %s:%s carries command_model_json outside class=command", m.class, m.word)
@@ -157,6 +180,16 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 		// non-command capability is off-grammar (only commands nest) and rejected here.
 		if p := c.GetCommandParent(); p != "" {
 			m.cmdParent = p
+		}
+		// A command may DECLARE that it needs a real terminal (ProvidedCapability.interactive):
+		// `shell`, `logs -f`, `mcp serve --stdio`. The DECLARATION is what selects the dispatch
+		// lane — a declaring command keeps the process-replacing exec lane (its child becomes the
+		// process and inherits the terminal), and every non-declaring command dispatches over the
+		// broker-backed Invoke(OpRun) lane with the host reverse channel attached, so it behaves
+		// IDENTICALLY compiled-in and runtime-loaded. Data-driven by design: no class-wide
+		// exemption, and no inference from plugin Go (opencharly/charly#1006).
+		if c.GetInteractive() {
+			m.interactive = true
 		}
 		for _, sc := range c.GetSubcommands() {
 			m.subcmds = append(m.subcmds, climodel.CLISubcommand{Name: sc.GetName(), Help: sc.GetHelp(), Hidden: sc.GetHidden()})

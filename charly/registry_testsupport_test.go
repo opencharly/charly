@@ -3,6 +3,8 @@ package main
 import (
 	"io"
 	"maps"
+
+	"cuelang.org/go/cue"
 )
 
 // snapshotProviderState captures the process-wide provider-registration state and returns a
@@ -38,7 +40,7 @@ func snapshotProviderState() func() {
 	primaries := maps.Clone(pluginPrimaries)
 
 	pluginSchemas.mu.Lock()
-	schemaSources := append([]string(nil), pluginSchemas.sources...)
+	schemaUnits := append([]cue.Value(nil), pluginSchemas.units...)
 	schemaDefs := maps.Clone(pluginSchemas.inputDefs)
 	schemaDefOwners := maps.Clone(pluginSchemas.defOwners)
 	schemaSrcSeen := maps.Clone(pluginSchemas.srcSeen)
@@ -55,7 +57,7 @@ func snapshotProviderState() func() {
 		pluginPrimaries = primaries
 
 		pluginSchemas.mu.Lock()
-		pluginSchemas.sources = schemaSources
+		pluginSchemas.units = schemaUnits
 		pluginSchemas.inputDefs = schemaDefs
 		pluginSchemas.defOwners = schemaDefOwners
 		pluginSchemas.srcSeen = schemaSrcSeen

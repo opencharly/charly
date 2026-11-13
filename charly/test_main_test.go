@@ -50,9 +50,14 @@ import (
 // shadows this default with its own value for that one test, exactly as before this
 // change existed. The temp dir is removed after the whole run.
 func TestMain(m *testing.M) {
-	if err := loadBuiltinPluginUnits(); err != nil {
-		fmt.Fprintf(os.Stderr, "TestMain: loadBuiltinPluginUnits: %v\n", err)
-		os.Exit(1)
+	// CHARLY_TEST_SKIP_BUILTIN_GATE lets a re-executed helper process start with NO composed
+	// plugin schema, which is the only state in which kindValueDefValue's lazy-materialization
+	// miss path can run (see TestKindValueDefValue_MaterializesBuiltinUnitsOnMiss).
+	if os.Getenv("CHARLY_TEST_SKIP_BUILTIN_GATE") != "1" {
+		if err := loadBuiltinPluginUnits(); err != nil {
+			fmt.Fprintf(os.Stderr, "TestMain: loadBuiltinPluginUnits: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	configHomeDir, err := os.MkdirTemp("", "charly-test-xdg-config-home-")

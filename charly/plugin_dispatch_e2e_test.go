@@ -32,10 +32,7 @@ func TestPluginDispatch_InvokeProviderAndHostBuild(t *testing.T) {
 		t.Fatalf("dispatch plugin module not found at %s: %v", srcA, err)
 	}
 
-	binA, err := buildPluginBinary(ctx, srcA, "plugin-example-dispatch-test")
-	if err != nil {
-		t.Fatalf("buildPluginBinary A: %v", err)
-	}
+	binA := hostBuildPluginForTest(t, ctx, srcA, "plugin-example-dispatch-test")
 	unitA, closerA, err := (&LocalTransport{BinPath: binA}).Connect(ctx)
 	if err != nil {
 		t.Fatalf("connect A: %v", err)

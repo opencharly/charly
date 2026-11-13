@@ -13,8 +13,8 @@ import (
 // engine_provider.go — the compiled-in servant of the `engine` provider class
 // (spec/schema/engine.cue). It answers every engine op by delegating to the pure
 // body in spec/container.InvokeEngineOp, so the op behavior is written ONCE and
-// served from compiled-in (this) or out-of-process (a future plugin-nerdctl)
-// placement identically.
+// served from compiled-in (this) or out-of-process (an external `engine:`
+// provider) placement identically.
 //
 // WHY A DEDICATED FILE (the externalizable dedicated-provider pattern, see
 // registry_bootstrap.go): the engine provider carries NO authored input schema of
@@ -25,8 +25,8 @@ import (
 // needed early), and it is consumed by the host through hostEngineBinary (the
 // overlay base-image probe) and exercised by engine_provider_test.go.
 //
-// podman and docker are compiled in here; nerdctl is the out-of-process
-// engine:nerdctl plugin (a project that references it connects it by word). All
+// podman and docker are compiled in here; containerd is the out-of-process
+// engine:containerd plugin (a project that references it connects it by word). All
 // three serve the SAME op bodies, because the bodies are engine-word-keyed data +
 // one dispatch in spec/container.
 

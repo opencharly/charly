@@ -95,9 +95,8 @@ func TestResolvePluginBinary_OverrideOutranksBakedBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeProviders(t, bakedDir, "plugin-h4", "verb:h4")
-	cache := t.TempDir()
 	isolatePluginSearch(t, bakedDir)
-	t.Setenv("XDG_CACHE_HOME", cache)
+	cache := os.Getenv("CHARLY_CACHE_DIR")
 
 	root := t.TempDir()
 	srcDir := writeMinimalPluginModule(t, root, "plugin-h4")
@@ -122,8 +121,8 @@ func TestResolvePluginBinary_OverrideOutranksBakedBinary(t *testing.T) {
 	if bin == bakedBin {
 		t.Fatalf("the BAKED binary %s served an overridden repo — the override must outrank it", bakedBin)
 	}
-	if wantDir := filepath.Join(cache, "charly", "plugins"); filepath.Dir(bin) != wantDir {
-		t.Fatalf("the override arm must host-build into the plugin cache %s; got %s", wantDir, bin)
+	if wantDir := filepath.Join(cache, "plugin-build", "views"); filepath.Dir(bin) != wantDir {
+		t.Fatalf("the override arm must host-build into the store's view dir %s; got %s", wantDir, bin)
 	}
 	if !strings.Contains(stderr, "ignoring baked binary "+bakedBin) || !strings.Contains(stderr, "CHARLY_REPO_OVERRIDE root "+root+" is authoritative") {
 		t.Fatalf("the bypassed baked binary must be named LOUDLY; stderr:\n%s", stderr)
@@ -199,9 +198,8 @@ func TestResolvePluginBinary_RealSeamServesTheOverrideTree(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the override arm host-builds a real module")
 	}
-	cache := t.TempDir()
 	isolatePluginSearch(t, "")
-	t.Setenv("XDG_CACHE_HOME", cache)
+	cache := os.Getenv("CHARLY_CACHE_DIR")
 
 	root := t.TempDir()
 	srcDir := writeMinimalPluginModule(t, root, "plugin-h4")
@@ -214,8 +212,8 @@ func TestResolvePluginBinary_RealSeamServesTheOverrideTree(t *testing.T) {
 	if overrideRoot != root {
 		t.Fatalf("real-seam override root = %q, want %q (the short-form entry must normalize)", overrideRoot, root)
 	}
-	if wantDir := filepath.Join(cache, "charly", "plugins"); filepath.Dir(bin) != wantDir {
-		t.Fatalf("the overridden source must be host-built into %s; got %s", wantDir, bin)
+	if wantDir := filepath.Join(cache, "plugin-build", "views"); filepath.Dir(bin) != wantDir {
+		t.Fatalf("the overridden source must be host-built into the store's view dir %s; got %s", wantDir, bin)
 	}
 	if root2, ok, err := repoOverrideRootFor("github.com/opencharly/other"); err != nil || ok {
 		t.Fatalf("a repo with NO entry must not be reported as overridden; got (%q,%v,%v)", root2, ok, err)
@@ -274,10 +272,14 @@ func TestResolveCommandPluginBinary_OverrideOutranksTheBakedManifest(t *testing.
 	}
 	const word = "zzoverridecmd"
 	const candyName = "plugin-zzoverridecmd"
-	cache := t.TempDir()
 	bakedDir := t.TempDir()
 	isolatePluginSearch(t, bakedDir)
-	t.Setenv("XDG_CACHE_HOME", cache)
+	// The store root is <CHARLY_CACHE_DIR>/plugin-build, and isolatePluginSearch owns that root
+	// (it is the ONE cache override — storekit.CacheDir). Read it BACK from the environment after
+	// isolation rather than minting a second temp dir before it: a capture taken before
+	// isolatePluginSearch names a directory the build never writes to, so the assertion below would
+	// fail on a correct run.
+	cache := os.Getenv("CHARLY_CACHE_DIR")
 	bakedBin := filepath.Join(bakedDir, candyName)
 	if err := os.WriteFile(bakedBin, []byte("prebuilt"), 0o755); err != nil {
 		t.Fatal(err)
@@ -307,8 +309,8 @@ func TestResolveCommandPluginBinary_OverrideOutranksTheBakedManifest(t *testing.
 	if bin == bakedBin {
 		t.Fatalf("the BAKED manifest hit %s served an overridden repo — the override must outrank it", bakedBin)
 	}
-	if wantDir := filepath.Join(cache, "charly", "plugins"); filepath.Dir(bin) != wantDir {
-		t.Fatalf("the override arm must host-build into the plugin cache %s; got %s", wantDir, bin)
+	if wantDir := filepath.Join(cache, "plugin-build", "views"); filepath.Dir(bin) != wantDir {
+		t.Fatalf("the override arm must host-build into the store's view dir %s; got %s", wantDir, bin)
 	}
 	if !strings.Contains(stderr, "ignoring baked binary "+bakedBin) {
 		t.Fatalf("the bypassed baked binary must be named LOUDLY; stderr:\n%s", stderr)

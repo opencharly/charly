@@ -31,11 +31,9 @@ func TestExternalPluginEndToEnd(t *testing.T) {
 		t.Fatalf("external plugin module not found at %s: %v", srcDir, err)
 	}
 
-	// 1. Host-build the provider binary (the loader's buildPluginBinary step).
-	bin, err := buildPluginBinary(ctx, srcDir, "plugin-example-external-test")
-	if err != nil {
-		t.Fatalf("buildPluginBinary: %v", err)
-	}
+	// 1. Host-build the provider binary through the production build cache
+	//    (buildcache.Build — the entry point the loader's host-build arm uses).
+	bin := hostBuildPluginForTest(t, ctx, srcDir, "plugin-example-external-test")
 
 	// 2. Connect OUT-OF-PROCESS via LocalTransport — providers AND schema arrive on
 	//    the unit, both lifted from the Describe channel.
@@ -115,7 +113,7 @@ func TestPluginSchemaEmptyRejectedUnconditionally(t *testing.T) {
 // CUE contract through the REAL gate + validator (no disk read at runtime — the
 // schema source here is the fixture, fed in as a unit would serve it). The
 // external plugin's self-contained schema splices onto the charly base
-// (base ++ plugin) and an authored externalprobe plugin_input is validated against
+// (base & plugin) and an authored externalprobe plugin_input is validated against
 // #ExternalprobeInput — a non-empty marker passes, an empty or missing marker is a
 // hard error (the `& !=""` / required constraint).
 func TestPluginSchemaSpliceValidation(t *testing.T) {
@@ -131,10 +129,10 @@ func TestPluginSchemaSpliceValidation(t *testing.T) {
 		t.Fatalf("registerPluginUnitSchema: %v", err)
 	}
 	if err := validateAuthoredPluginInput(ClassVerb, "externalprobe", []byte(`{"marker":"external-plugin-ok"}`)); err != nil {
-		t.Errorf("valid marker should pass base ++ plugin validation: %v", err)
+		t.Errorf("valid marker should pass base & plugin validation: %v", err)
 	}
 	if err := validateAuthoredPluginInput(ClassVerb, "externalprobe", []byte(`{"marker":""}`)); err == nil {
-		t.Error("empty marker should FAIL (base ++ plugin enforces marker & !=\"\")")
+		t.Error("empty marker should FAIL (base & plugin enforces marker & !=\"\")")
 	}
 	if err := validateAuthoredPluginInput(ClassVerb, "externalprobe", []byte(`{}`)); err == nil {
 		t.Error("missing marker should FAIL (required field)")
@@ -161,7 +159,7 @@ func TestBuiltinPluginSchemasSplice(t *testing.T) {
 // TestExternalSchemaSelfContained proves the self-contained contract every plugin
 // schema must honour: a schema that references a base def it does not itself define
 // FAILS a standalone compile — the exact property `cue exp gengotypes` relies on to
-// generate a plugin's Go params, and the reason the host's base ++ plugin splice is
+// generate a plugin's Go params, and the reason the host's base & plugin splice is
 // a collision check rather than a base-reference resolver.
 func TestExternalSchemaSelfContained(t *testing.T) {
 	if v := cuecontext.New().CompileString("#Bad: { x: #Step }\n"); v.Err() == nil {

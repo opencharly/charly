@@ -99,6 +99,20 @@ func localPluginClientConfig(cmd *exec.Cmd) *plugin.ClientConfig {
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 		AutoMTLS:         true,
 		Logger:           pluginClientLogger(os.Stderr),
+		// A plugin's own stdout/stderr go to charly's, i.e. to the operator's terminal.
+		//
+		// go-plugin defaults BOTH to io.Discard (client.go NewClient), so every line a plugin
+		// printed in serve mode vanished. That was survivable while a COMMAND always became the
+		// process (its own stdout WAS the terminal), but not now that a non-interactive command
+		// dispatches over the broker-backed Invoke(OpRun) lane (dispatchCommand): the front-end
+		// prints its run report there and has no other channel, so discarding it would make the
+		// new lane a SILENT substitute for the exec lane — `charly pipeline run --dry-run` went
+		// from printing its dry-run line to printing nothing (opencharly/charly#1006). Forwarding
+		// restores the observability the exec lane had, for a command and for a plugin's own
+		// diagnostics alike. The child's os.Std{out,err} are REDIRECTED into these writers, so no
+		// plugin stdout bytes are lost to the go-plugin handshake.
+		SyncStdout: os.Stdout,
+		SyncStderr: os.Stderr,
 		// Bound the exec→handshake window with the project's RESOLVED readiness per-attempt
 		// bound instead of go-plugin's unconfigurable 60s default (client.go:398). The window
 		// covers only spawning the already-built binary and completing its handshake — the build

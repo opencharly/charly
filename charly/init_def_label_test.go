@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 	"text/template"
@@ -157,48 +158,179 @@ func TestEmbeddedVocab_SystemdClaimsEveryUnitTypeItInstalls(t *testing.T) {
 		t.Fatalf("embeddedDefaults: %v", err)
 	}
 	ic := spec.ProjectInitConfig(uf, resolveInitConfigViaPlugin)
-	if ic == nil || ic.Init["systemd"] == nil {
-		t.Fatal("embedded vocabulary missing systemd init def")
+	if ic == nil {
+		t.Fatal("embedded vocabulary has no init config")
 	}
-	def := ic.Init["systemd"]
+	// The systemd FAMILY shares this claim/assembly pair: the machine init and the
+	// container variant author their assemblies separately (extends: shares only
+	// service_schema), so a widened candy_file: with a forgotten assembly edit is a
+	// real hazard in either entry.
+	for _, name := range []string{"systemd", "systemd-container"} {
+		t.Run(name, func(t *testing.T) {
+			def := ic.Init[name]
+			if def == nil {
+				t.Fatalf("embedded vocabulary missing %s init def", name)
+			}
 
-	claimed := map[string]bool{}
-	for _, p := range def.CandyFiles {
-		claimed[strings.TrimPrefix(p, "*")] = true
+			claimed := map[string]bool{}
+			for _, p := range def.CandyFiles {
+				claimed[strings.TrimPrefix(p, "*")] = true
+			}
+			// The service unit is the historical floor; the rest are what the widening added.
+			for _, ext := range []string{".service", ".socket", ".target"} {
+				if !claimed[ext] {
+					t.Errorf("%s candy_file: does not claim %s — a candy shipping one is "+
+						"silently ignored, because the glob happens at the point of use", name, ext)
+				}
+			}
+
+			asm := def.AssemblyTemplate
+			if asm == "" {
+				t.Fatalf("%s declares no assembly_template", name)
+			}
+			// The staged-unit DIRECTORY is read from the assembly's own mount TARGET, not
+			// assumed to be /systemd: the target is an implementation detail that already
+			// had to move (BuildKit does not materialize a top-level /system* target —
+			// measured), and a test that pins the literal path breaks on a correct rename
+			// while proving nothing about the semantics.
+			m := regexp.MustCompile(`target=(/[^,\s]+)`).FindStringSubmatch(asm)
+			if m == nil {
+				t.Fatalf("%s assembly declares no mount target directory: %s", name, asm)
+			}
+			unitDir := m[1]
+			// The target must NOT sit in the top-level /system* namespace: BuildKit
+			// does not materialize such a mount target, so the bind mounts nothing and
+			// the copy silently installs no units. This is the assertion that fails if
+			// either assembly's target is reverted to /systemd — the machine init's fix
+			// is a config line with no bed of its own in this repo, so this test is the
+			// gate that catches its reversion.
+			if strings.HasPrefix(unitDir, "/system") {
+				t.Errorf("%s mounts its units at %q, inside the top-level /system* namespace "+
+					"BuildKit does not materialize, so the assembly would copy no units", name, unitDir)
+			}
+			// The copy must not be extension-specific: a claimed type the copy misses is
+			// staged into the build context and then dropped on the floor.
+			if strings.Contains(asm, "cp "+unitDir+"/*.service ") {
+				t.Error("the assembly still copies only *.service, so every other claimed unit " +
+					"type is staged and then never installed")
+			}
+			// Enabling must cover the enableable claimed types...
+			for _, ext := range []string{".service", ".socket", ".target"} {
+				if !strings.Contains(asm, unitDir+"/*"+ext) {
+					t.Errorf("the assembly never enables %s units, though candy_file: claims them", ext)
+				}
+			}
+			// ...and must NOT enable a slice, which systemctl rejects.
+			if strings.Contains(asm, "enable") && strings.Contains(asm, "*.slice") {
+				t.Error("the assembly enables *.slice; a slice is a resource container referenced " +
+					"by other units' Slice=, and enabling one is an error")
+			}
+			// An unmatched glob stays literal in sh, so a candy shipping only services would
+			// otherwise fail the build on `systemctl enable '/systemd/*.socket'`.
+			if !strings.Contains(asm, `[ -e "$unit" ] || continue`) {
+				t.Error("the enable loop has no existence guard: an unmatched glob stays literal " +
+					"in sh and would fail the build for a candy that ships only one unit type")
+			}
+		})
 	}
-	// The service unit is the historical floor; the rest are what the widening added.
-	for _, ext := range []string{".service", ".socket", ".target"} {
-		if !claimed[ext] {
-			t.Errorf("systemd candy_file: does not claim %s — a candy shipping one is "+
-				"silently ignored, because the glob happens at the point of use", ext)
+}
+
+// TestEmbeddedVocab_SystemdContainerExtends pins the ONE production use of the
+// init vocabulary's `extends:` mechanism. The merge rule is zero-value
+// inheritance per FIELD of ResolvedInit (spec/spec/init_extends.go): a child's
+// non-empty field wins, an empty one inherits. Two consequences are asserted
+// here because both are silent when wrong:
+//
+//   - requires_capability is non-empty in the child, so it WINS. The container
+//     init must NOT inherit systemd:'s [preserve_user] — inheriting it would
+//     both gate the entry on an unrelated capability and let a non-root USER
+//     survive, which systemd refuses at PID 1 (exit 255 / start-limit-hit).
+//   - service_schema is inherited as ONE field, service_template included. A
+//     child that declares any part of service_schema wins the WHOLE field
+//     instead, and the emitted init def then carries an EMPTY service_template —
+//     every custom service entry fails to render against it.
+func TestEmbeddedVocab_SystemdContainerExtends(t *testing.T) {
+	uf, err := embeddedDefaults()
+	if err != nil {
+		t.Fatalf("embeddedDefaults: %v", err)
+	}
+	ic := spec.ProjectInitConfig(uf, resolveInitConfigViaPlugin)
+	if ic == nil || ic.Init["systemd"] == nil || ic.Init["systemd-container"] == nil {
+		t.Fatal("embedded vocabulary missing systemd or systemd-container init def")
+	}
+	base := ic.Init["systemd"]
+	def := ic.Init["systemd-container"]
+
+	if def.Extends != "" {
+		t.Errorf("systemd-container still carries extends=%q; the merge did not run", def.Extends)
+	}
+
+	// The child's own non-empty slice WINS.
+	for _, capability := range def.RequiresCapability {
+		if capability == "preserve_user" {
+			t.Errorf("systemd-container inherited requires_capability %q from systemd; a "+
+				"non-empty child slice must win, or the container init is gated on the wrong "+
+				"capability and the image keeps a non-root USER systemd refuses at PID 1",
+				capability)
 		}
 	}
+	if len(def.RequiresCapability) != 1 || def.RequiresCapability[0] != "init_system:systemd-container" {
+		t.Errorf("systemd-container requires_capability = %v, want [init_system:systemd-container]",
+			def.RequiresCapability)
+	}
 
-	asm := def.AssemblyTemplate
-	if asm == "" {
-		t.Fatal("systemd declares no assembly_template")
+	// The template the child leaves empty IS inherited from the entry it names.
+	if base.ServiceSchema == nil || base.ServiceSchema.ServiceTemplate == "" {
+		t.Fatal("systemd declares no service_template to inherit")
 	}
-	// The copy must not be extension-specific: a claimed type the copy misses is
-	// staged into the build context and then dropped on the floor.
-	if strings.Contains(asm, "cp /systemd/*.service ") {
-		t.Error("the assembly still copies only *.service, so every other claimed unit " +
-			"type is staged and then never installed")
+	if def.ServiceSchema == nil || def.ServiceSchema.ServiceTemplate == "" {
+		t.Fatal("systemd-container has no service_schema.service_template; the inherited " +
+			"template is missing, so every custom service entry fails to render " +
+			"(service_schema is inherited as ONE field: a child must leave it empty)")
 	}
-	// Enabling must cover the enableable claimed types...
-	for _, ext := range []string{".service", ".socket", ".target"} {
-		if !strings.Contains(asm, "/systemd/*"+ext) {
-			t.Errorf("the assembly never enables %s units, though candy_file: claims them", ext)
-		}
+	if def.ServiceSchema.ServiceTemplate != base.ServiceSchema.ServiceTemplate {
+		t.Error("systemd-container's service_template is not the inherited systemd: template")
 	}
-	// ...and must NOT enable a slice, which systemctl rejects.
-	if strings.Contains(asm, "enable") && strings.Contains(asm, "*.slice") {
-		t.Error("the assembly enables *.slice; a slice is a resource container referenced " +
-			"by other units' Slice=, and enabling one is an error")
+}
+
+// TestEmbeddedVocab_SystemdContainerEnablesPackagedSystemUnits exercises the
+// container init's system_enable_template. It is a SECOND enable path beside
+// assembly_template: the assembly enables candy-SHIPPED unit files, while this
+// template enables a distro-PACKAGED unit a service: entry names with
+// use_packaged. A template nobody renders is dead, and an EMPTY one emits a
+// bare `RUN` that fails the build, so both are asserted here rather than left
+// to a bed whose fixture may ship no packaged units.
+func TestEmbeddedVocab_SystemdContainerEnablesPackagedSystemUnits(t *testing.T) {
+	uf, err := embeddedDefaults()
+	if err != nil {
+		t.Fatalf("embeddedDefaults: %v", err)
 	}
-	// An unmatched glob stays literal in sh, so a candy shipping only services would
-	// otherwise fail the build on `systemctl enable '/systemd/*.socket'`.
-	if !strings.Contains(asm, `[ -e "$unit" ] || continue`) {
-		t.Error("the enable loop has no existence guard: an unmatched glob stays literal " +
-			"in sh and would fail the build for a candy that ships only one unit type")
+	ic := spec.ProjectInitConfig(uf, resolveInitConfigViaPlugin)
+	if ic == nil || ic.Init["systemd-container"] == nil {
+		t.Fatal("embedded vocabulary missing the systemd-container init def")
+	}
+	def := ic.Init["systemd-container"]
+	if def.SystemEnableTemplate == "" {
+		t.Fatal("systemd-container declares no system_enable_template — a packaged " +
+			"system-scope service would never be enabled")
+	}
+	// Render the authored template directly: the sdk mechanism kits are for
+	// PLUGINS, never the host (the import-purity gate), and this template reads
+	// only .Units, so text/template produces the same text the SDK renderer does.
+	tmpl, err := template.New("system-enable").Parse(def.SystemEnableTemplate)
+	if err != nil {
+		t.Fatalf("system_enable_template does not parse: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, map[string]any{"Units": []string{"w38-packaged.service"}}); err != nil {
+		t.Fatalf("rendering system_enable_template: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "systemctl enable w38-packaged.service") {
+		t.Errorf("the rendered system-enable block does not enable the packaged unit:\n%s", got)
+	}
+	if strings.Contains(got, "RUN\n") {
+		t.Error("the rendered system-enable block emitted a bare RUN; an empty template " +
+			"would fail the build")
 	}
 }

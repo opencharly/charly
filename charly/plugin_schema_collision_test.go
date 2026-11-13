@@ -106,7 +106,7 @@ func TestPluginSchemaSameShapeDifferentTextStillErrors(t *testing.T) {
 // TestPluginSchemaReplayIsIdempotent pins the ONE allowance: re-registering the EXACT same served
 // source string is a replay, not a second declaration. It is load-bearing in production (the
 // builtin schema gate re-run from a cleared state, and the embedded-defaults path re-registering a
-// unit) and it is why the `sources` slice no longer grows under `-count>N`.
+// unit) and it is why the `units` slice no longer grows under `-count>N`.
 func TestPluginSchemaReplayIsIdempotent(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 
@@ -118,17 +118,17 @@ func TestPluginSchemaReplayIsIdempotent(t *testing.T) {
 		t.Fatalf("first registration must succeed: %v", err)
 	}
 	pluginSchemas.mu.Lock()
-	afterFirst := len(pluginSchemas.sources)
+	afterFirst := len(pluginSchemas.units)
 	pluginSchemas.mu.Unlock()
 
 	if err := registerPluginUnitSchema("collide-replay-plugin", schema); err != nil {
 		t.Fatalf("re-registering the SAME source string is a replay and must succeed: %v", err)
 	}
 	pluginSchemas.mu.Lock()
-	afterReplay := len(pluginSchemas.sources)
+	afterReplay := len(pluginSchemas.units)
 	pluginSchemas.mu.Unlock()
 	if afterReplay != afterFirst {
-		t.Errorf("a replay must not re-append the source (sources %d → %d)", afterFirst, afterReplay)
+		t.Errorf("a replay must not re-append the unit (units %d → %d)", afterFirst, afterReplay)
 	}
 	if err := validateAuthoredPluginInput(ClassVerb, "collidereplay", []byte(`{"marker":"m"}`)); err != nil {
 		t.Errorf("the replayed plugin must still validate its own input: %v", err)
@@ -145,10 +145,7 @@ func TestPluginSchemaReplayIsIdempotent(t *testing.T) {
 func TestPluginSchemaBaseDefTwinAccepted(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 
-	baseV, err := compileBasePlusServed("")
-	if err != nil {
-		t.Fatal(err)
-	}
+	baseV := sharedCueSchema()
 	baseDefs, err := topLevelDefNames(baseV)
 	if err != nil {
 		t.Fatal(err)
@@ -165,10 +162,13 @@ func TestPluginSchemaBaseDefTwinAccepted(t *testing.T) {
 	}
 }
 
-// TestPluginSchemaMustCompileStandalone pins the self-containment precondition the collision gate
-// rests on (and that the plugin skill documents): a schema that only compiles once spliced onto the
-// base has def names the gate cannot read per source, so it is a hard error — never a silent skip.
-func TestPluginSchemaMustCompileStandalone(t *testing.T) {
+// TestPluginSchemaMustComposeOnItsOwn pins the per-unit precondition the collision gate rests on:
+// the gate reads a unit's def names PER SOURCE, so a unit must compose as a unit — a schema that
+// only compiles once unified onto the base has def names the gate cannot read per source, so it is
+// a hard error, never a silent skip. (It is composed as one CUE MODULE INSTANCE, sdk#490, so the
+// precondition is "composes on its own", not "compiles standalone": a unit may now import the spec
+// module, which a module-less text compile refuses.)
+func TestPluginSchemaMustComposeOnItsOwn(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 
 	err := registerPluginUnitSchema("collide-gate-base-referencing", PluginSchema{
@@ -176,9 +176,9 @@ func TestPluginSchemaMustCompileStandalone(t *testing.T) {
 		InputDefs: map[string]string{"verb:collidegateref": "#CollideGateRefersBase"},
 	})
 	if err == nil {
-		t.Fatal("a schema referencing a base def must be rejected: a plugin schema is self-contained (it must compile standalone)")
+		t.Fatal("a schema referencing a base def must be rejected: a plugin schema composes on its own, before it is unified onto the base")
 	}
-	if !strings.Contains(err.Error(), "STANDALONE") {
-		t.Errorf("the error must name the standalone-compile precondition; got: %v", err)
+	if !strings.Contains(err.Error(), "does not compose on its own") {
+		t.Errorf("the error must name the per-unit compose precondition; got: %v", err)
 	}
 }

@@ -32,6 +32,7 @@ var pluginProviderRefs = map[string]string{
 	"command:clean":             "github.com/opencharly/plugin-clean/candy/plugin-clean",
 	"command:cmd":               "github.com/opencharly/plugin-cmd/candy/plugin-cmd",
 	"command:config":            "github.com/opencharly/plugin-pod/candy/plugin-pod",
+	"command:containerd":        "github.com/opencharly/plugin-containerd/candy/plugin-containerd",
 	"command:cp":                "github.com/opencharly/plugin-pod/candy/plugin-pod",
 	"command:deploy":            "github.com/opencharly/plugin-fleet/candy/plugin-fleet",
 	"command:docs":              "github.com/opencharly/plugin-docs/candy/plugin-docs",
@@ -41,6 +42,7 @@ var pluginProviderRefs = map[string]string{
 	"command:feature":           "github.com/opencharly/plugin-feature/candy/plugin-feature",
 	"command:feature:box":       "github.com/opencharly/plugin-box/candy/plugin-box",
 	"command:fetch:box":         "github.com/opencharly/plugin-authoring/candy/plugin-authoring",
+	"command:firecracker":       "github.com/opencharly/plugin-firecracker/candy/plugin-firecracker",
 	"command:generate-packages": "github.com/opencharly/plugin-generate-packages/candy/generate-packages",
 	"command:generate:box":      "github.com/opencharly/plugin-box/candy/plugin-box",
 	"command:herdr":             "github.com/opencharly/plugin-herdr/candy/plugin-herdr",
@@ -54,7 +56,6 @@ var pluginProviderRefs = map[string]string{
 	"command:mcp":               "github.com/opencharly/plugin-mcp/candy/plugin-mcp",
 	"command:merge:box":         "github.com/opencharly/plugin-box/candy/plugin-box",
 	"command:migrate":           "github.com/opencharly/plugin-migrate/candy/plugin-migrate",
-	"command:nerdctl":           "github.com/opencharly/plugin-nerdctl/candy/plugin-nerdctl",
 	"command:new:box":           "github.com/opencharly/plugin-box/candy/plugin-box",
 	"command:ollama":            "github.com/opencharly/plugin-ollama/candy/plugin-ollama",
 	"command:pipeline":          "github.com/opencharly/plugin-pipeline/candy/plugin-pipeline",
@@ -94,7 +95,7 @@ var pluginProviderRefs = map[string]string{
 	"deploy:local":              "github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local",
 	"deploy:pod":                "github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
 	"deploy:vm":                 "github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
-	"engine:nerdctl":            "github.com/opencharly/plugin-nerdctl/candy/plugin-nerdctl",
+	"engine:containerd":         "github.com/opencharly/plugin-containerd/candy/plugin-containerd",
 	"kind:agent":                "github.com/opencharly/plugin-agent/candy/plugin-agent",
 	"kind:agent-team":           "github.com/opencharly/plugin-agent/candy/plugin-agent",
 	"kind:android":              "github.com/opencharly/plugin-substrate/candy/plugin-substrate",
@@ -105,6 +106,7 @@ var pluginProviderRefs = map[string]string{
 	"kind:distro":               "github.com/opencharly/plugin-distro/candy/plugin-distro",
 	"kind:examplekind":          "github.com/opencharly/plugin-example-kind/candy/plugin-example-kind",
 	"kind:examplestructkind":    "github.com/opencharly/plugin-example-structkind/candy/plugin-example-structkind",
+	"kind:firecracker":          "github.com/opencharly/plugin-substrate/candy/plugin-substrate",
 	"kind:hook":                 "github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind",
 	"kind:init":                 "github.com/opencharly/plugin-init/candy/plugin-init",
 	"kind:jetkvm":               "github.com/opencharly/plugin-jetkvm/candy/plugin-jetkvm",
@@ -149,6 +151,7 @@ var pluginProviderRefs = map[string]string{
 	"verb:bpf":                  "github.com/opencharly/plugin-bpf/candy/plugin-bpf",
 	"verb:cdp":                  "github.com/opencharly/plugin-cdp/candy/plugin-cdp",
 	"verb:command":              "github.com/opencharly/plugin-command/candy/plugin-command",
+	"verb:containerd":           "github.com/opencharly/plugin-containerd/candy/plugin-containerd",
 	"verb:crabbox":              "github.com/opencharly/plugin-crabbox/candy/plugin-crabbox",
 	"verb:credential":           "github.com/opencharly/plugin-secrets/candy/plugin-secrets",
 	"verb:cstream":              "github.com/opencharly/plugin-cstream/candy/plugin-cstream",
@@ -167,6 +170,7 @@ var pluginProviderRefs = map[string]string{
 	"verb:externalprobe":        "github.com/opencharly/plugin-example-external/candy/plugin-example-external",
 	"verb:file":                 "github.com/opencharly/plugin-file/candy/plugin-file",
 	"verb:file-parity":          "github.com/opencharly/plugin-task/candy/plugin-task",
+	"verb:firecracker":          "github.com/opencharly/plugin-firecracker/candy/plugin-firecracker",
 	"verb:gate":                 "github.com/opencharly/plugin-pipeline/candy/plugin-pipeline",
 	"verb:generate":             "github.com/opencharly/plugin-pipeline/candy/plugin-pipeline",
 	"verb:git-submodules":       "github.com/opencharly/plugin-task/candy/plugin-task",
@@ -187,7 +191,6 @@ var pluginProviderRefs = map[string]string{
 	"verb:mise":                 "github.com/opencharly/plugin-mise/candy/plugin-mise",
 	"verb:module-pins":          "github.com/opencharly/plugin-task/candy/plugin-task",
 	"verb:mount":                "github.com/opencharly/plugin-mount/candy/plugin-mount",
-	"verb:nerdctl":              "github.com/opencharly/plugin-nerdctl/candy/plugin-nerdctl",
 	"verb:oci":                  "github.com/opencharly/plugin-oci/candy/plugin-oci",
 	"verb:omarchy":              "github.com/opencharly/plugin-omarchy/candy/plugin-omarchy",
 	"verb:openclaw":             "github.com/opencharly/plugin-openclaw/candy/plugin-openclaw",
@@ -213,4 +216,26 @@ var pluginProviderRefs = map[string]string{
 	"verb:user":                 "github.com/opencharly/plugin-user/candy/plugin-user",
 	"verb:vnc":                  "github.com/opencharly/plugin-vnc/candy/plugin-vnc",
 	"verb:wl":                   "github.com/opencharly/plugin-wl/candy/plugin-wl",
+}
+
+// weldedCommandRefs maps a WELDED top-level command word -> the PINNED candy ref of the
+// plugin that serves it. The welded set is scripts/host-command-plugins.txt — the plugins
+// every native package bakes beside the binary at /usr/lib/charly/plugins. A package
+// install serves these words from those baked binaries; a dev/worktree build has none, so
+// the word still enters the CLI grammar and the plugin is host-built from this ref on first
+// use. A word a COMPILED-IN provider already serves is listed too — the registered
+// provider wins it, so the source fallback is never reached for those.
+var weldedCommandRefs = map[string]string{
+	"candy":    "@github.com/opencharly/plugin-candy/candy/plugin-candy:v2026.242.0526",
+	"clean":    "@github.com/opencharly/plugin-clean/candy/plugin-clean:v2026.261.0029",
+	"doctor":   "@github.com/opencharly/plugin-doctor/candy/plugin-doctor:v2026.261.0030",
+	"feature":  "@github.com/opencharly/plugin-feature/candy/plugin-feature:v2026.261.0008",
+	"mcp":      "@github.com/opencharly/plugin-mcp/candy/plugin-mcp:v2026.250.0721",
+	"pipeline": "@github.com/opencharly/plugin-pipeline/candy/plugin-pipeline:v2026.251.2226",
+	"preempt":  "@github.com/opencharly/plugin-preempt/candy/plugin-preempt:v2026.261.0030",
+	"review":   "@github.com/opencharly/plugin-review/candy/plugin-review:v2026.271.0909",
+	"secrets":  "@github.com/opencharly/plugin-secrets/candy/plugin-secrets:v2026.242.0530",
+	"settings": "@github.com/opencharly/plugin-settings/candy/plugin-settings:v2026.242.0532",
+	"udev":     "@github.com/opencharly/plugin-udev/candy/plugin-udev:v2026.242.0532",
+	"vm":       "@github.com/opencharly/plugin-vm/candy/plugin-vm:v2026.261.0009",
 }
