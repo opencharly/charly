@@ -406,33 +406,39 @@ func declaredExternalCommandIdentities() map[string]string {
 // hostBuildValidateWordSets (validate_project_host.go), which does the registration (K-wave 2 cone
 // R1 unit B). The registration itself stays kernel: it mutates the provider registry.
 
-// prescanDeclaredPluginWords reads the project root's `discover:` directive from
-// rootData (leniently — ignoring everything else), walks each discovered manifest
-// dir, and registers every external DEPLOY word a candy's `plugin: providers:`
-// declares. baseDir anchors relative discover paths. Best-effort: any I/O or parse
-// error on a single file is skipped, never fatal — a malformed candy must not break
-// `charly status` / `charly box validate` repo-wide.
+// prescanDeclaredPluginWords reads the project root's `discover:` and `import:` directives
+// from rootData (leniently — ignoring everything else), walks each discovered manifest dir
+// AND each imported project, and registers every external DEPLOY/COMMAND/KIND word (and
+// scalar-sugar primary) a candy's `plugin:` block declares. baseDir anchors relative
+// discover paths and import refs. Best-effort: any I/O or parse error on a single file is
+// skipped, never fatal — a malformed candy must not break `charly status` /
+// `charly box validate` repo-wide.
 func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
+	// allData accumulates the bytes the REMOTE leg scans for @github refs: the root file, its
+	// own discover tree, and — through the import leg — every imported project's manifest and
+	// its own discover tree, because a plugin pinned in ANY of those manifests needs its ref
+	// fetched exactly like one pinned in the root file.
+	allData := rootData
+	prescanDiscoveredPluginManifests(rootData, baseDir, &allData)
+	// visited is seeded with the ROOT project directory: the root's own manifest and discover
+	// tree were just walked, so an import that points back at the root is a REVISIT.
+	visited := map[string]bool{absPrescanDir(baseDir): true}
+	prescanImportedProjectEntries(rootData, baseDir, &allData, visited)
+	prescanRemotePluginManifests(allData, baseDir)
+}
+
+// prescanDiscoveredPluginManifests is the ONE `discover:` walk — the root file's own tree and
+// every imported project's tree drive it (R2), so both see the same manifest recognition and the
+// same per-class registration. It reads each discovered manifest once, registers the external
+// words it declares, and appends its bytes to allData for the remote ref leg (a plugin pinned in
+// a discovered candy's require:/candy: list — e.g. the charly meta-candy pinning the example
+// plugins — must be fetched exactly like one pinned in the root file). Best-effort: an
+// undeclarable or unreadable discover spec is skipped.
+func prescanDiscoveredPluginManifests(data []byte, baseDir string, allData *[]byte) {
 	var doc struct {
 		Discover spec.DiscoverConfig `yaml:"discover"`
-		// Import MUST use the canonical mixed-shape decoder (spec.ImportList): `import:` is a
-		// list whose items are EITHER a bare string (a flat import — the per-kind sibling-file
-		// split, e.g. `- vm.yml`) OR a single-key `alias: ref` map. Decoding it as
-		// []map[string]string made a bare-string entry fail the WHOLE struct unmarshal, so the
-		// early return below skipped the local discover walk AND the import leg entirely: a
-		// project with a flat import plus any plugin-provided kind (e.g. `pipeline:`) then
-		// failed to parse EVERY document with "no kind discriminator", because the plugin's
-		// kind word was never prescanned. spec.ImportList is the ONE decoder (R3).
-		Import spec.ImportList `yaml:"import"`
 	}
-	// A missing/!unparseable discover: block skips the LOCAL walk only. The remote leg
-	// below is about @github refs, which have nothing to do with local discovery: gating
-	// it on discover: meant a project that pins a plugin remotely and discovers nothing
-	// locally never prescanned that plugin at all, so its `plugin: primary:` never
-	// reached the parse and the scalar shorthand was rejected with "declares no primary
-	// field" — for a candy that declares one.
-	if err := yaml.Unmarshal(rootData, &doc); err != nil {
-		prescanRemotePluginManifests(rootData, baseDir)
+	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return
 	}
 	for _, disc := range doc.Discover {
@@ -452,90 +458,118 @@ func prescanDeclaredPluginWords(rootData []byte, baseDir string) {
 			continue
 		}
 		for _, dir := range dirs {
-			prescanPluginManifest(filepath.Join(dir, manifest))
-		}
-	}
-	// The remote leg must ALSO see the discovered candy manifests' refs (a plugin pinned in a
-	// discovered candy's require:/candy: list — e.g. the charly meta-candy pinning the example
-	// plugins), not just the root file's own refs: concatenate the discovered manifests' bytes
-	// with the root so every pinned plugin ref is fetched + prescanned at parse time.
-	allData := rootData
-	for _, disc := range doc.Discover {
-		if disc.Path == "" {
-			continue
-		}
-		manifest := disc.Manifest
-		if manifest == "" {
-			manifest = spec.UnifiedFileName
-		}
-		root := disc.Path
-		if !filepath.IsAbs(root) {
-			root = filepath.Join(baseDir, root)
-		}
-		dirs, err := loader.FindEntityDirs(root, manifest, disc.Recursive)
-		if err != nil {
-			continue
-		}
-		for _, dir := range dirs {
-			if b, err := os.ReadFile(filepath.Join(dir, manifest)); err == nil {
-				allData = append(allData, b...)
+			b, err := os.ReadFile(filepath.Join(dir, manifest))
+			if err != nil {
+				continue
 			}
+			prescanPluginManifestData(b)
+			*allData = append(*allData, b...)
 		}
 	}
-	// The IMPORT leg. A project's `import:` entries resolve to WHOLE PROJECTS (a
-	// distro repo, or the local box/<name> submodule a ref maps to) OR to sibling
-	// per-kind files (a flat bare-path import, e.g. `- vm.yml`), and their manifests
-	// carry plugin refs of their own — a bed in an imported box that authors a plugin
-	// verb's SCALAR shorthand needs that verb's `plugin: primary:` registered BEFORE
-	// parse, exactly like one in the root file.
-	//
-	// Without this leg the root's own refs and its discovered candies' refs were
-	// prescanned and an imported box's were not, so `cstream: status` in box/cachyos
-	// failed to parse with "declares no primary field for the scalar shorthand" —
-	// while the SAME manifest validated cleanly from its own repo root, where it IS
-	// the root file. That asymmetry (green standing alone, red composed) is the shape
-	// this closes.
-	//
-	// A FLAT entry (Namespace == "") is a local sibling file: read it directly so its
-	// plugin refs reach the remote leg too. A NAMESPACED entry mounts a whole project
-	// (a distro repo / local box/<name> submodule) whose manifest is prescanned and
-	// whose bytes join allData for the remote leg.
+}
+
+// prescanImportedProjectEntries walks one manifest's `import:` entries. The entries resolve to
+// one of three shapes, and each is prescanned by the mechanism that shape needs:
+//
+//   - a LOCAL PROJECT DIRECTORY (the umbrella's `- strata-cli: ./plugin-strata`, `- arch:
+//     ./charly`): a plugin repo's root manifest declares no `plugin:` block at all — it declares
+//     `discover:`, and its providers live in `candy/<name>/charly.yml`. Only prescanProjectDir
+//     reaches them, exactly like the root file's own tree.
+//   - a FLAT local sibling FILE (the per-kind split, `- vm.yml`): read directly, so its own
+//     plugin refs and primaries reach the parse like the root file's.
+//   - a `@github` ref: resolved to the checkout/cache path the parse itself reads (local
+//     box/<ns> checkout first), then walked as the project it is.
+//
+// Best-effort per entry: an unresolvable ref or an unreadable file prescans nothing.
+func prescanImportedProjectEntries(data []byte, baseDir string, allData *[]byte, visited map[string]bool) {
+	// Import MUST use the canonical mixed-shape decoder (spec.ImportList): `import:` is a list
+	// whose items are EITHER a bare string (a flat import — the per-kind sibling-file split,
+	// e.g. `- vm.yml`) OR a single-key `alias: ref` map. Decoding it as []map[string]string
+	// made a bare-string entry fail the unmarshal, skipping the local discover walk AND the
+	// import leg: a project with a flat import plus any plugin-provided kind (e.g. `pipeline:`)
+	// then failed to parse EVERY document with "no kind discriminator", because the plugin's
+	// kind word was never prescanned. spec.ImportList is the ONE decoder (R3).
+	var doc struct {
+		Import spec.ImportList `yaml:"import"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return
+	}
 	for _, imp := range doc.Import {
 		ref := strings.TrimSpace(imp.Ref)
 		if ref == "" {
 			continue
 		}
-		if !strings.HasPrefix(ref, "@") {
-			// FLAT local sibling file (the per-kind split): read + prescan it so its
-			// own pinned plugin refs register before parse.
-			p := ref
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(baseDir, p)
+		if strings.HasPrefix(ref, "@") {
+			if imp.Namespace == "" {
+				continue
 			}
-			prescanAndCollect(p, &allData)
+			dir, err := resolveImportedProject(imp.Namespace, strings.TrimPrefix(ref, "@"), baseDir)
+			if err != nil {
+				continue
+			}
+			prescanProjectDir(dir, allData, visited)
 			continue
 		}
-		if imp.Namespace == "" {
+		p := ref
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(baseDir, p)
+		}
+		if st, err := os.Stat(p); err == nil && st.IsDir() {
+			prescanProjectDir(p, allData, visited)
 			continue
 		}
-		dir, err := resolveImportedProject(imp.Namespace, strings.TrimPrefix(ref, "@"), baseDir)
-		if err != nil {
-			continue
-		}
-		prescanAndCollect(filepath.Join(dir, spec.UnifiedFileName), &allData)
+		prescanAndCollect(p, allData)
 	}
-	prescanRemotePluginManifests(allData, baseDir)
 }
 
-// prescanAndCollect registers the external words a manifest declares AND appends its bytes to
-// allData for the remote ref leg — the ONE idiom both import shapes (flat local sibling file,
-// namespaced whole project) drive (R3). Best-effort: a missing/unreadable file registers nothing
-// and appends nothing, exactly like the byte-gated per-manifest prescan it wraps.
-func prescanAndCollect(path string, allData *[]byte) {
-	prescanPluginManifest(path)
-	if b, err := os.ReadFile(path); err == nil {
-		*allData = append(*allData, b...)
+// prescanProjectDir walks ONE imported project from its own root: its manifest (whose `plugin:`
+// declarations register), its `discover:` tree (where a plugin repo's candy manifests — and so its
+// command/kind/deploy words — live), and, recursively, its OWN `import:` entries, which is how the
+// composed namespace graph is assembled (the charly repo's own `arch`/`cachyos`/… imports, and
+// theirs in turn). visited holds the already-walked project directories, so a diamond re-import, a
+// self-import, or a cycle (the loader's main↔cachyos precedent) walks each directory ONCE and
+// terminates. Best-effort: an unreadable manifest walks nothing.
+func prescanProjectDir(dir string, allData *[]byte, visited map[string]bool) {
+	if dir == "" {
+		return
 	}
+	abs := absPrescanDir(dir)
+	if visited[abs] {
+		return
+	}
+	visited[abs] = true
+	manifest := filepath.Join(dir, spec.UnifiedFileName)
+	data, err := os.ReadFile(manifest)
+	if err != nil {
+		return
+	}
+	prescanPluginManifestData(data)
+	*allData = append(*allData, data...)
+	prescanDiscoveredPluginManifests(data, dir, allData)
+	prescanImportedProjectEntries(data, dir, allData, visited)
+}
+
+// absPrescanDir normalizes a project directory to the key the import walk dedups on, so a relative
+// and an absolute spelling of the same directory are one visit.
+func absPrescanDir(dir string) string {
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
+	return filepath.Clean(dir)
+}
+
+// prescanAndCollect registers the external words a FLAT-imported local file declares AND appends
+// its bytes to allData for the remote ref leg, in one read. Best-effort: a missing/unreadable file
+// registers nothing and appends nothing, exactly like the byte-gated per-manifest prescan it
+// wraps.
+func prescanAndCollect(path string, allData *[]byte) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	prescanPluginManifestData(b)
+	*allData = append(*allData, b...)
 }
 
 // resolveImportedProject resolves one `import:` ref to the directory holding its manifest —
@@ -654,19 +688,28 @@ func prescanRemotePluginManifests(rootData []byte, baseDir string) {
 	}
 }
 
-// prescanPluginManifest reads one candy manifest's `plugin: providers:` declarations
-// and registers each external DEPLOY substrate word (the PARSE-time loader recognition
-// that lets a root-charly.yml bed using an external deploy substrate as its entity
-// discriminator LOAD before the provider connects) AND each external COMMAND word (the
-// CLI-grammar recognition that lets `charly <word>` parse before the provider connects —
-// consumed EARLY by prescanProjectCommandWords in main, ahead of kong.Parse). External
-// VERB words are NOT registered here: they are needed only at Validate (opActsInBuildDeploy),
-// and a @github-composed plugin candy is fetched only DURING the scan (after this parse-time
-// prescan), so verbs register post-scan from the candy map (registerExternalVerbsFromCandies).
-// The byte-gate skips every non-plugin manifest before paying for a YAML parse. Best-effort.
+// prescanPluginManifest reads one manifest from disk and prescans its declarations — the
+// path-taking form the remote leg uses (it resolves a repo to a manifest path it then reads).
 func prescanPluginManifest(path string) {
-	data, err := os.ReadFile(path)
-	if err != nil || !bytes.Contains(data, []byte("plugin:")) {
+	if data, err := os.ReadFile(path); err == nil {
+		prescanPluginManifestData(data)
+	}
+}
+
+// prescanPluginManifestData reads ONE manifest's `plugin: providers:` declarations (and its
+// `plugin: primary:` scalar-sugar map) FROM BYTES the caller already holds, and registers each
+// external DEPLOY substrate word (the PARSE-time loader recognition that lets a root-charly.yml bed
+// using an external deploy substrate as its entity discriminator LOAD before the provider
+// connects) AND each external COMMAND word (the CLI-grammar recognition that lets `charly <word>`
+// parse before the provider connects — consumed EARLY by prescanProjectCommandWords in main, ahead
+// of kong.Parse) AND each external KIND word (the parse-time `kind: <plugin-word>` recognition).
+// External VERB words are NOT registered here: they are needed only at Validate
+// (opActsInBuildDeploy), and a @github-composed plugin candy is fetched only DURING the scan (after
+// this parse-time prescan), so verbs register post-scan from the candy map
+// (registerExternalVerbsFromCandies). The byte-gate skips every non-plugin manifest before paying
+// for a YAML parse. Best-effort.
+func prescanPluginManifestData(data []byte) {
+	if !bytes.Contains(data, []byte("plugin:")) {
 		return
 	}
 	var root any
