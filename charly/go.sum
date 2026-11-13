@@ -167,8 +167,8 @@ github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319 
 github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026271.2319/go.mod h1:sJZfp6ovCsj1LzQAzq/RFw5FmtzBbnWZk8IPvyK/v+c=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445 h1:sue43HFANxzL/bfd6diij/B4pV7YP4n017TuZqpKOi8=
 github.com/opencharly/plugin-candy/candy/plugin-candy v0.2026313.1445/go.mod h1:Adnw/r+VqulE3m26DKB530+cGciLdlbW4snLwdk9q+c=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026317.744 h1:rFklEy7J3cCDOFIUlFJeZSVLxmTtfsvoDFc4ZbwkbnU=
-github.com/opencharly/plugin-check/candy/plugin-check v0.2026317.744/go.mod h1:Lvm4KKGY4G8ZRECioOZ1im0TxiSi1/yUvG4hT8NpJBU=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026317.1844 h1:gMAI15oBPCHUHMnUl1BfkDcuggL361g7h5XKP++NiSA=
+github.com/opencharly/plugin-check/candy/plugin-check v0.2026317.1844/go.mod h1:s98CkSD7z+XTixzT7N7ZNbi8DtHQIG4S18gOx/IrF/0=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026287.2341 h1:7HvWdgnWjmKl6XdU7TbUrAlGju+XGRgG3ub72Vc4mpw=
 github.com/opencharly/plugin-clean/candy/plugin-clean v0.2026287.2341/go.mod h1:JvMqAl8jecSWVscrP51vWx2aeDxP9ui1fcXecR3HkwA=
 github.com/opencharly/plugin-cmd/candy/plugin-cmd v0.2026272.2039 h1:gVsGunNwjAjPTX/rTXFzqFwwaEs5FKKZRhTFeO+RR0I=
@@ -271,8 +271,8 @@ github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356 h1:UC5l43x6WDw+H
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026287.2356/go.mod h1:AW+g3gtHTnRCaR+vJuqmCDMe7ExXD9VKjr2OgUfaf08=
 github.com/opencharly/sdk v0.2026317.712 h1:w+kQJ0++85dZ/6N1QMAIvF6/1ljmgqlOAIadjDq8pgA=
 github.com/opencharly/sdk v0.2026317.712/go.mod h1:q3RH72zJ1cWgGTuOr5y/mzIanyCxqgrcvVoh80I0+RQ=
-github.com/opencharly/spec v0.2026317.703 h1:cdefTqeJUVu7OvZEp/FLD3pBJ5epScJpow82ljg6MiA=
-github.com/opencharly/spec v0.2026317.703/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
+github.com/opencharly/spec v0.2026317.1828 h1:Zlq08NaQyZgM5sn+I+DRrWzNks96zLF/HZxViWl58rU=
+github.com/opencharly/spec v0.2026317.1828/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
