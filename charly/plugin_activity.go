@@ -186,6 +186,24 @@ func (a *pluginActivity) touch() {
 	// progress, and that is the signal the expiry path needs; see the expiry case in
 	// idleBoundedContext.
 	a.touches.Add(1)
+	// TEST SEAM — ZERO in production. DEFER the send by the gate, without holding the
+	// PRODUCER: the producer goroutine keeps running (so it keeps ATTEMPTING, which is the
+	// state under test) while the delivery is still in flight. Holding the producer instead
+	// would stop the attempts too, and a count that stops growing is not evidence — that is
+	// the same "a starved producer made no attempt" dead end the external load controls are.
+	// See pluginActivityTouchGate.
+	if pluginActivityTouchGate > 0 {
+		go func() {
+			time.Sleep(pluginActivityTouchGate)
+			if a.wake != nil {
+				select {
+				case a.wake <- struct{}{}:
+				default:
+				}
+			}
+		}()
+		return
+	}
 	// Signal the progress EVENT (non-blocking; a full buffer already holds a pending
 	// reset, which is equivalent to this one).
 	if a.wake != nil {
@@ -195,6 +213,20 @@ func (a *pluginActivity) touch() {
 		}
 	}
 }
+
+// pluginActivityTouchGate delays a touch's SEND after its attempt has been counted. It is
+// a TEST SEAM and ZERO in production (CHARLY_PLUGIN_TOUCH_GATE, unset by default).
+//
+// It exists because the production race it reproduces is otherwise unobservable: the defect
+// #913 fixes is a producer that ran touches.Add(1) and had not yet completed its non-blocking
+// send when the guard's confirmation looked — an interleaving that lasts two adjacent
+// instructions, so no external load control (CPU burners, short windows, GOMAXPROCS, a
+// whole-host pin) can hold it for a whole window. The gate holds exactly that interleaving
+// for as long as the caller asks, which turns "the attempt counted but nothing was delivered"
+// from a nanosecond coincidence into a state a live disposable bed can enter deterministically
+// (opencharly/charly#924). It fabricates nothing: the attempt is counted by touch() itself, and
+// the send is the real send, only later.
+var pluginActivityTouchGate time.Duration
 
 // touchAttempts reports how many times touch has been CALLED on this clock over the
 // call's life — attempts, not deliveries. It is read by the expiry path's confirmation
@@ -999,6 +1031,7 @@ func applyCallBoundEnv(getenv func(string) string) {
 	}{
 		{"CHARLY_PLUGIN_LEAF_CAP", &pluginLeafCapOverride},
 		{"CHARLY_PLUGIN_NO_PROGRESS", &pluginInvokeNoProgressOverride},
+		{"CHARLY_PLUGIN_TOUCH_GATE", &pluginActivityTouchGate},
 	} {
 		v := getenv(knob.env)
 		if v == "" {

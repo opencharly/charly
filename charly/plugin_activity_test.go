@@ -204,6 +204,54 @@ func TestPluginActivity_ConfirmationAcceptsAnAttemptedTouch(t *testing.T) {
 	}
 }
 
+// TestPluginActivity_TouchGateIsInertByDefault pins the SAFETY property of the instrument:
+// the send gate is zero unless someone sets it, so a production binary's touch() is the same
+// single non-blocking send it always was, with no wait and no goroutine.
+func TestPluginActivity_TouchGateIsInertByDefault(t *testing.T) {
+	if pluginActivityTouchGate != 0 {
+		t.Fatalf("pluginActivityTouchGate = %s; the gate must be ZERO unless a bed sets it", pluginActivityTouchGate)
+	}
+	a := newPluginActivity(0)
+	a.touch()
+	select {
+	case <-a.wake:
+	default:
+		t.Fatal("an ungated touch must still deliver its token synchronously")
+	}
+}
+
+// TestPluginActivity_TouchGateDefersOnlyTheSend is the instrument's own proof, and the shape a
+// live bed enters: with the gate set, touch() COUNTS the attempt and returns immediately while
+// the delivery is still in flight — the production interleaving (a producer preempted between the
+// attempt and its non-blocking send) held long enough to observe. Holding the PRODUCER instead
+// would stop the attempts, and a count that stops growing is not evidence.
+func TestPluginActivity_TouchGateDefersOnlyTheSend(t *testing.T) {
+	old := pluginActivityTouchGate
+	pluginActivityTouchGate = 60 * time.Millisecond
+	defer func() { pluginActivityTouchGate = old }()
+
+	a := newPluginActivity(0)
+	start := time.Now()
+	a.touch()
+	if elapsed := time.Since(start); elapsed >= pluginActivityTouchGate {
+		t.Fatalf("touch() held the producer for %s — the gate must defer the SEND, never the caller", elapsed)
+	}
+	if got := a.touchAttempts(); got != 1 {
+		t.Fatalf("touchAttempts = %d immediately after a gated touch, want 1 — the attempt must be counted BEFORE the send", got)
+	}
+	select {
+	case <-a.wake:
+		t.Fatal("the gated send delivered its token synchronously; the gate must defer it")
+	default:
+	}
+	select {
+	case <-a.wake:
+		// good: the real send arrived, late
+	case <-time.After(4 * pluginActivityTouchGate):
+		t.Fatal("the deferred send never arrived")
+	}
+}
+
 // TestPluginActivity_TouchAttemptCountsAttemptsNotDeliveries pins the seam's ONE property,
 // because getting it backwards would re-introduce exactly the confusion the seam exists to
 // remove: a counter of ACCEPTED sends undercounts whenever the depth-1 buffer already holds
