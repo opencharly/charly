@@ -31,7 +31,12 @@ func hostBuildDeployPluginsConnect(_ context.Context, req spec.DeployPluginsConn
 	if err := loadDeployPlugins(dir, req.Path, spec.ScopedExtraCandyRefs(spec.BoxScope(req.Path), req.AddCandy...)); err != nil {
 		return spec.DeployPluginsConnectReply{}, err
 	}
-	return spec.DeployPluginsConnectReply{Dir: dir}, nil
+	// The CONNECTED SET rides the reply (opencharly/charly#1131): the loader resolved each served
+	// plugin's binary and source dir just above and used to discard the mapping, so a consumer that
+	// has only a NAME had to re-derive the path by scanning a directory. The set is what THIS
+	// process connected, which is the deploy's own resolved set; absent when the project declares
+	// no out-of-tree plugin.
+	return spec.DeployPluginsConnectReply{Dir: dir, Plugins: connectedPluginSet.snapshot()}, nil
 }
 
 var _ = func() bool {
