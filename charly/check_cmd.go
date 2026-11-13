@@ -47,7 +47,7 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 	// PLUGIN candy (e.g. plugin-spice for the `spice:` check verb authored INLINE in
 	// the bed plan, with no candy in the image closure requiring it) would otherwise
 	// leave the plugin unloaded and the `spice:` step failing as an unknown verb.
-	addCandy, refWords := deployNodePluginContext(dir, box)
+	addCandy, refWords := deployNodePluginContext(cfg, dir, box)
 	// The VM plugin candy (verb:libvirt) is external (out-of-process) and in no box's image
 	// closure, so a bed whose plan dispatches `libvirt:` (e.g. check-fedora-vm's libvirt-verb-
 	// dispatches step) needs it pulled in by its canonical ref — the same host-side-plugin pattern

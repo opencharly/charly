@@ -151,9 +151,23 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 		m.commandModelJSON = append([]byte(nil), raw...)
 	}
 	// A class:step capability may DECLARE its install-step contract (F3): hostBuildConstructStep
-	// builds an externalStep carrying the plugin-declared Scope/Venue/Gate/Emits.
+	// builds an externalStep carrying the plugin-declared Scope/Venue/Gate/Emits, and reads
+	// PluginPaths to decide whether the step's INPUT receives the connected plugin set.
+	//
+	// EVERY field of the declared contract must be transcribed here: a field the plugin declares
+	// and this conversion drops is a capability the host cannot act on, silently. Measured
+	// (opencharly/charly#1131): PluginPaths was added to the wire and to the two conversions in
+	// `spec`/`sdk`, and THIS one was missed, so a plugin declared the flag, the host saw `false`,
+	// and the step refused with "the deploying charly supplied no connected plugin set" — the
+	// failure was loud only because the step's own contract refuses rather than guesses.
 	if sc := c.GetStepContract(); m.class == ClassStep && sc != nil {
-		m.contract = &spec.StepContract{Scope: spec.ScopeFromName(sc.GetScope()), Venue: spec.Venue(sc.GetVenue()), Gate: spec.Gate(sc.GetGate()), Emits: sc.GetEmits()}
+		m.contract = &spec.StepContract{
+			Scope:       spec.ScopeFromName(sc.GetScope()),
+			Venue:       spec.Venue(sc.GetVenue()),
+			Gate:        spec.Gate(sc.GetGate()),
+			Emits:       sc.GetEmits(),
+			PluginPaths: sc.GetPluginPaths(),
+		}
 	}
 	// A class:kind capability may declare it decodes a STRUCTURAL entity (F5): runPluginKind folds
 	// its spec.Deploy reply into uf.Deploy instead of landing a flat body opaquely.
