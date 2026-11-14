@@ -81,11 +81,19 @@ func (c *connectedPlugins) forget() {
 // never passed: the FILENAME a baked plugin binary takes is bakedPluginFileName's rule (the key's
 // last path segment, flattened), and the loader opens the delivered binary by exactly that name —
 // so a second derivation here would be a second rule for one filename (R2).
-func recordConnectedPluginFromLoad(key, viewPath, srcDir string) {
+//
+// providers are the words the unit REGISTERED, rendered by the ONE identity renderer the rest of
+// the loader uses. They are load-bearing for a delivered tree: the loader resolves a bare
+// command/verb word through a `<leaf>.providers` manifest beside the binary, so a tree without the
+// manifest answers every invocation with charly's usage text (measured on a disposable guest,
+// opencharly/charly#1131). They come from the unit the engine connected — never from scraping the
+// plugin's binary or re-parsing its candy.
+func recordConnectedPluginFromLoad(key, viewPath, srcDir string, providers []string) {
 	connectedPluginSet.recordOne(spec.DeployConnectedPlugin{
-		Key:      key,
-		Leaf:     bakedPluginFileName(key),
-		ViewPath: viewPath,
-		SrcDir:   srcDir,
+		Key:       key,
+		Leaf:      bakedPluginFileName(key),
+		ViewPath:  viewPath,
+		SrcDir:    srcDir,
+		Providers: providers,
 	})
 }

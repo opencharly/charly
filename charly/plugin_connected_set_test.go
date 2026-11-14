@@ -20,17 +20,20 @@ func TestConnectedPluginSetRecordsWhatTheLoaderServed(t *testing.T) {
 		"github.com/opencharly/plugin-deploy-firecracker/candy/plugin-deploy-firecracker",
 		"/home/op/.cache/charly/plugin-build/views/plugin-deploy-firecracker-4acc8316daba136b",
 		"/src/plugin-deploy-firecracker/candy/plugin-deploy-firecracker",
+		[]string{"step:plugin-tree", "deploy:firecracker"},
 	)
 	recordConnectedPluginFromLoad(
 		"plugin-firecracker",
 		"/home/op/.cache/charly/plugin-build/views/plugin-firecracker-0123456789abcdef",
 		"",
+		[]string{"command:firecracker"},
 	)
 	// A re-load of the SAME served bytes is not a second plugin.
 	recordConnectedPluginFromLoad(
 		"plugin-firecracker",
 		"/home/op/.cache/charly/plugin-build/views/plugin-firecracker-0123456789abcdef",
 		"",
+		[]string{"command:firecracker"},
 	)
 
 	got := connectedPluginSet.snapshot()
@@ -51,6 +54,12 @@ func TestConnectedPluginSetRecordsWhatTheLoaderServed(t *testing.T) {
 	}
 	if got[1].SrcDir != "" {
 		t.Errorf("a source-less served plugin must keep SrcDir empty, got %q", got[1].SrcDir)
+	}
+	// The WORDS the unit registered ride the entry: a delivered tree needs them for its
+	// `<leaf>.providers` manifest, and the engine is the only place they exist without scraping
+	// the plugin (opencharly/charly#1131).
+	if len(first.Providers) != 2 || first.Providers[0] != "step:plugin-tree" || first.Providers[1] != "deploy:firecracker" {
+		t.Errorf("Providers = %v, want the two words the unit registered", first.Providers)
 	}
 
 	// A caller holds a COPY: mutating it cannot change what the next reader sees.
