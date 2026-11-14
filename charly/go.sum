@@ -217,6 +217,8 @@ github.com/opencharly/plugin-interface/candy/plugin-interface v0.2026272.230 h1:
 github.com/opencharly/plugin-interface/candy/plugin-interface v0.2026272.230/go.mod h1:Gh45n+kv6QGWH/whvaYieYy2jYvd+P51mn7Mn4pMjFc=
 github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026272.235 h1:ANsX36hd8w0qOAyYoJkEafQjzjBYDIGCuqI6H4P+0PI=
 github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026272.235/go.mod h1:axW6uZfW6tQkPNd03VkSuV+qva33ht4sh5W0TQgPlog=
+github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026318.330 h1:DINvEZtOJOvcae7drAkQQ/opoKc4Hh/ZAxNZVjuz4PM=
+github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026318.330/go.mod h1:axW6uZfW6tQkPNd03VkSuV+qva33ht4sh5W0TQgPlog=
 github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param v0.2026272.237 h1:8WgqPstytfIZ2oYdPaG1hCURasPqR+NZ1mIc4PPtJ28=
 github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param v0.2026272.237/go.mod h1:lmea0+cpHgXRKRCljyd9MiI1dR3ucMUPZQzEW1Ispr0=
 github.com/opencharly/plugin-loader/candy/plugin-loader v0.2026272.233 h1:L6kNm5iLpkXZ5GSm5BWMqhKqPzvfGaOJw1fABshhne0=

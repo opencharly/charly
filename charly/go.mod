@@ -42,7 +42,7 @@ require (
 	github.com/opencharly/plugin-init/candy/plugin-init v0.2026296.1
 	github.com/opencharly/plugin-installstep/candy/plugin-installstep v0.2026276.1353
 	github.com/opencharly/plugin-interface/candy/plugin-interface v0.2026272.230
-	github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026272.235
+	github.com/opencharly/plugin-k8sgen/candy/plugin-k8sgen v0.2026318.330
 	github.com/opencharly/plugin-kernel-param/candy/plugin-kernel-param v0.2026272.237
 	github.com/opencharly/plugin-loader/candy/plugin-loader v0.2026272.233
 	github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026272.230
