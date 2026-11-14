@@ -54,7 +54,7 @@ func loadedReadiness() poll.ResolvedReadiness {
 		readinessLoading.Store(true)
 		defer readinessLoading.Store(false)
 		var def *spec.ReadinessConfig
-		if uf, ok, err := LoadUnified("."); err == nil && ok && uf != nil {
+		if uf, ok, err := LoadUnified(readinessProjectDir()); err == nil && ok && uf != nil {
 			def = uf.Defaults.Readiness
 		}
 		rr, err := poll.ResolveReadiness(def)
@@ -65,6 +65,27 @@ func loadedReadiness() poll.ResolvedReadiness {
 		readinessCached = rr
 	})
 	return readinessCached
+}
+
+// readinessProjectDir names the project whose `defaults.readiness:` applies to THIS invocation.
+//
+// It is the invocation's own resolved project dir — projectDirPreParse's chain
+// (CHARLY_PROJECT_DIR, then -C/--dir, then --repo / CHARLY_PROJECT_REPO, then cwd), the SAME
+// resolution the pre-parse plugin prescan drives — and NOT the bare process cwd. The difference
+// matters because the readiness answer is a ONE-SHOT sync.Once whose FIRST caller can be earlier
+// than main's chdir into that dir: the pre-parse plugin prescan connects a plugin and invokes a
+// provider, and pluginInvokeNoProgress asks loadedReadiness for its own wait bound. A bare
+// LoadUnified(".") there read the caller's ORIGINAL directory, so the project's readiness load (and
+// the plugin connects that ride on it) never happened for the real project — measured on the
+// umbrella project driven through CHARLY_PROJECT_DIR from another directory.
+//
+// "" from the chain means every source was exhausted AND os.Getwd() failed; "." is then the honest
+// fallback (LoadUnified resolves a relative dir against the cwd, exactly as before).
+func readinessProjectDir() string {
+	if dir := projectDirPreParse(); dir != "" {
+		return dir
+	}
+	return "."
 }
 
 // readinessPluginEnv emits the host's RESOLVED readiness as CHARLY_READINESS_* env entries, for
