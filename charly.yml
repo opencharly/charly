@@ -3357,7 +3357,16 @@ agentteams:
             controller container's DNS name.
         candy:
             - '@github.com/opencharly/layer-supervisord:v2026.271.1817'
-            - '@github.com/opencharly/layer-agentteams:v2026.274.2144'
+            # ADVANCED off the pre-fix tag: layer-agentteams@v2026.274.2144's
+            # `box/cachyos-base` composes `distro-cachyos/candy/cachyos-base-check:v2026.274.2120`,
+            # a distro tag whose tree still carries `box/crabbox-e2e` pinning the DELETED
+            # `pod-crabbox:v2026.274.0652`. That chain aborts the marketplace corpus walk
+            # (opencharly/marketplace#613) and is filed as opencharly/charly#1156.
+            # v2026.319.1239 is the tag that fixed it (opencharly/layer-agentteams#25, whose
+            # per-box ADE ran green over the new cachyos-base-check ref).
+            # NOTE: plugin-herdr and pod-herdr vendor a COPY of this file
+            # (`charly/charly.yml`), so the same line is advanced there in their own PRs.
+            - '@github.com/opencharly/layer-agentteams:v2026.319.1239'
 agentteams-manager:
     candy:
         base: cachyos.cachyos
