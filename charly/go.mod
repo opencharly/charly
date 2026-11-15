@@ -62,13 +62,13 @@ require (
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026272.438
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026272.430
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026272.442
-	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026318.2125
+	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026319.1527
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026272.423
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424
 	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026319.925
-	github.com/opencharly/sdk v0.2026319.1126
+	github.com/opencharly/sdk v0.2026319.1356
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -92,63 +92,40 @@ require (
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/log v0.2.0 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.18.1 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/digitalocean/go-libvirt v0.0.0-20260217163227-273eaa321819 // indirect
 	github.com/docker/cli v29.0.3+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
 	github.com/expr-lang/expr v1.17.8 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
-	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/google/go-containerregistry v0.20.7 // indirect
 	github.com/google/renameio/v2 v2.0.2 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kata-containers/govmm v0.0.0-20220119175834-88960a15dacd // indirect
 	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ollama/ollama v0.40.5 // indirect
-	github.com/opencharly/plugin-example-structkind/candy/plugin-example-structkind v0.2026318.2237 // indirect
-	github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt v0.2026318.2126 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sirupsen/logrus v1.10.2 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tidwall/gjson v1.19.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
-	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
-	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apimachinery v0.37.0 // indirect
-	k8s.io/client-go v0.37.0 // indirect
-	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
-	k8s.io/utils v0.0.0-20260626114624-be93311217bd // indirect
 	libvirt.org/go/libvirtxml v1.12005.0 // indirect
-	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
-	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
-	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
 require (
@@ -164,7 +141,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347
-	github.com/opencharly/spec v0.2026319.1226
+	github.com/opencharly/spec v0.2026319.1619
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect

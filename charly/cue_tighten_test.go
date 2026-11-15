@@ -7,8 +7,12 @@ package main
 // against re-loosening. Each ACCEPT case guards against over-tightening.
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // validateKindBody validates a YAML body AS an entity of `kind` (the body is the
@@ -302,7 +306,33 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 			if tc.kind == "candy" {
 				err = requireProjectLoader().ValidateCandyManifestCUE("t.yml", []byte(tc.yaml), loaderThreaded(), requireLoaderParser())
 			} else {
-				err = validateKindBody(t, tc.kind, tc.yaml)
+				body := tc.yaml
+				if tc.kind == "vm" && !tc.reject {
+					// The load path FILLS the post-default scalars before validation, so an ACCEPT
+					// case models the FILLED body. The values are DERIVED from the real seam, not
+					// written here: ApplyCueDefaults must resolve the served vm def through the
+					// threaded gates, so a broken fill makes this fail instead of silently
+					// supplying literals. See TestKindGatesFillTheRealVmKind for the same call.
+					filled := spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", URL: "http://x"}}
+					if ferr := requireProjectLoader().ApplyCueDefaults("vm", &filled, loaderThreaded()); ferr != nil {
+						t.Fatalf("the load-path fill did not resolve the served vm def: %v", ferr)
+					}
+					var fill strings.Builder
+					for _, kv := range []struct {
+						key string
+						val string
+					}{
+						{"autostart", fmt.Sprintf("%t", filled.Autostart)},
+						{"backend", fmt.Sprintf("%q", filled.Backend)},
+						{"firmware", fmt.Sprintf("%q", filled.Firmware)},
+					} {
+						if !regexp.MustCompile(`(?m)^\s*` + kv.key + `\s*:`).MatchString(body) {
+							fill.WriteString(kv.key + ": " + kv.val + "\n")
+						}
+					}
+					body = fill.String() + body
+				}
+				err = validateKindBody(t, tc.kind, body)
 			}
 			if tc.reject && err == nil {
 				t.Errorf("expected CUE to REJECT %q, but it passed", tc.name)
