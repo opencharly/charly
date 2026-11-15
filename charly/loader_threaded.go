@@ -317,6 +317,9 @@ func loaderThreaded() spec.Threaded {
 			t.StructuralKinds[k] = true
 		}
 	}
+	// The DECLARED GATES: each recognized kind word's served CUE, so a loader-side fill resolves
+	// a plugin-owned body through the schema the SERVING plugin shipped (sdk 0.2026319.104).
+	t.KindGates = pluginSchemas.kindGates(t.Kinds)
 	for w, f := range snapshotPluginPrimaries() {
 		t.Primaries[w] = f
 	}
