@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/opencharly/spec/ops"
 	"github.com/opencharly/spec/spec"
 )
 
@@ -12,13 +13,19 @@ import (
 // and echoes a minimal spec.DeployNode, so a test can assert WHAT the host marshalled onto the
 // wire — the only way to prove the `Standalone.Body` arms ran.
 type captureSubstrateProv struct {
-	env spec.StructuralKindLoadEnv
+	env    spec.StructuralKindLoadEnv
+	rawEnv []string
 }
 
-func (p *captureSubstrateProv) Reserved() string     { return "pod" }
-func (p *captureSubstrateProv) Class() ProviderClass { return ClassDeployTarget }
+func (p *captureSubstrateProv) Reserved() string { return "pod" }
+
+// IsStructuralKind makes the double a STRUCTURAL carrier, which is the only kind for which the
+// host builds the members env at all — the arm this test exists to exercise.
+func (p *captureSubstrateProv) IsStructuralKind() bool { return true }
+func (p *captureSubstrateProv) Class() ProviderClass   { return ClassDeployTarget }
 
 func (p *captureSubstrateProv) Invoke(_ context.Context, op *Operation) (*Result, error) {
+	p.rawEnv = append(p.rawEnv, string(op.Env))
 	if err := json.Unmarshal(op.Env, &p.env); err != nil {
 		return nil, err
 	}
@@ -53,5 +60,85 @@ func TestFoldSubstrateKindMarshalsTheStandaloneBody(t *testing.T) {
 	}
 	if round.Image != "x" {
 		t.Fatalf("the body lost the authored image: %q", round.Image)
+	}
+}
+
+// captureCandyProv records the env a CANDY provider is handed, so a test can assert that a
+// candy-image / candy-layer node rides the wire as BYTES in Standalone.Body rather than as an
+// authored struct.
+type captureCandyProv struct {
+	env  spec.StructuralKindLoadEnv
+	keep bool
+}
+
+func (p *captureCandyProv) Reserved() string             { return "candy" }
+func (p *captureCandyProv) Class() ProviderClass         { return ClassKind }
+func (p *captureCandyProv) DeclaredKindInputDef() string { return "#CandyValue" }
+
+func (p *captureCandyProv) Invoke(_ context.Context, op *Operation) (*Result, error) {
+	if err := json.Unmarshal(op.Env, &p.env); err != nil {
+		return nil, err
+	}
+	if op.Op == ops.OpLoad {
+		b, _ := json.Marshal(spec.CandyModel{Name: "mybox"})
+		return &Result{JSON: b}, nil
+	}
+	return &Result{JSON: []byte("{}")}, nil
+}
+
+// TestFoldSubstrateKindCarriesMembersAsBytes pins the members half of the marshalling: a structural
+// kind's authored peer members ride the SAME opaque body as bytes — inside the deploy body's
+// `member` field — never as an authored Go struct on the wire. Measured on this head: the probe
+// env is `{"standalone":{"shape":"deploy","body":{"target":"pod","image":"x","member":[{"name":"peer",
+// "position":"deploy-level","node":{"target":"pod","image":"y"}}]}}}`.
+func TestFoldSubstrateKindCarriesMembersAsBytes(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
+	prov := &captureSubstrateProv{}
+	pn := singleParsedNode(t, "mypod:\n  pod:\n    image: x\n  peer:\n    pod:\n      image: y\n")
+	var acc spec.MaterializedProject
+	if err := foldSubstrateKind(prov, pn, &acc); err != nil {
+		t.Fatalf("fold substrate kind: %v", err)
+	}
+	if prov.env.Standalone == nil || len(prov.env.Standalone.Body) == 0 {
+		t.Fatal("no opaque body reached the plugin")
+	}
+	// The member must be INSIDE those bytes, and must survive a decode: that is what makes the
+	// body the complete carrier rather than a scalar echo.
+	var round struct {
+		Target string `json:"target"`
+		Member []struct {
+			Name string `json:"name"`
+			Node struct {
+				Image string `json:"image"`
+			} `json:"node"`
+		} `json:"member"`
+	}
+	if err := json.Unmarshal(prov.env.Standalone.Body, &round); err != nil {
+		t.Fatalf("the body is not a deploy node: %v", err)
+	}
+	if len(round.Member) != 1 || round.Member[0].Name != "peer" || round.Member[0].Node.Image != "y" {
+		t.Fatalf("the authored member did not ride the body as bytes: %s", prov.env.Standalone.Body)
+	}
+}
+
+// TestFoldCandyKindMarshalsTheStandaloneBody pins the candy marshalling arm: a `candy:` node
+// (box⊻layer) reaches its plugin as `Standalone{Shape:"candy-image"|"candy-layer", Body:<json>}`.
+// It fails if the arm stops marshalling the node into the opaque body.
+func TestFoldCandyKindMarshalsTheStandaloneBody(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
+	prov := &captureCandyProv{}
+	pn := singleParsedNode(t, "mybox:\n  candy:\n    base: fedora\n")
+	var acc spec.MaterializedProject
+	if err := foldCandyKind(prov, pn, &acc); err != nil {
+		t.Fatalf("fold candy kind: %v", err)
+	}
+	if prov.env.Standalone == nil {
+		t.Fatal("the host sent no Standalone envelope — the candy body did not ride the wire")
+	}
+	if prov.env.Standalone.Shape != "candy-image" && prov.env.Standalone.Shape != "candy-layer" {
+		t.Fatalf("shape = %q, want candy-image or candy-layer", prov.env.Standalone.Shape)
+	}
+	if len(prov.env.Standalone.Body) == 0 {
+		t.Fatal("the standalone body is empty — the candy node was not marshalled into it")
 	}
 }
