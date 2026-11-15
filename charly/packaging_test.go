@@ -93,8 +93,8 @@ func TestPackagingSectionWellFormed(t *testing.T) {
 
 // TestPackagingDeclaresTheContainerdEngineStack — the containerd engine stack
 // (the nerdctl CLI, CNI plugins, rootlesskit and buildkit) is a hard dependency
-// on the distros that HAVE a nerdctl package (archlinux + apk; cachyos/omarchy
-// inherit archlinux), and NOT on rpm/deb/ipk where no such package exists.
+// on the distros that HAVE a nerdctl package (archlinux + apk; cachyos inherits
+// archlinux), and NOT on rpm/deb/ipk where no such package exists.
 func TestPackagingDeclaresTheContainerdEngineStack(t *testing.T) {
 	pkg := loadPackaging(t)
 	stack := []string{"nerdctl", "cni-plugins", "rootlesskit", "buildkit"}

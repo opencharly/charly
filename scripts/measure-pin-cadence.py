@@ -68,7 +68,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
-TWINS = ["box/arch", "box/cachyos", "box/debian", "box/fedora", "box/ubuntu", "box/omarchy"]
+TWINS = ["box/arch", "box/cachyos", "box/debian", "box/fedora", "box/ubuntu"]
 
 
 def sh(cmd: str, cwd: str) -> str:
