@@ -142,3 +142,50 @@ func TestFoldCandyKindMarshalsTheStandaloneBody(t *testing.T) {
 		t.Fatal("the standalone body is empty — the candy node was not marshalled into it")
 	}
 }
+
+// structProbeProv is a ClassKind structural carrier; registered, it is what makes the host build
+// the members channel instead of a standalone body.
+type structProbeProv struct {
+	capMeta
+	env  spec.StructuralKindLoadEnv
+	seen bool
+}
+
+func (p *structProbeProv) Invoke(_ context.Context, op *Operation) (*Result, error) {
+	if err := json.Unmarshal(op.Env, &p.env); err != nil {
+		return nil, err
+	}
+	p.seen = true
+	b, _ := json.Marshal(spec.DeployNode{Target: "pod", Image: "x"})
+	return &Result{JSON: b}, nil
+}
+
+// TestRunPluginKindMarshalsEveryMemberAsBytes pins the members channel: a structural kind's
+// authored resource members reach the plugin as OPAQUE BYTES (`Env.Members[name]`), never as an
+// authored Go struct. It fails without the arm and, at run time, if the wire stops carrying bytes.
+func TestRunPluginKindMarshalsEveryMemberAsBytes(t *testing.T) {
+	t.Cleanup(snapshotProviderState())
+	if err := registerPluginUnitSchema("structprobe", PluginSchema{
+		CueSource: "\n#StructprobeValue: {}\n",
+		InputDefs: map[string]string{provKey(ClassKind, "structprobe"): "#StructprobeValue"},
+	}); err != nil {
+		t.Fatalf("register the structprobe unit: %v", err)
+	}
+	prov := &structProbeProv{capMeta: capMeta{class: ClassKind, word: "structprobe", structural: true, inputDef: "#StructprobeValue"}}
+	RegisterBuiltinProvider(prov)
+
+	pn := spec.ParsedNode{
+		Name: "probe", Disc: "structprobe",
+		Children: []*spec.ParsedNode{{Name: "peer", Disc: "pod", Body: spec.RawBody(`{"image":"y"}`)}},
+	}
+	var acc spec.MaterializedProject
+	if err := runPluginKind(prov, pn, &acc); err != nil {
+		t.Fatalf("run plugin kind: %v", err)
+	}
+	if !prov.seen {
+		t.Fatal("the provider was never invoked")
+	}
+	if len(prov.env.Members) != 1 || len(prov.env.Members["peer"]) == 0 {
+		t.Fatalf("the member did not ride the members channel as bytes: %v", prov.env.Members)
+	}
+}

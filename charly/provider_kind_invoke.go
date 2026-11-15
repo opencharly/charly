@@ -74,7 +74,14 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	// opencharly/spec#304 units 1 and 2 that is every substrate/candy kind, whose body
 	// still lives in the base. `pipeline` and `task` are the two that moved, and each
 	// routes through the InputDef its own provider declares.
-	if _, gated := kindValueDefPath(prov, pn.Disc); gated {
+	// A STRUCTURAL kind wins over the host-value-gated route: its authored value is a MEMBER TREE,
+	// which the gated path cannot carry (it folds one opaque body and rejects entity children —
+	// "is not structural" — for a provider that IS one). Asking the carrier the host already holds,
+	// before the gated route, is what makes a structural kind that also declares an InputDef
+	// decodable at all (opencharly/opencharly#1057).
+	if sc, ok := prov.(spec.StructuralKindCarrier); ok && sc.IsStructuralKind() {
+		// fall through to the structural path below
+	} else if _, gated := kindValueDefPath(prov, pn.Disc); gated {
 		return foldHostValueGatedKind(prov, pn, acc)
 	}
 	paramsJSON, err := requireProjectLoader().EntityBodyJSON(pn)
