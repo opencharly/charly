@@ -248,8 +248,12 @@ func loaderThreaded() spec.Threaded {
 			t.DeploySubstrates[p.Reserved()] = true
 		}
 	}
-	// KindGates: every kind word whose serving plugin DECLARED a gate, plus the plugin's own
-	// served source. The receiving process compiles base+source itself, so a body that moved into
+	// KindGates: every kind word whose serving plugin DECLARED a gate, plus the UNION of every
+	// plugin's served source — not each plugin's own text. The union is what makes a gate
+	// COMPILE standalone: a served schema cites `schema.#…` defs that other units declare, and
+	// the receiving process never sees the base, so the source it is handed must be the whole
+	// composed set. Def names are per-word (`#VmValue` for `vm`, `#CandyValue` for `candy`), so
+	// the union introduces no cross-plugin collision. The receiving process compiles base+source itself, so a body that moved into
 	// a plugin is reachable from a loader-side helper or a plugin over the reverse channel, with
 	// no registry query and no base fallback (PROGRAM/schema-ownership-rca-rdd.md §3 I2/I3/I4).
 	t.KindGates = map[string]spec.KindGate{}
