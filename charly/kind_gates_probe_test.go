@@ -66,3 +66,29 @@ func TestKindGatesDriveTheDefaultsFill(t *testing.T) {
 		t.Fatal("the fill resolved a plugin-owned kind WITHOUT the threaded gate — the test cannot fail")
 	}
 }
+
+// TestKindGatesFillTheRealVmKind is the R10/R7 gate on the REAL recognized kind: `vm` is served
+// by plugin-vm, so its authored def lives in the SERVED schema and is reachable only through
+// spec.Threaded.KindGates. The fill must therefore produce the served schema's own defaults for a
+// zero body, and must FAIL with an empty threaded value — the negative arm is what makes this test
+// impossible to pass if the gate stops serving the served schema.
+func TestKindGatesFillTheRealVmKind(t *testing.T) {
+	v := spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", URL: "http://x"}}
+	if err := requireProjectLoader().ApplyCueDefaults("vm", &v, loaderThreaded()); err != nil {
+		t.Fatalf("filling a real vm body through the threaded gates failed: %v", err)
+	}
+	if v.Firmware != "bios" {
+		t.Fatalf("firmware = %q, want the served default %q", v.Firmware, "bios")
+	}
+	if v.Backend != "auto" {
+		t.Fatalf("backend = %q, want the served default %q", v.Backend, "auto")
+	}
+	if v.Autostart {
+		t.Fatalf("autostart = true, want the served default false")
+	}
+	// The NEGATIVE arm: with no gates the vm def is unreachable from the base schema.
+	bare := spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", URL: "http://x"}}
+	if err := requireProjectLoader().ApplyCueDefaults("vm", &bare, spec.Threaded{}); err == nil {
+		t.Fatal("the vm def resolved WITHOUT the threaded gate — the test cannot fail")
+	}
+}

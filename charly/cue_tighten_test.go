@@ -7,9 +7,12 @@ package main
 // against re-loosening. Each ACCEPT case guards against over-tightening.
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/opencharly/spec/spec"
 )
 
 // validateKindBody validates a YAML body AS an entity of `kind` (the body is the
@@ -305,17 +308,24 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 			} else {
 				body := tc.yaml
 				if tc.kind == "vm" && !tc.reject {
-					// #Vm now REQUIRES autostart/backend/firmware with no default machinery
-					// (spec vm.cue:963); the load path fills them before validation, so an ACCEPT
-					// case models the FILLED body. REJECT cases are left untouched, so each still
-					// rejects for its OWN reason rather than for a missing required scalar.
+					// The load path FILLS the post-default scalars before validation, so an ACCEPT
+					// case models the FILLED body. The values are DERIVED from the real seam, not
+					// written here: ApplyCueDefaults must resolve the served vm def through the
+					// threaded gates, so a broken fill makes this fail instead of silently
+					// supplying literals. See TestKindGatesFillTheRealVmKind for the same call.
+					filled := spec.ResolvedVm{Source: spec.VmSource{Kind: "cloud_image", URL: "http://x"}}
+					if ferr := requireProjectLoader().ApplyCueDefaults("vm", &filled, loaderThreaded()); ferr != nil {
+						t.Fatalf("the load-path fill did not resolve the served vm def: %v", ferr)
+					}
 					var fill strings.Builder
-					for _, kv := range []struct{ key, val string }{
-						{"autostart", "false"}, {"backend", "auto"}, {"firmware", "bios"},
+					for _, kv := range []struct {
+						key string
+						val string
+					}{
+						{"autostart", fmt.Sprintf("%t", filled.Autostart)},
+						{"backend", fmt.Sprintf("%q", filled.Backend)},
+						{"firmware", fmt.Sprintf("%q", filled.Firmware)},
 					} {
-						// Key on the AUTHORED value however it is spelled (`backend: auto`,
-						// `backend:auto`) — a plain substring check missed the no-space form and
-						// then injected a conflicting default.
 						if !regexp.MustCompile(`(?m)^\s*` + kv.key + `\s*:`).MatchString(body) {
 							fill.WriteString(kv.key + ": " + kv.val + "\n")
 						}
