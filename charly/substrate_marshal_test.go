@@ -67,8 +67,7 @@ func TestFoldSubstrateKindMarshalsTheStandaloneBody(t *testing.T) {
 // candy-image / candy-layer node rides the wire as BYTES in Standalone.Body rather than as an
 // authored struct.
 type captureCandyProv struct {
-	env  spec.StructuralKindLoadEnv
-	keep bool
+	env spec.StructuralKindLoadEnv
 }
 
 func (p *captureCandyProv) Reserved() string             { return "candy" }
