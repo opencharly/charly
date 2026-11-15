@@ -145,9 +145,6 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 	if err != nil {
 		return fmt.Errorf("plugin %q: served schema defs: %w", name, err)
 	}
-	for _, d := range newDefs {
-		pluginSchemas.defSources[d] = s.CueSource
-	}
 	replay := pluginSchemas.srcSeen[s.CueSource]
 	// THE DEF-NAME COLLISION GATE (charly#770) — DECLARATION IDENTITY, never a value
 	// comparison. It runs BEFORE this unit's schema is committed and names BOTH plugins and
@@ -169,6 +166,12 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 					name, d, prev.name, d)
 			}
 		}
+	}
+	// The gate table is filled only AFTER the def-name collision gate has PASSED: a unit that
+	// fails that gate returns above, so it can never leave a def -> source mapping behind for
+	// kindGates() to serve as a kind's schema source.
+	for _, d := range newDefs {
+		pluginSchemas.defSources[d] = s.CueSource
 	}
 	merged := pluginSchemas.units
 	v := pluginSchemas.unified
