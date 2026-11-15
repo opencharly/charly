@@ -66,6 +66,11 @@ type pluginSchemaSet struct {
 	defOwners map[string]defDeclarer // top-level def name → the declaring unit
 	srcSeen   map[string]bool        // exact served-schema source strings already spliced
 	inputDefs map[string]string      // provKey → def
+	// defSources is def name → the served CUE source that declares it. It exists for the
+	// DECLARED GATE (spec.Threaded.KindGates): the loader resolves a kind's def through the gate
+	// the SERVING plugin shipped, so the pair (def, source) must survive the splice. defOwners
+	// carries def → unit identity; this carries def → source, which no other map holds.
+	defSources map[string]string
 }
 
 // defDeclarer is the unit that declared a top-level def: identity is the unit's
@@ -97,6 +102,7 @@ func unitSchemaIdentity(name string, s PluginSchema) string {
 }
 
 var pluginSchemas = &pluginSchemaSet{
+	defSources: map[string]string{},
 	inputDefs: map[string]string{},
 	defOwners: map[string]defDeclarer{},
 	srcSeen:   map[string]bool{},
@@ -138,6 +144,9 @@ func registerPluginUnitSchema(name string, s PluginSchema) error {
 	newDefs, err := topLevelDefNames(unit)
 	if err != nil {
 		return fmt.Errorf("plugin %q: served schema defs: %w", name, err)
+	}
+	for _, d := range newDefs {
+		pluginSchemas.defSources[d] = s.CueSource
 	}
 	replay := pluginSchemas.srcSeen[s.CueSource]
 	// THE DEF-NAME COLLISION GATE (charly#770) — DECLARATION IDENTITY, never a value
@@ -227,6 +236,27 @@ func topLevelDefNames(v cue.Value) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// kindGates snapshots each recognized kind word's DECLARED gate — the def name the served
+// schema declares for that word plus the source carrying it — as spec.Threaded.KindGates DATA.
+// The sdk's ApplyCueDefaults resolves a kind's def through the gate FIRST (a body that moved
+// into a plugin is reachable only that way); a word with no matching served def has no gate and
+// keeps the base-schema resolution. The def convention is `#` + the word (case-insensitive:
+// `#Vm` for `vm`), which is what the served plugin schemas use.
+func (s *pluginSchemaSet) kindGates(words map[string]bool) map[string]spec.KindGate {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]spec.KindGate, len(words))
+	for w := range words {
+		for d, src := range s.defSources {
+			if strings.EqualFold(strings.TrimPrefix(d, "#"), w) {
+				out[w] = spec.KindGate{Def: d, Source: src}
+				break
+			}
+		}
+	}
+	return out
 }
 
 // validateAuthoredPluginInput is THE only plugin_input validator — schema-source

@@ -121,9 +121,13 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 		// The #StructuralKindLoadEnv wire contract is CUE-frozen at the map form; the host IR is
 		// the ONE ordered member list — convert at the marshal seam only (the wire JSON is
 		// identical: encoding/json sorts map keys, exactly as the former map value marshaled).
-		envMembers := make(map[string]*spec.Deploy, len(members))
+		envMembers := make(map[string]spec.RawBody, len(members))
 		for _, m := range members {
-			envMembers[m.Name] = m.Node
+			body, berr := json.Marshal(m.Node)
+			if berr != nil {
+				return fmt.Errorf("node %q: marshal member body: %w", pn.Name, berr)
+			}
+			envMembers[m.Name] = spec.RawBody(body)
 		}
 		envJSON, err = json.Marshal(spec.StructuralKindLoadEnv{Members: envMembers})
 		if err != nil {
@@ -264,13 +268,17 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 		if err != nil {
 			return fmt.Errorf("node %q: decode deploy: %w", pn.Name, err)
 		}
-		env.Standalone = &spec.StandaloneLoad{Shape: "deploy", Deploy: bn}
+		body, berr := json.Marshal(bn)
+		if berr != nil {
+			return fmt.Errorf("node %q: marshal standalone body: %w", pn.Name, berr)
+		}
+		env.Standalone = &spec.StandaloneLoad{Shape: "deploy", Body: spec.RawBody(body)}
 	} else {
 		tmpl, err := pl.DecodeStandaloneTemplateJSON(pn, t)
 		if err != nil {
 			return fmt.Errorf("node %q: decode template: %w", pn.Name, err)
 		}
-		env.Standalone = &spec.StandaloneLoad{Shape: "template", Template: tmpl}
+		env.Standalone = &spec.StandaloneLoad{Shape: "template", Body: spec.RawBody(tmpl)}
 	}
 	envJSON, err := json.Marshal(env)
 	if err != nil {
@@ -321,13 +329,21 @@ func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 		if err := pl.DecodeNodeValue(pn, &b); err != nil {
 			return fmt.Errorf("node %q: decode image: %w", pn.Name, err)
 		}
-		env.Standalone = &spec.StandaloneLoad{Shape: "candy-image", Box: &b}
+		bbody, berr := json.Marshal(&b)
+		if berr != nil {
+			return fmt.Errorf("node %q: marshal image body: %w", pn.Name, berr)
+		}
+		env.Standalone = &spec.StandaloneLoad{Shape: "candy-image", Body: spec.RawBody(bbody)}
 	} else {
 		_, ic, berr := pl.BuildCandy(pn)
 		if berr != nil {
 			return fmt.Errorf("node %q: decode layer: %w", pn.Name, berr)
 		}
-		env.Standalone = &spec.StandaloneLoad{Shape: "candy-layer", Candy: &ic.CandyYAML}
+		cbody, cerr := json.Marshal(&ic.CandyYAML)
+		if cerr != nil {
+			return fmt.Errorf("node %q: marshal layer body: %w", pn.Name, cerr)
+		}
+		env.Standalone = &spec.StandaloneLoad{Shape: "candy-layer", Body: spec.RawBody(cbody)}
 	}
 	envJSON, err := json.Marshal(env)
 	if err != nil {

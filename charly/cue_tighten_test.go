@@ -302,7 +302,23 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 			if tc.kind == "candy" {
 				err = requireProjectLoader().ValidateCandyManifestCUE("t.yml", []byte(tc.yaml), loaderThreaded(), requireLoaderParser())
 			} else {
-				err = validateKindBody(t, tc.kind, tc.yaml)
+				body := tc.yaml
+				if tc.kind == "vm" && !tc.reject {
+					// #Vm now REQUIRES autostart/backend/firmware with no default machinery
+					// (spec vm.cue:963); the load path fills them before validation, so an ACCEPT
+					// case models the FILLED body. REJECT cases are left untouched, so each still
+					// rejects for its OWN reason rather than for a missing required scalar.
+					var fill strings.Builder
+					for _, kv := range []struct{ key, val string }{
+						{"autostart", "false"}, {"backend", "qemu"}, {"firmware", "bios"},
+					} {
+						if !strings.Contains(body, kv.key+":") {
+							fill.WriteString(kv.key + ": " + kv.val + "\n")
+						}
+					}
+					body = fill.String() + body
+				}
+				err = validateKindBody(t, tc.kind, body)
 			}
 			if tc.reject && err == nil {
 				t.Errorf("expected CUE to REJECT %q, but it passed", tc.name)
