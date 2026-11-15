@@ -26,7 +26,7 @@ func validateKindBody(t *testing.T, kind, yamlBody string) error {
 	if err != nil {
 		return err
 	}
-	return requireProjectLoader().ValidateEntityCUE(kind, "t.yml:"+kind, doc)
+	return requireProjectLoader().ValidateEntityCUEWithGates(kind, "t.yml:"+kind, doc, loaderThreaded().KindGates)
 }
 
 func TestCueTightening_RejectsAndAccepts(t *testing.T) {
