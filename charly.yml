@@ -3357,7 +3357,20 @@ agentteams:
             controller container's DNS name.
         candy:
             - '@github.com/opencharly/layer-supervisord:v2026.271.1817'
-            - '@github.com/opencharly/layer-agentteams:v2026.274.2144'
+            # ADVANCED off the pre-fix tag: layer-agentteams@v2026.274.2144's
+            # `box/cachyos-base` composes `distro-cachyos/candy/cachyos-base-check:v2026.274.2120`,
+            # a distro tag whose tree still carries `box/crabbox-e2e` pinning the DELETED
+            # `pod-crabbox:v2026.274.0652`. That chain ABORTED the marketplace corpus walk
+            # (opencharly/marketplace#613, closed by the corpus landing opencharly/marketplace#616);
+            # what remains live today is the skip-and-warn it forced, so a generation now completes
+            # with one counted skip instead of dying. The carriers still producing that skip are
+            # filed as opencharly/charly#1156, and this ref is one of them.
+            # v2026.319.1239 is the tag that fixed it (opencharly/layer-agentteams#25, whose
+            # per-box ADE ran green over the new cachyos-base-check ref).
+            # NOTE: plugin-herdr and pod-herdr pin THIS repo as a submodule (their `charly`
+            # gitlink, currently an older commit), so this line reaches them only when that
+            # gitlink advances. There is no second copy of it to edit.
+            - '@github.com/opencharly/layer-agentteams:v2026.319.1239'
 agentteams-manager:
     candy:
         base: cachyos.cachyos
