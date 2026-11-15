@@ -251,7 +251,15 @@ func (s *pluginSchemaSet) kindGates(words map[string]bool) map[string]spec.KindG
 	for w := range words {
 		for d, src := range s.defSources {
 			if strings.EqualFold(strings.TrimPrefix(d, "#"), w) {
-				out[w] = spec.KindGate{Def: d, Source: src}
+				g := spec.KindGate{Def: d, Source: src}
+				// The WIRE twin, when the unit declares one: `#<Word>Value` is the def the
+				// plugin's WIRE value takes where it differs from the authored body (vm is the
+				// live instance — #Vm authored, #VmValue wire).
+				wire := "#" + strings.ToUpper(w[:1]) + w[1:] + "Value"
+				if _, ok := s.defSources[wire]; ok {
+					g.WireDef = wire
+				}
+				out[w] = g
 				break
 			}
 		}

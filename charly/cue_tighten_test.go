@@ -7,6 +7,7 @@ package main
 // against re-loosening. Each ACCEPT case guards against over-tightening.
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -310,9 +311,12 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 					// rejects for its OWN reason rather than for a missing required scalar.
 					var fill strings.Builder
 					for _, kv := range []struct{ key, val string }{
-						{"autostart", "false"}, {"backend", "qemu"}, {"firmware", "bios"},
+						{"autostart", "false"}, {"backend", "auto"}, {"firmware", "bios"},
 					} {
-						if !strings.Contains(body, kv.key+":") {
+						// Key on the AUTHORED value however it is spelled (`backend: auto`,
+						// `backend:auto`) — a plain substring check missed the no-space form and
+						// then injected a conflicting default.
+						if !regexp.MustCompile(`(?m)^\s*` + kv.key + `\s*:`).MatchString(body) {
 							fill.WriteString(kv.key + ": " + kv.val + "\n")
 						}
 					}
