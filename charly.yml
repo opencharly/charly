@@ -3364,8 +3364,9 @@ agentteams:
             # (opencharly/marketplace#613) and is filed as opencharly/charly#1156.
             # v2026.319.1239 is the tag that fixed it (opencharly/layer-agentteams#25, whose
             # per-box ADE ran green over the new cachyos-base-check ref).
-            # NOTE: plugin-herdr and pod-herdr vendor a COPY of this file
-            # (`charly/charly.yml`), so the same line is advanced there in their own PRs.
+            # NOTE: plugin-herdr and pod-herdr pin THIS repo as a submodule (their `charly`
+            # gitlink, currently an older commit), so this line reaches them only when that
+            # gitlink advances. There is no second copy of it to edit.
             - '@github.com/opencharly/layer-agentteams:v2026.319.1239'
 agentteams-manager:
     candy:
