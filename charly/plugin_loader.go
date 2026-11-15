@@ -103,9 +103,9 @@ func unitSchemaIdentity(name string, s PluginSchema) string {
 
 var pluginSchemas = &pluginSchemaSet{
 	defSources: map[string]string{},
-	inputDefs: map[string]string{},
-	defOwners: map[string]defDeclarer{},
-	srcSeen:   map[string]bool{},
+	inputDefs:  map[string]string{},
+	defOwners:  map[string]defDeclarer{},
+	srcSeen:    map[string]bool{},
 }
 
 // registerPluginUnitSchema is THE plugin schema load gate — byte-identical for a
