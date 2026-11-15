@@ -18,7 +18,16 @@ import:
     # imports main back (they reach main's shared candies via @github refs), so the
     # former main↔cachyos / main↔fedora mutual cycles are dissolved.
     - arch: '@github.com/opencharly/distro-arch:v2026.274.1256'
-    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.281.1001'
+    # cachyos is a FLOOR, not a ceiling: never pin it below v2026.281.1001 (that was the
+    # tag that dropped the retired `pod-openclaw` pins from the CachyOS refs list), but
+    # v2026.281.1001 itself carries a DEAD ref — its `box/crabbox-e2e/charly.yml` pins
+    # `pod-crabbox:v2026.274.0652`, a tag that no longer exists in that repo. This file's
+    # closure is resolved by anything that pins THIS repo, so the dead ref aborted the
+    # marketplace corpus regeneration org-wide (opencharly/marketplace#613: every
+    # `charly marketplace generate` and the daily refresh, 2026-11-10..14).
+    # v2026.318.1213's `box/crabbox-e2e` composes `pod-crabbox-coordinator:v2026.293.1003`
+    # instead (the distro-cachyos 2026.293.1743 fix), so the closure resolves.
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.318.1213'
     - debian: '@github.com/opencharly/distro-debian:v2026.274.0746'
     - fedora: '@github.com/opencharly/distro-fedora:v2026.281.1250'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.274.0752'
