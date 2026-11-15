@@ -74,7 +74,14 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 	// opencharly/spec#304 units 1 and 2 that is every substrate/candy kind, whose body
 	// still lives in the base. `pipeline` and `task` are the two that moved, and each
 	// routes through the InputDef its own provider declares.
-	if _, gated := kindValueDefPath(prov, pn.Disc); gated {
+	// A STRUCTURAL kind wins over the host-value-gated route: its authored value is a MEMBER TREE,
+	// which the gated path cannot carry (it folds one opaque body and rejects entity children —
+	// "is not structural" — for a provider that IS one). Asking the carrier the host already holds,
+	// before the gated route, is what makes a structural kind that also declares an InputDef
+	// decodable at all (opencharly/opencharly#1057).
+	if sc, ok := prov.(spec.StructuralKindCarrier); ok && sc.IsStructuralKind() {
+		// fall through to the structural path below
+	} else if _, gated := kindValueDefPath(prov, pn.Disc); gated {
 		return foldHostValueGatedKind(prov, pn, acc)
 	}
 	paramsJSON, err := requireProjectLoader().EntityBodyJSON(pn)
@@ -121,9 +128,15 @@ func runPluginKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 		// The #StructuralKindLoadEnv wire contract is CUE-frozen at the map form; the host IR is
 		// the ONE ordered member list — convert at the marshal seam only (the wire JSON is
 		// identical: encoding/json sorts map keys, exactly as the former map value marshaled).
-		envMembers := make(map[string]*spec.Deploy, len(members))
+		// The wire carries every member as OPAQUE BYTES (D-SCH-7): the host marshals each
+		// canonical node once, at the same seam, so the plugin decodes what it needs.
+		envMembers := make(map[string]spec.RawBody, len(members))
 		for _, m := range members {
-			envMembers[m.Name] = m.Node
+			nodeJSON, jerr := json.Marshal(m.Node)
+			if jerr != nil {
+				return fmt.Errorf("node %q: marshal member %q: %w", pn.Name, m.Name, jerr)
+			}
+			envMembers[m.Name] = nodeJSON
 		}
 		envJSON, err = json.Marshal(spec.StructuralKindLoadEnv{Members: envMembers})
 		if err != nil {
@@ -264,13 +277,17 @@ func foldSubstrateKind(prov Provider, pn spec.ParsedNode, acc *spec.Materialized
 		if err != nil {
 			return fmt.Errorf("node %q: decode deploy: %w", pn.Name, err)
 		}
-		env.Standalone = &spec.StandaloneLoad{Shape: "deploy", Deploy: bn}
+		bnJSON, jerr := json.Marshal(bn)
+		if jerr != nil {
+			return fmt.Errorf("node %q: marshal deploy node: %w", pn.Name, jerr)
+		}
+		env.Standalone = &spec.StandaloneLoad{Shape: "deploy", Body: bnJSON}
 	} else {
 		tmpl, err := pl.DecodeStandaloneTemplateJSON(pn, t)
 		if err != nil {
 			return fmt.Errorf("node %q: decode template: %w", pn.Name, err)
 		}
-		env.Standalone = &spec.StandaloneLoad{Shape: "template", Template: tmpl}
+		env.Standalone = &spec.StandaloneLoad{Shape: "template", Body: tmpl}
 	}
 	envJSON, err := json.Marshal(env)
 	if err != nil {
@@ -321,13 +338,21 @@ func foldCandyKind(prov Provider, pn spec.ParsedNode, acc *spec.MaterializedProj
 		if err := pl.DecodeNodeValue(pn, &b); err != nil {
 			return fmt.Errorf("node %q: decode image: %w", pn.Name, err)
 		}
-		env.Standalone = &spec.StandaloneLoad{Shape: "candy-image", Box: &b}
+		bJSON, jerr := json.Marshal(&b)
+		if jerr != nil {
+			return fmt.Errorf("node %q: marshal image: %w", pn.Name, jerr)
+		}
+		env.Standalone = &spec.StandaloneLoad{Shape: "candy-image", Body: bJSON}
 	} else {
 		_, ic, berr := pl.BuildCandy(pn)
 		if berr != nil {
 			return fmt.Errorf("node %q: decode layer: %w", pn.Name, berr)
 		}
-		env.Standalone = &spec.StandaloneLoad{Shape: "candy-layer", Candy: &ic.CandyYAML}
+		cJSON, jerr := json.Marshal(&ic.CandyYAML)
+		if jerr != nil {
+			return fmt.Errorf("node %q: marshal layer: %w", pn.Name, jerr)
+		}
+		env.Standalone = &spec.StandaloneLoad{Shape: "candy-layer", Body: cJSON}
 	}
 	envJSON, err := json.Marshal(env)
 	if err != nil {
