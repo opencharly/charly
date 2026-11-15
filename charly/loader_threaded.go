@@ -167,10 +167,12 @@ func hostWalkSeams() spec.WalkSeams {
 // members, and each plugin verb's scalar-sugar primary field. Computed fresh per parse pass:
 // connectDeclaredKindPlugins runs before the document parse, so the registry is stable within a
 // pass, and the re-entrant connect-then-reload re-snapshots.
-// authoredDefName renders a kind word as its authored definition name: `vm` -> `Vm`,
-// `kubevirt` -> `Kubevirt`, `firecracker` -> `Firecracker`. This is the schema's OWN naming rule
-// (the moved bodies are `#Vm`, `#Pod`, `#Kubernetes`), so the fill follows the declaration rather
-// than inventing a second convention.
+// authoredDefName renders a kind word as the name of its AUTHORED twin, when the schema declares
+// one: `vm` -> `Vm`, so a served source carrying `#VmValue` usually carries `#Vm` beside it. The
+// convention is applied ONLY as a probe — the fill uses the authored def only when the source
+// actually declares `#<Name>:` — so a kind with no twin keeps the def its capability DECLARED
+// (`kubevirt` serves `#KubeVirtInput`, which is both its input and its only body def; there is no
+// `#Kubevirt` and none is invented here).
 func authoredDefName(word string) string {
 	if word == "" {
 		return ""
