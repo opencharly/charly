@@ -275,11 +275,16 @@ func loaderThreaded() spec.Threaded {
 		// `#Vm`, declared in the same served source. Resolving the union refuses authored
 		// fixtures for a field the OTHER arm requires (opencharly/opencharly#1048), so the
 		// authored def wins when the schema declares it under the schema's own naming rule.
+		// The two shapes travel APART (spec#328): Def is the authored body the host validates
+		// and fills, WireDef is the value the plugin's `InputDef` names. The schema's own naming
+		// gives the authored twin (`#Vm` beside `#VmValue`), so the fill follows the declaration
+		// rather than resolving a wire union against an authored document.
 		authored := "#" + authoredDefName(parts[1])
+		gate := spec.KindGate{Def: def, Source: joined}
 		if authored != def && strings.Contains(joined, authored+":") {
-			def = authored
+			gate.Def, gate.WireDef = authored, def
 		}
-		t.KindGates[parts[1]] = spec.KindGate{Def: def, Source: joined}
+		t.KindGates[parts[1]] = gate
 	}
 	pluginSchemas.mu.Unlock()
 	// Parse-time pre-scan declarations (a project plugin's kind/substrate word recognized before
