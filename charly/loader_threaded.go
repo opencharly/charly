@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
+	"strings"
 
 	"cuelang.org/go/cue"
 	"github.com/opencharly/spec/spec"
@@ -165,6 +167,55 @@ func hostWalkSeams() spec.WalkSeams {
 // members, and each plugin verb's scalar-sugar primary field. Computed fresh per parse pass:
 // connectDeclaredKindPlugins runs before the document parse, so the registry is stable within a
 // pass, and the re-entrant connect-then-reload re-snapshots.
+// joinCueSources turns N complete CUE files into ONE compilable file: a single package clause,
+// the union of their imports, and their bodies. A gate's Source is compiled on its own (the
+// receiving process never sees the base), so a join that kept each file's package clause produced
+// invalid CUE and every gate failed to compile.
+func joinCueSources(files []string) string {
+	pkg := ""
+	imports := map[string]bool{}
+	bodies := make([]string, 0, len(files))
+	for _, f := range files {
+		var body []string
+		inImportBlock := false
+		for _, line := range strings.Split(f, "\n") {
+			trimmed := strings.TrimSpace(line)
+			switch {
+			case strings.HasPrefix(trimmed, "package "):
+				if pkg == "" {
+					pkg = trimmed
+				}
+				continue
+			case strings.HasPrefix(trimmed, "import \""):
+				imports[trimmed] = true
+				continue
+			case trimmed == "import (":
+				inImportBlock = true
+				continue
+			case inImportBlock && trimmed == ")":
+				inImportBlock = false
+				continue
+			case inImportBlock:
+				if trimmed != "" {
+					imports["import "+trimmed] = true
+				}
+				continue
+			}
+			body = append(body, line)
+		}
+		bodies = append(bodies, strings.Join(body, "\n"))
+	}
+	if pkg == "" {
+		pkg = "package schema"
+	}
+	names := make([]string, 0, len(imports))
+	for im := range imports {
+		names = append(names, im)
+	}
+	sort.Strings(names)
+	return pkg + "\n" + strings.Join(names, "\n") + "\n" + strings.Join(bodies, "\n")
+}
+
 func loaderThreaded() spec.Threaded {
 	t := spec.Threaded{
 		Kinds:                    map[string]bool{},
@@ -184,6 +235,33 @@ func loaderThreaded() spec.Threaded {
 			t.DeploySubstrates[p.Reserved()] = true
 		}
 	}
+	// KindGates: every kind word whose serving plugin DECLARED a gate, plus the plugin's own
+	// served source. The receiving process compiles base+source itself, so a body that moved into
+	// a plugin is reachable from a loader-side helper or a plugin over the reverse channel, with
+	// no registry query and no base fallback (PROGRAM/schema-ownership-rca-rdd.md §3 I2/I3/I4).
+	t.KindGates = map[string]spec.KindGate{}
+	pluginSchemas.mu.Lock()
+	src := make([]string, 0, len(pluginSchemas.srcSeen))
+	for s := range pluginSchemas.srcSeen {
+		src = append(src, s)
+	}
+	sort.Strings(src)
+	// The served sources are FULL CUE files: each carries its own package clause and imports.
+	// Joining them verbatim produces invalid CUE (`package` twice, imports mid-stream), and the
+	// gate then fails to compile — so the join hoists ONE package clause and the union of the
+	// imports, and concatenates the bodies. That is the only form kindDefFor can compile alone.
+	joined := joinCueSources(src)
+	for key, def := range pluginSchemas.inputDefs {
+		// The registry key is `class:word` (providerKey), NOT `class/word`: splitting on the
+		// wrong separator left every gate map EMPTY, and the fill silently fell back to the
+		// envelope — the defect that kept the vm defaults unresolvable.
+		parts := strings.SplitN(key, ":", 2)
+		if len(parts) != 2 || ProviderClass(parts[0]) != ClassKind {
+			continue
+		}
+		t.KindGates[parts[1]] = spec.KindGate{Def: def, Source: joined}
+	}
+	pluginSchemas.mu.Unlock()
 	// Parse-time pre-scan declarations (a project plugin's kind/substrate word recognized before
 	// its out-of-process provider connects — recognizedDeploySubstrate; the kind-word analogue is
 	// this same declaredKind loop below, now consumed as the spec.Threaded.Kinds DATA snapshot

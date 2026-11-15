@@ -70,7 +70,7 @@ func defaultedFidelitySpec(t *testing.T) *spec.VmSpec {
 	if spec.Firmware != "" {
 		t.Fatalf("fixture should leave firmware unset, got %q", spec.Firmware)
 	}
-	if err := requireProjectLoader().ApplyCueDefaults("vm", &spec); err != nil {
+	if err := requireProjectLoader().ApplyCueDefaults("vm", &spec, loaderThreaded()); err != nil {
 		t.Fatalf("applyCueDefaults: %v", err)
 	}
 	return &spec
@@ -168,7 +168,7 @@ func TestApplyCueDefaults_VmPreservesSetFirmware(t *testing.T) {
 	if err := decodeViaCUEForTest(t, "firmware: uefi-insecure\nsource:\n  kind: cloud_image\n  url: https://x/i.qcow2\n", &spec); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if err := requireProjectLoader().ApplyCueDefaults("vm", &spec); err != nil {
+	if err := requireProjectLoader().ApplyCueDefaults("vm", &spec, loaderThreaded()); err != nil {
 		t.Fatalf("applyCueDefaults: %v", err)
 	}
 	if spec.Firmware != "uefi-insecure" {
