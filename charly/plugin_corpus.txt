@@ -79,7 +79,6 @@ github.com/opencharly/plugin-mise
 github.com/opencharly/plugin-mount
 github.com/opencharly/plugin-oci
 github.com/opencharly/plugin-ollama
-github.com/opencharly/plugin-omarchy
 github.com/opencharly/plugin-openclaw
 github.com/opencharly/plugin-package
 github.com/opencharly/plugin-pipeline

@@ -18,7 +18,3 @@
 	path = box/ubuntu
 	url = https://github.com/opencharly/distro-ubuntu.git
 	branch = main
-[submodule "box/omarchy"]
-	path = box/omarchy
-	url = https://github.com/opencharly/distro-omarchy.git
-	branch = main
