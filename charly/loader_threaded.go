@@ -167,6 +167,17 @@ func hostWalkSeams() spec.WalkSeams {
 // members, and each plugin verb's scalar-sugar primary field. Computed fresh per parse pass:
 // connectDeclaredKindPlugins runs before the document parse, so the registry is stable within a
 // pass, and the re-entrant connect-then-reload re-snapshots.
+// authoredDefName renders a kind word as its authored definition name: `vm` -> `Vm`,
+// `kubevirt` -> `Kubevirt`, `firecracker` -> `Firecracker`. This is the schema's OWN naming rule
+// (the moved bodies are `#Vm`, `#Pod`, `#Kubernetes`), so the fill follows the declaration rather
+// than inventing a second convention.
+func authoredDefName(word string) string {
+	if word == "" {
+		return ""
+	}
+	return strings.ToUpper(word[:1]) + word[1:]
+}
+
 // joinCueSources turns N complete CUE files into ONE compilable file: a single package clause,
 // the union of their imports, and their bodies. A gate's Source is compiled on its own (the
 // receiving process never sees the base), so a join that kept each file's package clause produced
@@ -258,6 +269,15 @@ func loaderThreaded() spec.Threaded {
 		parts := strings.SplitN(key, ":", 2)
 		if len(parts) != 2 || ProviderClass(parts[0]) != ClassKind {
 			continue
+		}
+		// The gate resolves the AUTHORED body, not the wire value. A plugin declares its wire
+		// input (`#VmValue`, a union with the deploy-value shape); the body an author writes is
+		// `#Vm`, declared in the same served source. Resolving the union refuses authored
+		// fixtures for a field the OTHER arm requires (opencharly/opencharly#1048), so the
+		// authored def wins when the schema declares it under the schema's own naming rule.
+		authored := "#" + authoredDefName(parts[1])
+		if authored != def && strings.Contains(joined, authored+":") {
+			def = authored
 		}
 		t.KindGates[parts[1]] = spec.KindGate{Def: def, Source: joined}
 	}
