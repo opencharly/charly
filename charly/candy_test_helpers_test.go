@@ -87,11 +87,15 @@ func decodeRawPtr[T any](raw spec.RawBody) *T {
 func (a *testCandyReader) RelayPorts() []int { return a.m.PortRelayPorts }
 func (a *testCandyReader) RunOps() []spec.Op { return a.m.RunOps }
 func (a *testCandyReader) HasTasks() bool    { return len(a.m.RunOps) > 0 }
-func (a *testCandyReader) HasExtract() bool  { return len(a.m.Extract) > 0 }
+func (a *testCandyReader) HasExtract() bool {
+	return len(decodeRawSlice[spec.CandyExtract](a.m.Extract)) > 0
+}
 func (a *testCandyReader) Extract() []spec.CandyExtract {
 	return decodeRawSlice[spec.CandyExtract](a.m.Extract)
 }
-func (a *testCandyReader) HasData() bool          { return len(a.m.Data) > 0 }
+func (a *testCandyReader) HasData() bool {
+	return len(decodeRawSlice[spec.CandyData](a.m.Data)) > 0
+}
 func (a *testCandyReader) Data() []spec.CandyData { return decodeRawSlice[spec.CandyData](a.m.Data) }
 
 func (a *testCandyReader) Packaging() *spec.Packaging { return a.m.Packaging }
@@ -182,14 +186,20 @@ func (a *testCandyReader) MCPAccept() []spec.EnvDependency     { return a.m.MCPA
 func (a *testCandyReader) Alias() []spec.ResolvedCandyAlias {
 	return decodeRawSlice[spec.ResolvedCandyAlias](a.v.Aliases)
 }
-func (a *testCandyReader) HasAliases() bool { return len(a.v.Aliases) > 0 }
+func (a *testCandyReader) HasAliases() bool {
+	return len(decodeRawSlice[spec.ResolvedCandyAlias](a.v.Aliases)) > 0
+}
 func (a *testCandyReader) Volume() []spec.ResolvedCandyVolume {
 	return decodeRawSlice[spec.ResolvedCandyVolume](a.v.Volumes)
 }
-func (a *testCandyReader) HasVolumes() bool                    { return len(a.v.Volumes) > 0 }
-func (a *testCandyReader) EnvProvides() map[string]string      { return a.v.EnvProvides }
-func (a *testCandyReader) MCPProvide() []spec.CandyMCPProvide  { return a.v.MCPProvide }
-func (a *testCandyReader) Artifact() []spec.CandyArtifact { return decodeRawSlice[spec.CandyArtifact](a.m.Artifact) }
+func (a *testCandyReader) HasVolumes() bool {
+	return len(decodeRawSlice[spec.ResolvedCandyVolume](a.v.Volumes)) > 0
+}
+func (a *testCandyReader) EnvProvides() map[string]string     { return a.v.EnvProvides }
+func (a *testCandyReader) MCPProvide() []spec.CandyMCPProvide { return a.v.MCPProvide }
+func (a *testCandyReader) Artifact() []spec.CandyArtifact {
+	return decodeRawSlice[spec.CandyArtifact](a.m.Artifact)
+}
 func (a *testCandyReader) Capabilities() *spec.CandyCapability { return a.m.Capability }
 func (a *testCandyReader) RequiresCapabilities() []string      { return a.m.RequiresCapability }
 func (a *testCandyReader) Engine() string                      { return a.m.Engine }
