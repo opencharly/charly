@@ -441,6 +441,23 @@ func TestPacInstallUpgradeSemantics(t *testing.T) {
 	if !strings.Contains(fd.LocalPkg.InstallTemplate, "pacman -U --noconfirm") {
 		t.Errorf("pac local_pkg install must use `pacman -U`. got:\n%s", fd.LocalPkg.InstallTemplate)
 	}
+
+	// NO comment line may survive inside the rendered shell body. The body is
+	// `&& \`-continued, so a `#` line swallows the rest of the LOGICAL line and the
+	// command arrives truncated — the RUN then fails with no stderr reaching the build
+	// log (measured: "pacman-key --init && # Reseed pacman keyring ..." never reached
+	// pacman, and every box built on that base failed while reporting nothing).
+	for _, body := range []struct{ name, text string }{
+		{"install", tmpl},
+		{"local_pkg.install", fd.LocalPkg.InstallTemplate},
+	} {
+		for _, line := range strings.Split(body.text, "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "#") {
+				t.Errorf("%s template emits a comment line into the shell body, which truncates a "+
+					"`&& \\`-continued command: %q", body.name, strings.TrimSpace(line))
+			}
+		}
+	}
 }
 
 // TestPacstrapBuilderTemplateFieldsExist proves every `.Distro.Pacstrap.X` interpolated

@@ -585,6 +585,15 @@ arch:
                         # deterministic keyserver-free mechanism every other format uses.
                         # A bare fingerprint (hex) falls back to pacman-key --recv-keys.
                         #
+                        # The keyring is reseeded from the locally-installed keyring packages
+                        # (cachyos-keyring, archlinux-keyring) BEFORE the transaction: `--populate`
+                        # is local-only and sub-second, does no keyserver roundtrip, and is non-fatal
+                        # (`|| true`) so an air-gapped build whose keyring is already current succeeds.
+                        #
+                        # Kept OUT of the `|` block below on purpose: the body is `&& \`-continued,
+                        # and a `#` line inside a continued shell command swallows the rest of the
+                        # logical line, so the chain arrives incomplete and the step dies with no
+                        # diagnostic (measured: pacman-key --init && <comment> never reaches pacman).
                         install: |
                             pacman-key --init && \
                             {{- range .Keys}}
@@ -604,12 +613,6 @@ arch:
                             {{- end}}
                             {{- end}}
                             {{- end}}
-                            # Reseed pacman keyring from the locally-installed
-                            # keyring packages (cachyos-keyring, archlinux-keyring).
-                            # `--populate` is local-only and FAST (sub-second per
-                            # repo); does NOT do keyserver roundtrips. Non-fatal
-                            # (`|| true`) so air-gapped / restricted-network builds
-                            # succeed when the keyring was already current.
                             (pacman-key --populate 2>/dev/null || true) && \
                             pacman -Syu --noconfirm --needed{{range .Options}} {{.}}{{end}}{{range .Packages}} {{.}}{{end}}
                 present_template: |
