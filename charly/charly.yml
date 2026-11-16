@@ -1220,7 +1220,7 @@ fedora:
 ubuntu:
     distro:
         inherits: debian
-        version: "24.04"
+        version: "26.04"
         bootstrap:
             install_cmd: ""
             package: []
@@ -1231,7 +1231,7 @@ ubuntu:
             gid: 1000
             home: /home/ubuntu
         debootstrap:
-            suite: noble
+            suite: resolute
             mirror: http://archive.ubuntu.com/ubuntu
             variant: minbase
             components: main,universe
