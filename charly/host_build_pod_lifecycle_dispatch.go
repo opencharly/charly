@@ -137,12 +137,40 @@ func releaseResourceClaim(claimant string) {
 // dispatchAndRunLifecycle resolves node/box/instance's LifecycleTarget for op (the shared
 // dispatchLifecycleTarget core-M step) and, on success, runs the caller's op-specific body against
 // it — the shared core every start/stop/shell/logs/service/cmd case below delegates to.
+//
+// A MUTATING op appends exactly ONE audit record per act (D-AUDIT-1), on the resolve-failure
+// path and the act path alike: finishLifecycleAct is the one recording site, so no case below
+// can record twice or forget (P06 leg 3a).
 func dispatchAndRunLifecycle(op string, node *spec.DeployNode, box, instance string, run func(spec.LifecycleTarget) error) error {
 	lt, err := dispatchLifecycleTarget(op, node, spec.DeployKey(box, instance))
 	if err != nil {
-		return err
+		return finishLifecycleAct(op, box, instance, err)
 	}
-	return run(lt)
+	return runLifecycleAct(op, box, instance, lt, run)
+}
+
+// runLifecycleAct runs one op-specific body against a resolved target and records the act. It
+// is split from dispatchAndRunLifecycle so the outcome branch is reachable — and proved —
+// without a live venue (audit_event_test.go drives it with a fake body).
+func runLifecycleAct(op, box, instance string, lt spec.LifecycleTarget, run func(spec.LifecycleTarget) error) error {
+	return finishLifecycleAct(op, box, instance, run(lt))
+}
+
+// finishLifecycleAct is the ONE recording site for a lifecycle act.
+//
+// A lost record is never silent (D-LAW-5): when the act failed, its own error is returned —
+// that is what the operator must act on — and the lost record is reported on stderr; when the
+// act succeeded, the lost record becomes the error, and the message says the act DID happen.
+func finishLifecycleAct(op, box, instance string, actErr error) error {
+	recErr := recordLifecycleAct(op, box, instance, actErr)
+	if recErr == nil {
+		return actErr
+	}
+	if actErr != nil {
+		fmt.Fprintf(os.Stderr, "charly: %v; the act itself failed first: %v\n", recErr, actErr)
+		return actErr
+	}
+	return fmt.Errorf("the %s act succeeded but its audit record was not appended: %w", op, recErr)
 }
 
 // decodeLifecyclePayload decodes req.Payload into T (one of the #PodXPayload types), wrapping any
@@ -263,7 +291,10 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 			// "no charly.yml" error dispatchByDeployTarget reports.
 			Node: req.Node,
 		}
-		return spec.PodLifecycleReply{}, cmd.dispatchByDeployTarget()
+		// update is the one mutating op that does NOT delegate to dispatchAndRunLifecycle (its
+		// body is dispatchByDeployTarget's own per-target dispatch), so the act's ONE record is
+		// appended here, through the same finishLifecycleAct site every other mutation uses.
+		return spec.PodLifecycleReply{}, finishLifecycleAct(req.Op, req.Box, req.Instance, cmd.dispatchByDeployTarget())
 
 	case "remove":
 		// remove is FULLY reduced (Cutover B unit 2 remove-verb completion, option (b)):

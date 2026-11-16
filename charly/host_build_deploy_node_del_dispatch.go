@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/opencharly/spec/spec"
 )
@@ -16,7 +17,21 @@ import (
 const deployNodeDelDispatchBuilderKind = "deploy-node-del-dispatch"
 
 func hostBuildDeployNodeDelDispatch(_ context.Context, req spec.DeployNodeDelDispatchRequest, _ buildEngineContext) (spec.DeployNodeDelDispatchReply, error) {
-	return spec.DeployNodeDelDispatchReply{}, runDeployNodeDelDispatch(req)
+	actErr := runDeployNodeDelDispatch(req)
+	// ONE teardown record per `deploy del` act (D-AUDIT-1), on every outcome path: this
+	// wrapper is the act's single entry, so the count cannot drift from the act's count.
+	recErr := recordDeployDelAct(req, actErr)
+	switch {
+	case recErr == nil:
+		return spec.DeployNodeDelDispatchReply{}, actErr
+	case actErr != nil:
+		// The operator must act on the teardown's own error; the lost record is loud, never
+		// silent (D-LAW-5).
+		fmt.Fprintf(os.Stderr, "charly: %v; the teardown itself failed first: %v\n", recErr, actErr)
+		return spec.DeployNodeDelDispatchReply{}, actErr
+	default:
+		return spec.DeployNodeDelDispatchReply{}, fmt.Errorf("the deploy del act succeeded but its audit record was not appended: %w", recErr)
+	}
 }
 
 // runDeployNodeDelDispatch is the `del` twin of runResolveTargetAdd (host_build_resolve_target_add.go):
