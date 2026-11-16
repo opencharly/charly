@@ -29,7 +29,7 @@ import:
     # instead (the distro-cachyos 2026.293.1743 fix), so the closure resolves.
     - cachyos: '@github.com/opencharly/distro-cachyos:v2026.318.1213'
     - debian: '@github.com/opencharly/distro-debian:v2026.274.0746'
-    - fedora: '@github.com/opencharly/distro-fedora:v2026.281.1250'
+    - fedora: '@github.com/opencharly/distro-fedora:v2026.319.1306'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.274.0752'
     # The `vm:` substrate. check-sidecar-pod declares a deploy-level VM member
     # (`from: eval-vm`) and BringUpMembers dispatches `deploy add` for it, so the
