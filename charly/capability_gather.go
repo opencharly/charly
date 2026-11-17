@@ -88,9 +88,19 @@ func GatherStackCapabilities(owner string, models map[string]spec.Candy, visible
 		return nil, nil
 	}
 
-	// The refusal comes FIRST, before any provide is gathered: a want whose type has no provide
-	// surface fails the load loudly whether or not some lookalike provide sits in the tree.
+	// The refusal comes FIRST, before any provide is gathered -- but it applies to `need:` wants
+	// ONLY, and that asymmetry is D-CAP-1's, not a convenience:
+	//
+	//   "a `need:` must be bound and FAILS THE LOAD when it is not; a `use:` is bound when a
+	//    provide exists and takes its `default:`, or GOES WITHOUT, otherwise."
+	//
+	// A `use:` of a type with no provide surface is the "goes without" case: it is RECORDED as
+	// unbound (D-CAP-3) and the deployment proceeds. Raising here made a legitimate fallback
+	// fatal, which is a worse failure than the silence this refusal exists to prevent.
 	for _, w := range wants {
+		if w.Strength != needsolver.Need {
+			continue // a `use:` falls back; it never fails the load
+		}
 		if _, ok := provideSurfaces[w.Type]; !ok {
 			return nil, &ErrNoProvideSurface{Type: w.Type, WantedBy: "candy:" + owner}
 		}
@@ -110,9 +120,17 @@ func GatherStackCapabilities(owner string, models map[string]spec.Candy, visible
 	// that candy's provide twice and Resolve would report a FALSE ErrAmbiguous naming
 	// "(candy:prov, candy:prov)" -- an error that blames the tree for the gatherer's arithmetic.
 	// One distinct type, one collection, regardless of how many wants share it.
+	// Only types that HAVE a surface are collected. A `use:` of a surface-less type survives the
+	// refusal above (D-CAP-1: it goes without), so its type reaches this loop -- and the zero
+	// value of provideSurface has a NIL `collect`, so including it would panic on the call rather
+	// than record the unbound use. The surface check is the same one the refusal makes, from the
+	// other side.
 	provTypes := make([]string, 0, len(provideSurfaces))
 	seen := map[string]bool{}
 	for _, w := range wants {
+		if _, hasSurface := provideSurfaces[w.Type]; !hasSurface {
+			continue
+		}
 		if !seen[w.Type] {
 			seen[w.Type] = true
 			provTypes = append(provTypes, w.Type)
@@ -136,19 +154,26 @@ func GatherStackCapabilities(owner string, models map[string]spec.Candy, visible
 
 // wantsOf projects one authored block (`need:` or `use:`) onto the solver's Want list. The entries
 // are the capability table's typed maps: type -> name -> entry.
+// authoredCapabilityTypes is the CLOSED set of capability types a node may author, in the order
+// the schema declares them. It lives here ONCE and drives both halves: a new capability type is
+// added to this slice and nowhere else, and wantsOf checks that each caller supplies exactly this
+// many key lists -- so a type added to the schema without a projection is a runtime refusal at
+// the first gather, not a silent omission.
+var authoredCapabilityTypes = []string{"env", "parameter", "secret", "endpoint", "network", "harness"}
+
 // wantsOf projects one node's authored capability entries into solver wants. The `need:` and
-// `use:` halves differ in exactly two things -- the source struct and the Strength -- so the
-// SIX-TYPE table and the sort-and-project loop live here ONCE. R2: a second copy of that table
-// is a second place to forget a capability type when the schema grows one.
-func wantsOf(owner string, byType map[string][]string, strength needsolver.Strength) []needsolver.Want {
-	types := make([]string, 0, len(byType))
-	for t := range byType {
-		types = append(types, t)
+// `use:` halves differ in exactly two things -- the values and the Strength -- so the type NAMES
+// live in authoredCapabilityTypes and the values arrive positionally, one list per type in that
+// order. R2: the table was copy-pasted once and the body claimed otherwise; it is one table now.
+func wantsOf(owner string, keys [][]string, strength needsolver.Strength) []needsolver.Want {
+	if len(keys) != len(authoredCapabilityTypes) {
+		panic(fmt.Sprintf("capability gather: %d key lists for %d authored types -- a capability type "+
+			"was added to the schema without a projection; add it to authoredCapabilityTypes and to "+
+			"every caller", len(keys), len(authoredCapabilityTypes)))
 	}
-	sort.Strings(types)
 	var out []needsolver.Want
-	for _, t := range types {
-		for _, name := range byType[t] {
+	for i, t := range authoredCapabilityTypes {
+		for _, name := range keys[i] {
 			out = append(out, needsolver.Want{
 				Capability: needsolver.Capability{Type: t, Name: name},
 				Strength:   strength,
@@ -160,18 +185,18 @@ func wantsOf(owner string, byType map[string][]string, strength needsolver.Stren
 }
 
 // wantsOfNeed is the `need:` half: D-CAP-1 says a need must be BOUND and fails the load when it
-// is not.
+// is not. The key lists are positional, one per authoredCapabilityTypes entry.
 func wantsOfNeed(owner string, need *spec.CandyNeed) []needsolver.Want {
 	if need == nil {
 		return nil
 	}
-	return wantsOf(owner, map[string][]string{
-		"env":       capabilityKeysOf(need.Env),
-		"parameter": capabilityKeysOf(need.Parameter),
-		"secret":    capabilityKeysOf(need.Secret),
-		"endpoint":  capabilityKeysOf(need.Endpoint),
-		"network":   capabilityKeysOf(need.Network),
-		"harness":   capabilityKeysOf(need.Harness),
+	return wantsOf(owner, [][]string{
+		capabilityKeysOf(need.Env),
+		capabilityKeysOf(need.Parameter),
+		capabilityKeysOf(need.Secret),
+		capabilityKeysOf(need.Endpoint),
+		capabilityKeysOf(need.Network),
+		capabilityKeysOf(need.Harness),
 	}, needsolver.Need)
 }
 
@@ -180,13 +205,13 @@ func wantsOfUse(owner string, use *spec.CandyUse) []needsolver.Want {
 	if use == nil {
 		return nil
 	}
-	return wantsOf(owner, map[string][]string{
-		"env":       capabilityKeysOf(use.Env),
-		"parameter": capabilityKeysOf(use.Parameter),
-		"secret":    capabilityKeysOf(use.Secret),
-		"endpoint":  capabilityKeysOf(use.Endpoint),
-		"network":   capabilityKeysOf(use.Network),
-		"harness":   capabilityKeysOf(use.Harness),
+	return wantsOf(owner, [][]string{
+		capabilityKeysOf(use.Env),
+		capabilityKeysOf(use.Parameter),
+		capabilityKeysOf(use.Secret),
+		capabilityKeysOf(use.Endpoint),
+		capabilityKeysOf(use.Network),
+		capabilityKeysOf(use.Harness),
 	}, needsolver.Use)
 }
 

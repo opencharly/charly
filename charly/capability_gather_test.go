@@ -201,3 +201,49 @@ func TestGatherCollectsAProvidersProvidesOncePerType(t *testing.T) {
 		}
 	}
 }
+
+// TestGatherUseOfASurfacelessTypeGoesWithout is the test whose absence let a bug ship. The
+// refusal was applied to EVERY want, so a candy authoring `use: secret:` -- secret has no
+// provide surface -- raised ErrNoProvideSurface and FAILED THE LOAD. D-CAP-1 forbids that:
+//
+//	"a `need:` must be bound and fails the load when it is not; a `use:` is bound when a
+//	 provide exists and takes its `default:`, or GOES WITHOUT, otherwise."
+//
+// The existing use-fallback test uses `env`, which HAS a surface, so it never reached this
+// path. This one uses a type with NO surface, which is the only fixture that can catch it.
+func TestGatherUseOfASurfacelessTypeGoesWithout(t *testing.T) {
+	app := spec.Candy{Name: "app"}
+	app.Use = &spec.CandyUse{Secret: map[string]struct {
+		Src      spec.AbsPath `yaml:"src,omitempty" json:"src,omitempty"`
+		Dst      spec.AbsPath `yaml:"dst,omitempty" json:"dst,omitempty"`
+		Optional bool         `yaml:"optional,omitempty" json:"optional,omitempty"`
+	}{"lab-key": {}}}
+
+	// secret has no provide surface, so a NEED here must fail loudly -- and a USE must not.
+	got, err := GatherStackCapabilities("app", map[string]spec.Candy{"app": app}, map[string]bool{"app": true})
+	if err != nil {
+		t.Fatalf("a `use:` of a surface-less type must GO WITHOUT (D-CAP-1), not fail the load: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("the unbound use must be RECORDED (D-CAP-3), got %d: %#v", len(got), got)
+	}
+	if got[0].Bound != "" {
+		t.Fatalf("an unbound use records Bound=\"\", got %q", got[0].Bound)
+	}
+
+	// And the contrast that makes it D-CAP-1 rather than an oversight: the SAME capability as a
+	// `need:` is refused, because a need may not go without.
+	needApp := spec.Candy{Name: "app"}
+	needApp.Need = &spec.CandyNeed{Secret: map[string]struct{}{"lab-key": {}}}
+	_, err = GatherStackCapabilities("app", map[string]spec.Candy{"app": needApp}, map[string]bool{"app": true})
+	if err == nil {
+		t.Fatal("a `need:` of a surface-less type must fail the load (D-CAP-1)")
+	}
+	var ref *ErrNoProvideSurface
+	if !errors.As(err, &ref) {
+		t.Fatalf("the need must raise *ErrNoProvideSurface, got %T: %v", err, err)
+	}
+	if ref.Type != "secret" {
+		t.Fatalf("the refusal must name the type, got %q", ref.Type)
+	}
+}
