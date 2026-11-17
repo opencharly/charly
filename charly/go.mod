@@ -68,7 +68,7 @@ require (
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424
 	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026319.925
-	github.com/opencharly/sdk v0.2026320.2158
+	github.com/opencharly/sdk v0.2026321.2010
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1

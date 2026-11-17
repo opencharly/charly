@@ -165,6 +165,8 @@ github.com/opencharly/sdk v0.2026320.1345 h1:FhbPYF5Q7/Sh/5fWOgjigOlSpiHvlzX61iP
 github.com/opencharly/sdk v0.2026320.1345/go.mod h1:7Sgzrmeu2peHLc5VN0Px9V0y22BsssSOfUJO/ytvNR4=
 github.com/opencharly/sdk v0.2026320.2158 h1:mVPR+ZktcbXIHiJDIvDfPIWWHiSLW42jvOD57RZc3cw=
 github.com/opencharly/sdk v0.2026320.2158/go.mod h1:7Sgzrmeu2peHLc5VN0Px9V0y22BsssSOfUJO/ytvNR4=
+github.com/opencharly/sdk v0.2026321.2010 h1:mndRYDgM/njXxl5sj1KqFyyrkqJIDw4uMZbTnONZ5VU=
+github.com/opencharly/sdk v0.2026321.2010/go.mod h1:mfPh0BB4/YbxmA+cBLEOW8PeW3nNcWcp7XGpJ9krt/Q=
 github.com/opencharly/spec v0.2026319.1226 h1:e4tknus8fGVlw0+cbun2mHh5yAHNGk5Rxt+0dbV+U5I=
 github.com/opencharly/spec v0.2026319.1226/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencharly/spec v0.2026319.1619 h1:riSmYbmj7p5IVg/ciE15MILNzfmVgE9K2mSBliUDIhc=
