@@ -152,8 +152,6 @@ func GatherStackCapabilities(owner string, models map[string]spec.Candy, visible
 	return needsolver.Resolve(wants, provides)
 }
 
-// wantsOf projects one authored block (`need:` or `use:`) onto the solver's Want list. The entries
-// are the capability table's typed maps: type -> name -> entry.
 // authoredCapabilityTypes is the CLOSED set of capability types a node may author, in the order
 // the schema declares them. It lives here ONCE and drives both halves: a new capability type is
 // added to this slice and nowhere else, and wantsOf checks that each caller supplies exactly this
