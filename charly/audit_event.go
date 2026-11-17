@@ -40,13 +40,18 @@ const (
 
 )
 
-// spec.AuditEvent mirrors spec #spec.AuditEvent (DESIGN.cue:1153).
-// stateAuditAppender is the core-side implementation the wiring needs to be testable and
-// real before 3b lands: ONE append-only JSON-Lines file under the state root
-// (storeroot.RootState — D-DEP-5's durable tree, which `cache clear` must not touch).
+// INTERIM APPENDER, and it says so. The target is `sdk`'s `auditkit` (one `O_EXCL` file per act, which
+// makes D-AUDIT-1 structural). `auditkit` is in opencharly/sdk#550, which is PASS but not merged, so no
+// released sdk tag carries the package and this import does not resolve:
 //
-// It carries NO state between calls (the path resolves per call), so it is not the
-// package-level singleton D-CORE-3 forbids.
+//	audit_event.go:28: no required module provides package github.com/opencharly/sdk/auditkit
+//
+// So this writes ONE append-only JSON-Lines file under the state root (storeroot.RootState -- D-DEP-5's
+// durable tree, which `cache clear` must not touch). The swap to auditkit lands as the FIRST change after
+// that tag, and deletes this type; keeping both would be the duplication R2 forbids.
+//
+// It carries NO state between calls (the path resolves per call), so it is not the package-level
+// singleton D-CORE-3 forbids.
 type stateAuditAppender struct{}
 
 // auditRecordFile is the record's ONE name under the state root.
@@ -171,6 +176,10 @@ func appendAuditEvent(ev spec.AuditEvent) error {
 }
 
 // auditOutcome maps an act's error to the closed outcome word.
+// auditOutcome maps an act's error to the record's outcome. The closed table is `ok`/`failed` only:
+// a REFUSAL is not a distinct outcome in this wiring, because the acts wired here either run or fail --
+// nothing in this change authorizes or denies an act, so nothing can refuse one (D-AUDIT-5's `refused`
+// is produced by whatever DOES authorize, and that is not this change).
 func auditOutcome(err error) string {
 	if err != nil {
 		return auditOutcomeFailed
