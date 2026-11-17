@@ -118,3 +118,54 @@ func TestGatherRefusesATypeWithNoProvideSurface(t *testing.T) {
 		t.Fatalf("the refusal must distinguish itself from a search that found nothing: %v", err)
 	}
 }
+
+// TestGatherUsesFallBackWhenUnbound is the `use:` half, which the first revision never
+// exercised. D-CAP-1 draws the line: a `need:` "must be bound and FAILS THE LOAD when it is
+// not", while a `use:` "is bound when a provide exists and takes its `default:`, or goes
+// without, otherwise." So the same tree that errors for a need must SUCCEED for a use -- and
+// nothing else in this file proves it, because every other fixture authors only `.Need`.
+//
+// The plant that makes it load-bearing: project `use:` as needsolver.Need instead of
+// needsolver.Use and the unbound case below fails the load it must survive.
+func TestGatherUsesFallBackWhenUnbound(t *testing.T) {
+	app := spec.Candy{Name: "app"}
+	app.Use = &spec.CandyUse{Env: map[string]struct {
+		Default spec.InitNeutral `yaml:"default,omitempty" json:"default,omitempty"`
+	}{"NOBODY_OFFERS_THIS": {}}}
+
+	// No visible member provides env:NOBODY_OFFERS_THIS. A NEED here would be ErrUnbound; a
+	// USE falls back, so the gather must return no error and record no binding.
+	got, err := GatherStackCapabilities("app", map[string]spec.Candy{"app": app}, map[string]bool{"app": true})
+	if err != nil {
+		t.Fatalf("a `use:` with no visible provide must fall back, not fail the load: %v", err)
+	}
+	// D-CAP-3: "a `use:` is bound when a provide exists and takes its `default:`, or goes
+	// without, otherwise" -- and an unbound use is RECORDED, not dropped. So exactly one
+	// binding comes back with Bound EMPTY, which is the state a deployment reads to report the
+	// capability it went without. An empty slice would lose that, and the absence of an error
+	// is what distinguishes a `use:` here from a `need:`.
+	if len(got) != 1 {
+		t.Fatalf("an unbound use must record exactly one binding, got %d: %#v", len(got), got)
+	}
+	if got[0].Bound != "" {
+		t.Fatalf("an unbound use must record Bound=\"\" (it went without), got %q", got[0].Bound)
+	}
+	if got[0].Want.Name != "NOBODY_OFFERS_THIS" {
+		t.Fatalf("the recorded binding must name the use, got %#v", got[0])
+	}
+
+	// The bound half: the same use, now with a visible provider, binds to it.
+	prov := spec.Candy{Name: "prov"}
+	prov.EnvProvides = map[string]string{"NOBODY_OFFERS_THIS": "http://prov:80"}
+	models := map[string]spec.Candy{"app": app, "prov": prov}
+	got, err = GatherStackCapabilities("app", models, map[string]bool{"app": true, "prov": true})
+	if err != nil {
+		t.Fatalf("a `use:` with a visible provide must bind: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("a bound use must record one binding, got %d: %#v", len(got), got)
+	}
+	if got[0].Want.Name != "NOBODY_OFFERS_THIS" || got[0].Bound != "candy:prov" {
+		t.Fatalf("the binding must name the use and the provide's Origin, got %#v", got[0])
+	}
+}

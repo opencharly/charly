@@ -104,14 +104,30 @@ func GatherStackCapabilities(owner string, models map[string]spec.Candy, visible
 		members = append(members, name)
 	}
 	sort.Strings(members)
+
+	// The provide TYPES to collect, as a SET. Collecting inside the want loop would gather a
+	// member's provides once per want, so two env needs both provided by one candy would count
+	// that candy's provide twice and Resolve would report a FALSE ErrAmbiguous naming
+	// "(candy:prov, candy:prov)" -- an error that blames the tree for the gatherer's arithmetic.
+	// One distinct type, one collection, regardless of how many wants share it.
+	provTypes := make([]string, 0, len(provideSurfaces))
+	seen := map[string]bool{}
+	for _, w := range wants {
+		if !seen[w.Type] {
+			seen[w.Type] = true
+			provTypes = append(provTypes, w.Type)
+		}
+	}
+	sort.Strings(provTypes)
+
 	var provides []needsolver.Provide
 	for _, name := range members {
 		m, ok := models[name]
 		if !ok {
 			return nil, fmt.Errorf("capability gather: visible member %q is not in the resolved stack", name)
 		}
-		for _, w := range wants {
-			provides = append(provides, provideSurfaces[w.Type].collect(m)...)
+		for _, t := range provTypes {
+			provides = append(provides, provideSurfaces[t].collect(m)...)
 		}
 	}
 
@@ -120,18 +136,11 @@ func GatherStackCapabilities(owner string, models map[string]spec.Candy, visible
 
 // wantsOf projects one authored block (`need:` or `use:`) onto the solver's Want list. The entries
 // are the capability table's typed maps: type -> name -> entry.
-func wantsOfNeed(owner string, need *spec.CandyNeed) []needsolver.Want {
-	if need == nil {
-		return nil
-	}
-	byType := map[string][]string{
-		"env":       capabilityKeysOf(need.Env),
-		"parameter": capabilityKeysOf(need.Parameter),
-		"secret":    capabilityKeysOf(need.Secret),
-		"endpoint":  capabilityKeysOf(need.Endpoint),
-		"network":   capabilityKeysOf(need.Network),
-		"harness":   capabilityKeysOf(need.Harness),
-	}
+// wantsOf projects one node's authored capability entries into solver wants. The `need:` and
+// `use:` halves differ in exactly two things -- the source struct and the Strength -- so the
+// SIX-TYPE table and the sort-and-project loop live here ONCE. R2: a second copy of that table
+// is a second place to forget a capability type when the schema grows one.
+func wantsOf(owner string, byType map[string][]string, strength needsolver.Strength) []needsolver.Want {
 	types := make([]string, 0, len(byType))
 	for t := range byType {
 		types = append(types, t)
@@ -142,7 +151,7 @@ func wantsOfNeed(owner string, need *spec.CandyNeed) []needsolver.Want {
 		for _, name := range byType[t] {
 			out = append(out, needsolver.Want{
 				Capability: needsolver.Capability{Type: t, Name: name},
-				Strength:   needsolver.Need,
+				Strength:   strength,
 				Authored:   "candy:" + owner,
 			})
 		}
@@ -150,36 +159,35 @@ func wantsOfNeed(owner string, need *spec.CandyNeed) []needsolver.Want {
 	return out
 }
 
-// wantsOfUse is the `use:` half: the same projection, plus the entry's `default:` where the type
-// carries one. `use:` entries are the ones D-CAP-1 lets fall back.
+// wantsOfNeed is the `need:` half: D-CAP-1 says a need must be BOUND and fails the load when it
+// is not.
+func wantsOfNeed(owner string, need *spec.CandyNeed) []needsolver.Want {
+	if need == nil {
+		return nil
+	}
+	return wantsOf(owner, map[string][]string{
+		"env":       capabilityKeysOf(need.Env),
+		"parameter": capabilityKeysOf(need.Parameter),
+		"secret":    capabilityKeysOf(need.Secret),
+		"endpoint":  capabilityKeysOf(need.Endpoint),
+		"network":   capabilityKeysOf(need.Network),
+		"harness":   capabilityKeysOf(need.Harness),
+	}, needsolver.Need)
+}
+
+// wantsOfUse is the `use:` half: the ones D-CAP-1 lets fall back when no provide is visible.
 func wantsOfUse(owner string, use *spec.CandyUse) []needsolver.Want {
 	if use == nil {
 		return nil
 	}
-	byType := map[string][]string{
+	return wantsOf(owner, map[string][]string{
 		"env":       capabilityKeysOf(use.Env),
 		"parameter": capabilityKeysOf(use.Parameter),
 		"secret":    capabilityKeysOf(use.Secret),
 		"endpoint":  capabilityKeysOf(use.Endpoint),
 		"network":   capabilityKeysOf(use.Network),
 		"harness":   capabilityKeysOf(use.Harness),
-	}
-	types := make([]string, 0, len(byType))
-	for t := range byType {
-		types = append(types, t)
-	}
-	sort.Strings(types)
-	var out []needsolver.Want
-	for _, t := range types {
-		for _, name := range byType[t] {
-			out = append(out, needsolver.Want{
-				Capability: needsolver.Capability{Type: t, Name: name},
-				Strength:   needsolver.Use,
-				Authored:   "candy:" + owner,
-			})
-		}
-	}
-	return out
+	}, needsolver.Use)
 }
 
 func capabilityKeysOf[V any](m map[string]V) []string {
