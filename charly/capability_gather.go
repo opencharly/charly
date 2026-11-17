@@ -106,8 +106,15 @@ func GatherStackCapabilities(owner string, models map[string]spec.Candy, visible
 		}
 	}
 
-	// Provides: §8.2 rows 1-3 are the visible members; row 4 (the registry) and row 5 (the grant)
-	// are the caller's to add to `visible` as their own entries. Gathered in sorted order so an
+	// Provides: §8.2 rows 1-3 only. Rows 4 (the registry, for role words and apis) and 5 (the
+	// deployment kind's grant, for host capabilities) are NOT supplied yet, and `visible` must
+	// therefore be a SUBSET of `models` -- a caller who adds a registry or grant name gets the
+	// "not in the resolved stack" error below, not a gathered provide.
+	//
+	// When rows 4-5 arrive they carry entries that are not candy members, so this loop will need
+	// to tell the two apart: a candy name must resolve in `models`, a registry or grant entry must
+	// not. Stating that here rather than leaving it to be discovered is the point -- a comment that
+	// walks a caller into an error is the same defect this function exists to prevent. Gathered in sorted order so an
 	// ambiguous error names both providers in stack order.
 	members := make([]string, 0, len(visible))
 	for name := range visible {
@@ -142,7 +149,9 @@ func GatherStackCapabilities(owner string, models map[string]spec.Candy, visible
 	for _, name := range members {
 		m, ok := models[name]
 		if !ok {
-			return nil, fmt.Errorf("capability gather: visible member %q is not in the resolved stack", name)
+			return nil, fmt.Errorf("capability gather: visible member %q is not in the resolved stack "+
+				"(8.2 rows 4-5 -- the registry and the grant -- are not supplied yet, so `visible` must be a "+
+				"subset of the resolved stack)", name)
 		}
 		for _, t := range provTypes {
 			provides = append(provides, provideSurfaces[t].collect(m)...)

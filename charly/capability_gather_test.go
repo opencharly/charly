@@ -5,10 +5,19 @@ package main
 // REFUSAL for a type that has none.
 //
 // The EIGHT cases, and what each one is for. This header enumerated five for three review
-// rounds while the file shipped eight; it is now derived by counting, not remembered:
+// rounds while the file shipped eight.
 //
-//   $ grep -cE '^func TestGather' capability_gather_test.go        -> 5 top-level
-//   $ grep -cE '^\t\tt\.Run\(' capability_gather_test.go          -> 4 subtests
+// The count, DERIVED rather than remembered -- both commands run on this file:
+//
+//   $ grep -c '^func TestGather' capability_gather_test.go
+//   5
+//   $ grep -c 't\.Run(' capability_gather_test.go
+//   4
+//
+// 5 top-level functions, one of which is a table driving 4 subtests: 4 subtests + 4 standalone
+// = 8 cases. (An earlier version of this comment pasted a two-tab pattern that matches ZERO
+// lines here -- the subtests are at one tab -- so it claimed a count its own command could not
+// produce. That is the same defect the header exists to prevent.)
 //
 //   1. bound          -- a need binds the one visible provide, and the recorded map names it;
 //   2. ErrUnbound     -- a need with no provide FAILS the load (D-CAP-1: "a `need:` must be bound
