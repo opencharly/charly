@@ -4,15 +4,27 @@ package main
 // capability type with both an authored want surface and an authored provide surface), plus the
 // REFUSAL for a type that has none.
 //
-// The five cases, and what each one is for:
-//   1. bound          — a need binds the one visible provide, and the recorded map names it;
-//   2. ErrUnbound     — a need with no provide FAILS the load (D-CAP-1: "a `need:` must be bound
-//                       and fails the load when it is not");
-//   3. ErrAmbiguous   — two visible provides of one capability error and name BOTH (D-CAP-3);
-//   4. visibility     — a provide that EXISTS but is not visible from the needing node does not
-//                       bind: §8.2 is load-bearing, not decoration;
-//   5. ErrNoProvideSurface — a `secret` need raises the REFUSAL, never ErrUnbound: the search
-//                       cannot happen, so reporting "searched, found none" would be a lie.
+// The EIGHT cases, and what each one is for. This header enumerated five for three review
+// rounds while the file shipped eight; it is now derived by counting, not remembered:
+//
+//   $ grep -cE '^func TestGather' capability_gather_test.go        -> 5 top-level
+//   $ grep -cE '^\t\tt\.Run\(' capability_gather_test.go          -> 4 subtests
+//
+//   1. bound          -- a need binds the one visible provide, and the recorded map names it;
+//   2. ErrUnbound     -- a need with no provide FAILS the load (D-CAP-1: "a `need:` must be bound
+//                        and fails the load when it is not");
+//   3. ErrAmbiguous   -- two visible provides of one capability error and name BOTH (D-CAP-3);
+//   4. visibility     -- a provide that EXISTS but is not visible from the needing node must not
+//                        bind: 8.2 is load-bearing, not decoration;
+//   5. refusal        -- a `secret` need raises ErrNoProvideSurface, never ErrUnbound: the provide
+//                        cannot be authored at all, so "searched, found none" would be a lie;
+//   6. use-fallback   -- an unbound `use:` GOES WITHOUT and is recorded with Bound="", because
+//                        D-CAP-1 draws that line against `need:` and D-CAP-3 says it is recorded;
+//   7. use-nosurface  -- a `use:` of a type with NO provide surface also goes without: the refusal
+//                        is scoped to `need:`, and applying it to a `use:` fails a valid load;
+//   8. double-count   -- two needs of one type against ONE provider both bind: collecting provides
+//                        inside the want loop counted the provider twice and returned a FALSE
+//                        ErrAmbiguous naming the same Origin twice.
 
 import (
 	"errors"
