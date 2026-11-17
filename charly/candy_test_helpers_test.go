@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -50,18 +51,52 @@ func (a *testCandyReader) Reboot() bool         { return a.m.Reboot }
 func (a *testCandyReader) GetRemote() bool      { return a.v.Remote }
 func (a *testCandyReader) GetRepoPath() string  { return a.v.RepoPath }
 
-func (a *testCandyReader) Vars() map[string]string      { return a.m.Vars }
-func (a *testCandyReader) PlanSteps() []spec.Step       { return a.m.Plan }
-func (a *testCandyReader) Apk() []spec.ApkPackageSpec   { return a.m.Apk }
-func (a *testCandyReader) TopPackages() []string        { return a.m.TopPackages }
-func (a *testCandyReader) ServiceFiles() []string       { return a.m.ServiceFiles }
-func (a *testCandyReader) RelayPorts() []int            { return a.m.PortRelayPorts }
-func (a *testCandyReader) RunOps() []spec.Op            { return a.m.RunOps }
-func (a *testCandyReader) HasTasks() bool               { return len(a.m.RunOps) > 0 }
-func (a *testCandyReader) HasExtract() bool             { return len(a.m.Extract) > 0 }
-func (a *testCandyReader) Extract() []spec.CandyExtract { return a.m.Extract }
-func (a *testCandyReader) HasData() bool                { return len(a.m.Data) > 0 }
-func (a *testCandyReader) Data() []spec.CandyData       { return a.m.Data }
+func (a *testCandyReader) Vars() map[string]string    { return a.m.Vars }
+func (a *testCandyReader) PlanSteps() []spec.Step     { return a.m.Plan }
+func (a *testCandyReader) Apk() []spec.ApkPackageSpec { return a.m.Apk }
+func (a *testCandyReader) TopPackages() []string      { return a.m.TopPackages }
+func (a *testCandyReader) ServiceFiles() []string     { return a.m.ServiceFiles }
+
+// decodeRawSlice / decodeRawPtr decode the RawBody sub-shapes back into the spec types a reader
+// returns. The spec's authored-def extraction left CandyView/CandyModel fields as opaque json
+// (`RawBody = json.RawMessage`); its own candy_reader.go says a reader "decodes a body that has
+// already been validated, so the resolved form is what it needs". Best-effort: a fixture that
+// cannot decode yields nil, exactly what the same fixture yielded before the refactor.
+func decodeRawSlice[T any](raw spec.RawBody) []T {
+	if len(raw) == 0 {
+		return nil
+	}
+	var out []T
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func decodeRawPtr[T any](raw spec.RawBody) *T {
+	if len(raw) == 0 {
+		return nil
+	}
+	var out T
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil
+	}
+	return &out
+}
+
+func (a *testCandyReader) RelayPorts() []int { return a.m.PortRelayPorts }
+func (a *testCandyReader) RunOps() []spec.Op { return a.m.RunOps }
+func (a *testCandyReader) HasTasks() bool    { return len(a.m.RunOps) > 0 }
+func (a *testCandyReader) HasExtract() bool {
+	return len(decodeRawSlice[spec.CandyExtract](a.m.Extract)) > 0
+}
+func (a *testCandyReader) Extract() []spec.CandyExtract {
+	return decodeRawSlice[spec.CandyExtract](a.m.Extract)
+}
+func (a *testCandyReader) HasData() bool {
+	return len(decodeRawSlice[spec.CandyData](a.m.Data)) > 0
+}
+func (a *testCandyReader) Data() []spec.CandyData { return decodeRawSlice[spec.CandyData](a.m.Data) }
 
 func (a *testCandyReader) Packaging() *spec.Packaging { return a.m.Packaging }
 func (a *testCandyReader) FormatSection(name string) *spec.PackageSection {
@@ -81,7 +116,9 @@ func (a *testCandyReader) EnvConfig() (*spec.EnvConfig, error) { return a.m.Env,
 func (a *testCandyReader) HasRoute() bool                      { return a.m.Route != nil }
 func (a *testCandyReader) Route() (*spec.RouteConfig, error)   { return a.m.Route, nil }
 func (a *testCandyReader) Shell() *spec.Shell                  { return a.m.Shell }
-func (a *testCandyReader) Service() []spec.CandyService        { return a.m.Service }
+func (a *testCandyReader) Service() []spec.CandyService {
+	return decodeRawSlice[spec.CandyService](a.m.Service)
+}
 
 func (a *testCandyReader) GetIncludedCandy() []spec.CandyRefEntry {
 	return testWrapCandyRefs(a.v.IncludedCandy)
@@ -135,8 +172,10 @@ func (a *testCandyReader) GetStatus() string            { return a.v.Status }
 func (a *testCandyReader) GetDescription() string       { return a.v.Description }
 func (a *testCandyReader) GetSubPathPrefix() string     { return a.v.SubPathPrefix }
 
-func (a *testCandyReader) Security() *spec.Security            { return a.m.Security }
-func (a *testCandyReader) Hooks() *spec.CandyHook              { return a.m.Hook }
+func (a *testCandyReader) Security() *spec.Security { return a.m.Security }
+func (a *testCandyReader) Hooks() *spec.CandyHook {
+	return decodeRawPtr[spec.CandyHook](a.m.Hook)
+}
 func (a *testCandyReader) EnvRequire() []spec.EnvDependency    { return a.m.EnvRequire }
 func (a *testCandyReader) EnvAccept() []spec.EnvDependency     { return a.m.EnvAccept }
 func (a *testCandyReader) SecretRequire() []spec.EnvDependency { return a.m.SecretRequire }
@@ -144,13 +183,23 @@ func (a *testCandyReader) SecretAccept() []spec.EnvDependency  { return a.m.Secr
 func (a *testCandyReader) MCPRequire() []spec.EnvDependency    { return a.m.MCPRequire }
 func (a *testCandyReader) MCPAccept() []spec.EnvDependency     { return a.m.MCPAccept }
 
-func (a *testCandyReader) Alias() []spec.CandyAlias            { return a.v.Aliases }
-func (a *testCandyReader) HasAliases() bool                    { return len(a.v.Aliases) > 0 }
-func (a *testCandyReader) Volume() []spec.CandyVolume          { return a.v.Volumes }
-func (a *testCandyReader) HasVolumes() bool                    { return len(a.v.Volumes) > 0 }
-func (a *testCandyReader) EnvProvides() map[string]string      { return a.v.EnvProvides }
-func (a *testCandyReader) MCPProvide() []spec.CandyMCPProvide  { return a.v.MCPProvide }
-func (a *testCandyReader) Artifact() []spec.CandyArtifact      { return a.m.Artifact }
+func (a *testCandyReader) Alias() []spec.ResolvedCandyAlias {
+	return decodeRawSlice[spec.ResolvedCandyAlias](a.v.Aliases)
+}
+func (a *testCandyReader) HasAliases() bool {
+	return len(decodeRawSlice[spec.ResolvedCandyAlias](a.v.Aliases)) > 0
+}
+func (a *testCandyReader) Volume() []spec.ResolvedCandyVolume {
+	return decodeRawSlice[spec.ResolvedCandyVolume](a.v.Volumes)
+}
+func (a *testCandyReader) HasVolumes() bool {
+	return len(decodeRawSlice[spec.ResolvedCandyVolume](a.v.Volumes)) > 0
+}
+func (a *testCandyReader) EnvProvides() map[string]string     { return a.v.EnvProvides }
+func (a *testCandyReader) MCPProvide() []spec.CandyMCPProvide { return a.v.MCPProvide }
+func (a *testCandyReader) Artifact() []spec.CandyArtifact {
+	return decodeRawSlice[spec.CandyArtifact](a.m.Artifact)
+}
 func (a *testCandyReader) Capabilities() *spec.CandyCapability { return a.m.Capability }
 func (a *testCandyReader) RequiresCapabilities() []string      { return a.m.RequiresCapability }
 func (a *testCandyReader) Engine() string                      { return a.m.Engine }
