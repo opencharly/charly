@@ -69,8 +69,8 @@ charly:
                       components: main
                     - name: tailscale
                       url: "https://pkgs.tailscale.com/stable/ubuntu"
-                      key: "https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg"
-                      suite: noble
+                      key: "https://pkgs.tailscale.com/stable/ubuntu/resolute.noarmor.gpg"
+                      suite: resolute
                       components: main
             fedora:
                 package:
