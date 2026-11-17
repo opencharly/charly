@@ -32,7 +32,7 @@ func isolateStateRoot(t *testing.T) string {
 
 // readAuditRecords parses the append-only file back into records. A missing file is zero
 // records, not an error: that IS the "nothing was recorded" state the test must see.
-func readAuditRecords(t *testing.T, path string) []AuditEvent {
+func readAuditRecords(t *testing.T, path string) []spec.AuditEvent {
 	t.Helper()
 	b, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -41,12 +41,12 @@ func readAuditRecords(t *testing.T, path string) []AuditEvent {
 	if err != nil {
 		t.Fatalf("read audit file %s: %v", path, err)
 	}
-	var out []AuditEvent
+	var out []spec.AuditEvent
 	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
 		if line == "" {
 			continue
 		}
-		var ev AuditEvent
+		var ev spec.AuditEvent
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
 			t.Fatalf("audit line is not a record: %v\nline: %s", err, line)
 		}
@@ -91,7 +91,7 @@ func TestDispatchAndRunLifecycle_AppendsExactlyOneRecord(t *testing.T) {
 	if got.Identity == "" {
 		t.Error("identity is empty; D-AUDIT-2 requires who acted")
 	}
-	if _, perr := time.Parse(time.RFC3339, got.At); perr != nil {
+	if _, perr := time.Parse(time.RFC3339, string(got.At)); perr != nil {
 		t.Errorf("at = %q is not an RFC3339 #Timestamp: %v", got.At, perr)
 	}
 }

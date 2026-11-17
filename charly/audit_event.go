@@ -4,20 +4,17 @@ package main
 // wiring side of P06 leg 3a: charly's own mutations append exactly one record each.
 //
 // THE SHAPE IS THE CONTRACT'S, NOT THIS FILE'S. Every field below mirrors DESIGN.cue's
-// #AuditEvent / #AuditDetail (DESIGN.cue:1146-1172) one-for-one, including the two closed
+// #spec.AuditEvent / #AuditDetail (DESIGN.cue:1146-1172) one-for-one, including the two closed
 // word lists (`_auditEvent`: mutate|authorize|admit|activate|teardown, `_auditOutcome`:
 // ok|refused|failed, `_detailCode`: reason|path|field|ref|count|duration) and the three
 // scalar patterns (#Ref for identity/target, #Timestamp for at, #Redacted for a value
 // that must be named but never held).
 //
-// RECONCILIATION (stated here because it is a landing prerequisite, not a detail): the
-// contract publishes NO Go type for #AuditEvent at the pinned spec tag, so this file
-// carries a hand-written mirror. When opencharly/sdk's writer (P06 leg 3b) lands, the
-// mirror is deleted in favour of the generated spec type, `AuditAppender` remains the
-// single seam core depends on, and `stateAuditAppender` is replaced by the sdk
-// implementation — no call site below changes, because each one reaches the seam through
-// `appendAuditEvent` only.
-
+// NO MIRROR: the contract publishes the Go type. `spec v0.2026320.2307` carries `#AuditEvent` and its
+// primitives (`#Word`, `#Ref`, `#Timestamp` -- DESIGN.cue:1146-1175), so this file uses the generated
+// type directly and `AuditAppender` is the single seam core depends on. The hand-written mirror this
+// file used to carry existed only because the pinned spec had no such type; it is gone, and with it
+// the drift risk of two spellings of one contract.
 import (
 	"encoding/json"
 	"fmt"
@@ -47,41 +44,7 @@ const (
 	auditDetailReason = "reason"
 )
 
-// AuditEvent mirrors spec #AuditEvent (DESIGN.cue:1153).
-type AuditEvent struct {
-	At        string        `json:"at"`               // #Timestamp
-	Event     string        `json:"event"`            // or(_auditEventWord)
-	Outcome   string        `json:"outcome"`          // or(_auditOutcomeWord)
-	Identity  string        `json:"identity"`         // #Ref — who acted (D-AUDIT-2)
-	Target    string        `json:"target,omitempty"` // #Ref — what was acted on
-	Action    string        `json:"action,omitempty"` // #Word — a charly verb (D-AUDIT-5)
-	Namespace string        `json:"namespace,omitempty"`
-	Revision  string        `json:"revision,omitempty"`
-	Detail    []AuditDetail `json:"detail,omitempty"` // ≤32 (list.MaxItems(32))
-}
-
-// AuditDetail mirrors #AuditDetail (DESIGN.cue:1164).
-type AuditDetail struct {
-	Code  string         `json:"code"` // or(_detailCodeWord)
-	Text  string         `json:"text"` // #Text (non-empty)
-	Value *AuditRedacted `json:"value,omitempty"`
-}
-
-// AuditRedacted is #Redacted: a record says a value was there without holding it
-// (D-AUDIT-3 — an audit that holds a secret is a leak with a timestamp).
-type AuditRedacted struct {
-	Redacted bool `json:"redacted"`
-}
-
-// AuditAppender appends exactly one record and never rewrites or deletes one (D-AUDIT-4).
-//
-// This is the NARROW INTERFACE core codes against: P06 leg 3b (opencharly/sdk) owns the
-// implementation, core owns the call sites. `Append` must be safe to call from concurrent
-// processes (D-CONC-1) and must never write a record twice.
-type AuditAppender interface {
-	Append(AuditEvent) error
-}
-
+// spec.AuditEvent mirrors spec #spec.AuditEvent (DESIGN.cue:1153).
 // stateAuditAppender is the core-side implementation the wiring needs to be testable and
 // real before 3b lands: ONE append-only JSON-Lines file under the state root
 // (storeroot.RootState — D-DEP-5's durable tree, which `cache clear` must not touch).
@@ -100,7 +63,7 @@ const auditRecordFile = "audit.jsonl"
 // processes appending concurrently cannot interleave within a record. A partially
 // written last line (a crash) is visible and is the next reader's business, not a
 // mutation of an existing record (D-AUDIT-4).
-func (stateAuditAppender) Append(ev AuditEvent) error {
+func (stateAuditAppender) Append(ev spec.AuditEvent) error {
 	line, err := json.Marshal(ev)
 	if err != nil {
 		return fmt.Errorf("audit: encode record: %w", err)
@@ -198,12 +161,12 @@ func auditIdentity() string {
 //
 // Failure policy (D-LAW-5: fail loud, no silent loss): the caller decides how to report
 // a lost record, but it is never swallowed here — the error is returned to be surfaced.
-func appendAuditEvent(ev AuditEvent) error {
+func appendAuditEvent(ev spec.AuditEvent) error {
 	if ev.At == "" {
-		ev.At = time.Now().UTC().Format(time.RFC3339)
+		ev.At = spec.Timestamp(time.Now().UTC().Format(time.RFC3339))
 	}
 	if ev.Identity == "" {
-		ev.Identity = auditIdentity()
+		ev.Identity = spec.Ref(auditIdentity())
 	}
 	if ev.Event == "" || ev.Outcome == "" {
 		return fmt.Errorf("audit: record needs an event and an outcome (event=%q outcome=%q)", ev.Event, ev.Outcome)
@@ -248,20 +211,20 @@ func recordLifecycleAct(op, box, instance string, actErr error) error {
 	if !mutation {
 		return nil
 	}
-	return appendAuditEvent(AuditEvent{
+	return appendAuditEvent(spec.AuditEvent{
 		Event:   event,
 		Outcome: auditOutcome(actErr),
-		Target:  auditRef(spec.DeployKey(box, instance)),
-		Action:  op,
+		Target:  spec.Ref(auditRef(spec.DeployKey(box, instance))),
+		Action:  spec.Word(op),
 	})
 }
 
 // recordDeployDelAct appends the ONE teardown record for a `deploy del` act (D-AUDIT-1).
 func recordDeployDelAct(req spec.DeployNodeDelDispatchRequest, actErr error) error {
-	return appendAuditEvent(AuditEvent{
+	return appendAuditEvent(spec.AuditEvent{
 		Event:   auditEventTeardown,
 		Outcome: auditOutcome(actErr),
-		Target:  auditRef(req.Name),
+		Target:  spec.Ref(auditRef(req.Name)),
 		Action:  "del",
 	})
 }
