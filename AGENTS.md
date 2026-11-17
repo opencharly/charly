@@ -27,6 +27,24 @@ touching the matching code:
 | OCI labels / capabilities contract | `/charly-internals:capabilities` |
 | VmSpec / libvirt / cloud-init / OVMF internals | `/charly-internals:vm-spec` |
 
+## DESIGN.md is the contract's subject
+
+The umbrella rulebook says how to work; `DESIGN.md` says what must be true when the work is
+done — the contract's requirements, its invariants, and the data shapes every repo shares.
+Read it before designing anything here: before adding a field, a shape or a mechanism, grep
+the contract for it and read the row that governs the area. **Conformance to the rulebook
+with a violation of `DESIGN.md` is not a pass.** When the two disagree, the disagreement is
+a defect in one of them: fix the one that is wrong, in the open, and say so.
+`spec/schema/*.cue` is the machine-readable projection of `DESIGN.md`, and `DESIGN.cue` is
+its schema; where the prose and the CUE differ, the CUE is what the tooling enforces and the
+difference is a defect to resolve — never a licence to pick whichever is convenient.
+
+For this core the consequence is concrete: `charly` is a generic plugin host, so **core
+never grows a per-kind branch that `DESIGN.md` places in a plugin.** The boundary law below
+states the placement in principle; `DESIGN.md` is where each kind's placement is written
+down, and a branch added here that the contract assigns to a plugin is a contract violation
+whatever the boundary law's shorthand suggests.
+
 ## The kernel/plugin boundary law
 
 Core is a generic plugin host. It owns only plugin loading, prescan/dispatch (including the
