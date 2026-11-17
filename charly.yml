@@ -5432,8 +5432,12 @@ plugin-skill:
 seam-proof-candy:
     candy:
         description: |-
-            Declares exactly ONE required secret and NOTHING else — no base, no packages, no
-            services. THREE LIMITS this bed does NOT claim: (1) DELIVERY, not retrieval —
+            Declares exactly ONE required secret. It carries no `base:` (a node cannot be both a
+            secret-bearer and an image) and adds no SERVICES; it does compose one warm layer so the
+            build has a real installation to perform, which is why `seam-proof-box` declares a
+            `distro:` for it. (An earlier version of this sentence said "NOTHING else — no packages",
+            which the entity itself contradicted: it composes `layer-ripgrep`, whose ripgrep package
+            needs the box's distro to install.) THREE LIMITS this bed does NOT claim: (1) DELIVERY, not retrieval —
             EnsureCandySecret mints a 32-byte token when the value is missing everywhere, so a pass
             means "delivered", not "read from a pre-seeded store"; (2) the IR limb only — the seam
             removes the value from the plan and the rendered script, and it is still persisted into
@@ -5454,7 +5458,7 @@ seam-proof-candy:
                   is missing everywhere EnsureCandySecret MINTS one, so this bed proves delivery, not
                   retrieval from a pre-seeded store.
         plan:
-            - check: the candy declares exactly one required secret and installs nothing, so its own plan is a no-op that must pass
+            - check: the candy declares exactly ONE required secret and adds no services, so its own plan is a no-op that must pass
               id: seam-proof-declared
               exit_status: 0
               command:
@@ -5463,7 +5467,7 @@ seam-proof-candy:
 seam-proof-box:
     candy:
         base: quay.io/fedora/fedora:43
-        distro: [fedora]   # a LIST of distro names -- the composed candy installs its packages with these
+        distro: [fedora]   # a LIST of distro names; the composed candy installs its packages with these
         description: |-
             The smallest BOX composing the seam's candy (a box carries base:, a candy carries
             secret_require: — one entity cannot be both). This bed exercises the BOX path, which is
