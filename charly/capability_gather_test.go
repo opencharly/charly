@@ -169,3 +169,35 @@ func TestGatherUsesFallBackWhenUnbound(t *testing.T) {
 		t.Fatalf("the binding must name the use and the provide's Origin, got %#v", got[0])
 	}
 }
+
+// TestGatherCollectsAProvidersProvidesOncePerType is the dedupe's own coverage, and it is the
+// test whose ABSENCE let a false error ship. The gatherer collects a member's provides once per
+// distinct provide TYPE; when it collected them inside the WANT loop instead, a member's env
+// provides were appended once per env want, so two env needs against ONE provider counted that
+// provider twice and `needsolver.Resolve` reported a FALSE ErrAmbiguous naming
+// "(candy:prov, candy:prov)" -- an error blaming the tree for the gatherer's arithmetic.
+//
+// The fixture must have TWO wants of one type. Every other case here has one, which is exactly
+// why the defect was invisible: a test with one item per collection cannot see a double-count.
+func TestGatherCollectsAProvidersProvidesOncePerType(t *testing.T) {
+	app := spec.Candy{Name: "app"}
+	app.Need = &spec.CandyNeed{Env: map[string]struct{}{"FOO": {}, "BAR": {}}}
+
+	prov := spec.Candy{Name: "prov"}
+	prov.EnvProvides = map[string]string{"FOO": "http://prov:80", "BAR": "http://prov:81"}
+	models := map[string]spec.Candy{"app": app, "prov": prov}
+
+	got, err := GatherStackCapabilities("app", models, map[string]bool{"app": true, "prov": true})
+	if err != nil {
+		// A double-count surfaces HERE, as ErrAmbiguous naming the same Origin twice.
+		t.Fatalf("two env needs against ONE provider must not be ambiguous: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("both env needs must bind, got %d: %#v", len(got), got)
+	}
+	for _, b := range got {
+		if b.Bound != "candy:prov" {
+			t.Fatalf("%q must bind to candy:prov, got %q", b.Want.Name, b.Bound)
+		}
+	}
+}
