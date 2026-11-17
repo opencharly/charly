@@ -12,7 +12,7 @@ package main
 //
 // NO MIRROR: the contract publishes the Go type. `spec v0.2026320.2307` carries `#AuditEvent` and its
 // primitives (`#Word`, `#Ref`, `#Timestamp` -- DESIGN.cue:1146-1175), so this file uses the generated
-// type directly and `AuditAppender` is the single seam core depends on. The hand-written mirror this
+// type directly. The hand-written mirror this
 // file used to carry existed only because the pinned spec had no such type; it is gone, and with it
 // the drift risk of two spellings of one contract.
 import (
