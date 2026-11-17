@@ -18,7 +18,7 @@ require (
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
-	github.com/opencharly/sdk v0.2026320.1345 // indirect
+	github.com/opencharly/sdk v0.2026320.2158 // indirect
 	github.com/opencharly/spec v0.2026320.2116 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
