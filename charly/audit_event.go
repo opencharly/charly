@@ -174,7 +174,6 @@ func appendAuditEvent(ev spec.AuditEvent) error {
 	return (stateAuditAppender{}).Append(ev)
 }
 
-// auditOutcome maps an act's error to the closed outcome word.
 // auditOutcome maps an act's error to the record's outcome. The closed table is `ok`/`failed` only:
 // a REFUSAL is not a distinct outcome in this wiring, because the acts wired here either run or fail --
 // nothing in this change authorizes or denies an act, so nothing can refuse one (D-AUDIT-5's `refused`
