@@ -5428,3 +5428,81 @@ plugin-skill:
         triggers:
             - "Authoring a plugin (a candy with a `plugin:` block) / builtin vs out-of-tree plugin / per-plugin `.cue` schema (single source → `gengotypes` for dev + schema-over-`Describe` RPC at runtime) / the plugin SDK (`github.com/opencharly/sdk`, the proxy-resolved contract module — no submodule) / `sdk/**` / a compiled-in plugin candy (`compiled_plugins:`) or host-coupled kit candy / an external plugin module"
             - "Editing `spec/schema/*.cue` / `charly task cue-gen` / `cue exp gengotypes` / generated `cue_types_gen.go` / Schema Driven Design (SDD) / a schema spike"
+
+seam-proof-candy:
+    candy:
+        description: |-
+            Declares exactly ONE required secret and NOTHING else — no base, no packages, no
+            services. THREE LIMITS this bed does NOT claim: (1) DELIVERY, not retrieval —
+            EnsureCandySecret mints a 32-byte token when the value is missing everywhere, so a pass
+            means "delivered", not "read from a pre-seeded store"; (2) the IR limb only — the seam
+            removes the value from the plan and the rendered script, and it is still persisted into
+            `state` as the unit's Environment=; (3) the handle-shaped answer is not this —
+            #BindOutput.binding is #Opaque (spec/schema/bind.cue:48-52), delivered at realize by the
+            type owner's bind (DESIGN.md:685). A green bed is not a compliance claim.
+        # A candy with NO source dir must still compose something: the build validator wants
+        # "at least one install file, a candy: field, an external_builder:, or a plugin: block".
+        # An inline candy has no source dir, so the lightest real answer is to compose one warm
+        # layer -- the same ref the sibling bed already uses, so the build cache is warm.
+        candy:
+            - '@github.com/opencharly/layer-ripgrep:v2026.235.1653'
+        secret_require:
+            - name: SEAM_PROOF_TOKEN
+              key: charly/seam-proof/token
+              description: >-
+                  The seam's proof token. Resolved from the credential store at CONFIG time; when it
+                  is missing everywhere EnsureCandySecret MINTS one, so this bed proves delivery, not
+                  retrieval from a pre-seeded store.
+        plan:
+            - check: the candy declares exactly one required secret and installs nothing, so its own plan is a no-op that must pass
+              id: seam-proof-declared
+              exit_status: 0
+              command:
+                in_container: false
+                command: "true"
+seam-proof-box:
+    candy:
+        base: quay.io/fedora/fedora:43
+        distro: [fedora]   # a LIST of distro names -- the composed candy installs its packages with these
+        description: |-
+            The smallest BOX composing the seam's candy (a box carries base:, a candy carries
+            secret_require: — one entity cannot be both). This bed exercises the BOX path, which is
+            the path the four migrating consumers take; the D-CAP-6 add_candy: union is
+            contract-correct but not exercised here, because an overlay ref resolves to a candy NAME
+            only by reading the overlay repo's manifest.
+        candy:
+            - seam-proof-candy
+check-seam-proof:
+    pod:
+        description: >-
+            R10 for the config-time secret seam (plugin-deploy-pod#73): a disposable pod whose box
+            chain authors secret_require:, so the seam's box walk reaches the candy. The check
+            asserts DELIVERY WITHOUT LEAKING — the value's LENGTH only, never the value (a bed log is
+            output, and D-SEC-1 lists output).
+        image: seam-proof-box
+        disposable: true
+        lifecycle: dev
+        plan:
+            - check: the container's environment carries SEAM_PROOF_TOKEN (non-zero length; the value is never printed)
+              id: seam-proof-token-delivered
+              context: [runtime]
+              timeout: 300s
+              exit_status: 0
+              stdout:
+                - contains: SEAM-PROOF-OK
+              command:
+                in_container: true
+                command: |
+                    set -eu
+                    # The plan runner expands a BRACED reference in a command's text against
+                    # the task's merged env, so a shell-style default expansion never reaches
+                    # the shell and the harness reports a DEAD assertion. Read the process
+                    # environment at RUN time instead -- the remedy AGENTS.md states for this:
+                    # printenv, guarded so an unset variable cannot abort the step.
+                    # NOTE: no braced reference may appear in THIS comment either; the scanner
+                    # reads the whole command text, comments included. That is how the first
+                    # version of this fix reintroduced the defect it documents.
+                    tok=$(printenv SEAM_PROOF_TOKEN 2>/dev/null || true)
+                    n=$(printf %s "$tok" | wc -c)
+                    test "$n" -gt 0
+                    echo "SEAM-PROOF-OK length=$n"
