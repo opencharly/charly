@@ -79,9 +79,15 @@ func (stateAuditAppender) Append(ev spec.AuditEvent) error {
 	if err != nil {
 		return fmt.Errorf("audit: open %s: %w", path, err)
 	}
-	defer f.Close()
 	if _, err := f.Write(append(line, '\n')); err != nil {
+		_ = f.Close() // the write already failed; report THAT error, not the close's
 		return fmt.Errorf("audit: append %s: %w", path, err)
+	}
+	// A Close error on an append-only file means the record may not be durable, so it is
+	// returned rather than discarded: an audit that silently loses a write is worse than one
+	// that reports it (D-AUDIT-1 requires the record to EXIST).
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("audit: close %s: %w", path, err)
 	}
 	return nil
 }
