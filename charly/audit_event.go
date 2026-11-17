@@ -31,13 +31,12 @@ import (
 
 // The closed vocabularies, from DESIGN.cue's _auditEvent/_auditOutcome.
 const (
-	auditEventMutate    = "mutate"
-	auditEventActivate  = "activate"
-	auditEventTeardown  = "teardown"
+	auditEventMutate   = "mutate"
+	auditEventActivate = "activate"
+	auditEventTeardown = "teardown"
 
-	auditOutcomeOK      = "ok"
-	auditOutcomeFailed  = "failed"
-
+	auditOutcomeOK     = "ok"
+	auditOutcomeFailed = "failed"
 )
 
 // INTERIM APPENDER, and it says so. The target is `sdk`'s `auditkit` (one `O_EXCL` file per act, which
