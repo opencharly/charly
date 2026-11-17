@@ -155,7 +155,10 @@ func TestGatherUsesFallBackWhenUnbound(t *testing.T) {
 	}{"NOBODY_OFFERS_THIS": {}}}
 
 	// No visible member provides env:NOBODY_OFFERS_THIS. A NEED here would be ErrUnbound; a
-	// USE falls back, so the gather must return no error and record no binding.
+	// USE falls back, so the gather must return no error -- and D-CAP-3 says it RECORDS the unbound
+	// use with Bound="", exactly one entry, rather than dropping it. (This sentence read "record no
+	// binding" until a review caught it: the author's original, mistaken requirement, left standing
+	// beside the assertion that contradicts it -- D-CAP-3 overruled it and the prose did not follow.)
 	got, err := GatherStackCapabilities("app", map[string]spec.Candy{"app": app}, map[string]bool{"app": true})
 	if err != nil {
 		t.Fatalf("a `use:` with no visible provide must fall back, not fail the load: %v", err)
