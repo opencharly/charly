@@ -69,7 +69,7 @@ func TestGatherCapabilitiesVocabulary(t *testing.T) {
 		if len(bindings) != 1 || bindings[0].Bound != "candy:prov" {
 			t.Fatalf("the recorded map must name the provide, got %+v", bindings)
 		}
-		if bindings[0].Capability.Name != "FOO" || bindings[0].Capability.Type != "env" {
+		if bindings[0].Name != "FOO" || bindings[0].Type != "env" {
 			t.Fatalf("the binding names the wrong capability: %+v", bindings[0].Capability)
 		}
 	})
@@ -171,7 +171,7 @@ func TestGatherUsesFallBackWhenUnbound(t *testing.T) {
 	if got[0].Bound != "" {
 		t.Fatalf("an unbound use must record Bound=\"\" (it went without), got %q", got[0].Bound)
 	}
-	if got[0].Want.Name != "NOBODY_OFFERS_THIS" {
+	if got[0].Name != "NOBODY_OFFERS_THIS" {
 		t.Fatalf("the recorded binding must name the use, got %#v", got[0])
 	}
 
@@ -186,7 +186,7 @@ func TestGatherUsesFallBackWhenUnbound(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("a bound use must record one binding, got %d: %#v", len(got), got)
 	}
-	if got[0].Want.Name != "NOBODY_OFFERS_THIS" || got[0].Bound != "candy:prov" {
+	if got[0].Name != "NOBODY_OFFERS_THIS" || got[0].Bound != "candy:prov" {
 		t.Fatalf("the binding must name the use and the provide's Origin, got %#v", got[0])
 	}
 }
@@ -218,7 +218,7 @@ func TestGatherCollectsAProvidersProvidesOncePerType(t *testing.T) {
 	}
 	for _, b := range got {
 		if b.Bound != "candy:prov" {
-			t.Fatalf("%q must bind to candy:prov, got %q", b.Want.Name, b.Bound)
+			t.Fatalf("%q must bind to candy:prov, got %q", b.Name, b.Bound)
 		}
 	}
 }
