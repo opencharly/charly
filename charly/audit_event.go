@@ -32,16 +32,12 @@ import (
 // The closed vocabularies, from DESIGN.cue's _auditEvent/_auditOutcome.
 const (
 	auditEventMutate    = "mutate"
-	auditEventAuthorize = "authorize"
-	auditEventAdmit     = "admit"
 	auditEventActivate  = "activate"
 	auditEventTeardown  = "teardown"
 
 	auditOutcomeOK      = "ok"
-	auditOutcomeRefused = "refused"
 	auditOutcomeFailed  = "failed"
 
-	auditDetailReason = "reason"
 )
 
 // spec.AuditEvent mirrors spec #spec.AuditEvent (DESIGN.cue:1153).
