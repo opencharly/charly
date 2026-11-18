@@ -94,7 +94,7 @@ func TestReservedWordRegistry_DeploySubstrates(t *testing.T) {
 	// deploy-substrate half is asserted by the loop above (its plugin is in the corpus, so
 	// the set — a projection of the index, not of spec.ResourceKinds — includes it). This
 	// pins the remaining half: `kubevirt` stays a CUE resource kind.
-	if !resourceKindSet["kubevirt"] {
+	if !spec.ResourceKindSet()["kubevirt"] {
 		t.Fatalf("kubevirt must remain a CUE resource kind (it is a known substrate word)")
 	}
 
