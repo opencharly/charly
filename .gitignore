@@ -160,3 +160,10 @@ pytorch_model*.bin
 
 # pluginsgen dev sibling (charly#835) — untracked by design: a dev build must leave the tracked tree clean
 charly/plugins_dev_generated.go
+
+# Session worktrees. A subrepo's own rulebook puts them under `<repo>/.worktrees/`, and
+# the umbrella's Part II #2 puts them under `<umbrella>/.worktrees/<slug>/<repo>/`. Both
+# are sanctioned, so the directory must be invisible to `git status` from either side --
+# an untracked `.worktrees/` made `charly task verify` fail with "charly: dirty working
+# tree" on 2026-11-18, and the tree was clean by every other measure.
+.worktrees/
