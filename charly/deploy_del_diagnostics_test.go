@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/opencharly/spec/spec"
 	"strings"
 	"testing"
 )
@@ -42,7 +43,7 @@ func TestUnresolvedDeployTargetError(t *testing.T) {
 		externalizedDeploySubstrates["kubevirt"] = true
 		pluginProviderRefs["deploy:kubevirt"] = "github.com/opencharly/plugin-kubevirt/candy/plugin-kubevirt"
 	}()
-	if !resourceKindSet["kubevirt"] || externalizedDeploySubstrates["kubevirt"] {
+	if !spec.ResourceKindSet()["kubevirt"] || externalizedDeploySubstrates["kubevirt"] {
 		t.Fatalf("precondition: kubevirt must be a resource kind absent from the deploy set")
 	}
 	unserved := unresolvedDeployTargetError("my-kv", "kubevirt").Error()

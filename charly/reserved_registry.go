@@ -40,10 +40,10 @@ func setFromSlice(words []string) map[string]bool {
 // from sdk/schema/*.cue. NEVER hand-edit a parallel copy; change the schema and
 // regenerate.
 var (
-	// resourceKindSet — the DEPLOYABLE subset that nests sub-entity children
-	// (#ResourceKind). Replaces the hand nodeResourceKinds + node_normalize.go's
-	// inline resource-child switch.
-	resourceKindSet = setFromSlice(spec.ResourceKinds)
+	// The #ResourceKind membership is NOT derived here: both consult sites ask the
+	// CONTRACT (spec.ResourceKindSet()), so core and contract cannot hold two
+	// derivations of one vocabulary that agree only by luck. resource_kind_set_test.go
+	// moves the vocabulary and asks a classification whose answer depends on it.
 	// authoredOpFieldSet — the AUTHORED #Op field vocabulary (builtin verbs +
 	// shared step modifiers, minus the never-authored internal fields). The
 	// parse-time desugar (node_desugar.go) classifies a step key against it:

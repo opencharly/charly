@@ -562,7 +562,7 @@ func ResolveTarget(node *spec.DeployNode, name string) (spec.UnifiedDeployTarget
 // generated deploy-provider index (a plugin-declared word, e.g. exampledeploy) — both are real
 // target words; neither is a typo.
 func unresolvedDeployTargetError(name, target string) error {
-	if resourceKindSet[target] || externalizedDeploySubstrates[target] {
+	if spec.ResourceKindSet()[target] || externalizedDeploySubstrates[target] {
 		ref := canonicalProviderRef(ClassDeployTarget, target, "", "")
 		if ref == "" {
 			// A known substrate word whose serving plugin is NOT in the generated corpus —

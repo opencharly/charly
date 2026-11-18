@@ -313,7 +313,7 @@ func isExternalDeploySubstrate(target string) bool {
 	if target == "" {
 		return false
 	}
-	if resourceKindSet[target] {
+	if spec.ResourceKindSet()[target] {
 		return externalizedDeploySubstrates[target] && recognizedDeploySubstrate(target)
 	}
 	return recognizedDeploySubstrate(target)
