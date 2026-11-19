@@ -10,10 +10,10 @@ package main
 // + ScanAllCandyWithConfig) — and the registry pull ref it produced — MOVED PLUGIN-SIDE: the calling
 // plugin (candy/plugin-build's ensureRemoteRef) loads the cached repo's cfg via the K1 loader reverse
 // legs + reads the box's registry/name itself (loaderkit.LoadUnified +
-// cfg.BoxConfig(name).Registry || cfg.Defaults.Registry + kit.ResolveShellImageRef), shedding the
-// deploykit import from charly core (the former backing file is DELETED; deploykit 15→14). The
-// candy-map/Resolved/Config fields the old reply carried were dead output (ScanAllCandyWithConfig
-// was wasted work — no caller read them). plugin-box's dispatchBuild uses only BoxName+CacheDir (it
+// cfg.BoxConfig(name).Registry || cfg.Defaults.Registry + kit.ResolveShellImageRef), which lets
+// charly core shed its deploykit import. The reply carries no candy-map/Resolved/Config field:
+// that output had no reader, so scanning for it would be wasted work. plugin-box's dispatchBuild
+// uses only BoxName+CacheDir (it
 // re-dispatches build:box with Dir=CacheDir), so it is unaffected by the pull-ref drop.
 
 import (

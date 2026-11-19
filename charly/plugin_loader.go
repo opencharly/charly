@@ -116,7 +116,7 @@ var pluginSchemas = &pluginSchemaSet{
 // base & Σ. (directive: a proper schema is evaluated every time a plugin loads.)
 func registerPluginUnitSchema(name string, s PluginSchema) error {
 	if strings.TrimSpace(s.CueSource) == "" {
-		// NO SCHEMA-LESS PLUGINS (the former stub-gate relaxation is DELETED). Every
+		// NO SCHEMA-LESS PLUGINS. Every
 		// plugin MUST serve a non-empty, self-contained CUE schema — its single
 		// source for typed params, charly.yml/env configuration, runtime validation,
 		// and Go code generation. There is no input-less exemption: a plugin whose
@@ -375,15 +375,13 @@ func safePluginBinName(name string) string {
 
 // The out-of-tree plugin BUILD lives in sdk/buildcache, and this file owns no cache path.
 //
-// The cluster that used to sit here is DELETED (R5): pluginBuildCacheDir (a second
-// os.UserCacheDir() root that ignored CHARLY_CACHE_DIR), pluginSourceTag (a digest of the
-// ABSOLUTE source PATH — the #76 fix for the cross-worktree output-file race, which could not
-// answer "is this binary still current"), buildPluginBinary (the `go build -o <bin>` plus its
-// atomic rename), the `bin+".lock"` per-binary lock that sat INSIDE the cache tree, and the
-// pluginBuildStamp / .stamp content-stamp sidecar (all of plugin_build_stamp.go) that patched
-// the path key's freshness hole. The build cache is now the content-addressed store, keyed by
-// D-STORE-4's inputs, so the stamp dies BY CONSTRUCTION — freshness IS the key — and the per-key
-// lock lives in buildcache under the runtime root, not in the cache (the homes rule).
+// Two rules follow, and both are why the build-and-cache step is delegated. First, the build
+// cache is the content-addressed store keyed by D-STORE-4's inputs, so freshness IS the key: no
+// content-stamp sidecar and no source-PATH digest is needed to answer "is this binary still
+// current", because a path key cannot answer it — the same source builds under a different path
+// per worktree. Second, the per-key lock lives in buildcache under the runtime root, never inside
+// the cache tree (the homes rule); and a second os.UserCacheDir() root has no place here, since
+// such a root ignores CHARLY_CACHE_DIR.
 //
 // The `-buildvcs=false` decision that used to live in pluginBuildVCSFlag is now unconditional
 // inside buildcache.Build, for the same reason it was made here (charly#178): `-buildvcs=auto`
@@ -1118,9 +1116,9 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // resolveMergedDeployTree returns the top-level Deploy (deploy-node) map — the merged project
 // charly.yml + per-host operator overlay, ready for dotted-path traversal — the host-side
 // merged-tree read the two remaining check host seams need (deployNodePluginContext below +
-// check_venue_resolve.go's checkVenueExecFromReply). It replaces the DELETED deploy_tree.go
-// host merged-tree read (#55 LOADER cone): instead of a host-resident sdk/deploykit projection+merge
-// (the incomplete seam a floor-M read must not carry), it drives the LOADER CAPABILITY — the
+// check_venue_resolve.go's checkVenueExecFromReply). It is not a host-resident sdk/deploykit
+// projection+merge (the incomplete seam a floor-M read must not carry): it drives the
+// LOADER CAPABILITY — the
 // spec.ProjectLoader.ResolveMergedDeployTree seam (#55 coneA Q2(1)), which runs the
 // loaderkit.ResolveMergedTreeViaExecutor project+overlay merge INSIDE the loader plugin over the
 // in-proc host reverse channel (the SAME executorReverseServer path command:validate /

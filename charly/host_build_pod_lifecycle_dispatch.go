@@ -276,9 +276,9 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		// preempt.go) — CHARLY_PREEMPT_LEASE-gated host-process state a placement-agnostic
 		// plugin cannot own (candy/plugin-pod ships out-of-process, so its own env cannot see
 		// the outer orchestrator's guard). This is now the ONLY core-side arbiter bracket: the
-		// deploy-dispatch Start/Stop bracket went peer-dispatch at K-wave 2 cone R2 bank E
-		// (candy/plugin-fleet's handleLifecycleSimple Invokes verb:arbiter directly; the
-		// "arbiter-bracket-*" HostBuild seam is DELETED). The plugin defers this call as its
+		// deploy-dispatch Start/Stop bracket is peer-dispatch
+		// (candy/plugin-fleet's handleLifecycleSimple Invokes verb:arbiter directly; there is no
+		// "arbiter-bracket-*" HostBuild seam). The plugin defers this call as its
 		// LAST step, reproducing the former core `defer releaseResourceClaim(...)`'s "always
 		// runs, after everything else" semantics. It does NOT touch a LifecycleTarget, so it
 		// stays outside dispatchAndRunLifecycle (see file header).

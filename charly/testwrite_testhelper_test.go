@@ -2,8 +2,8 @@ package main
 
 // testwrite_testhelper_test.go — shared test-file-writing helpers for package main.
 //
-// `mustWrite` used to live in plugin_build_stamp_test.go, which was DELETED WHOLE with the loader's
-// content-stamp sidecar (the phase-1 store cutover, charly#896). It is not a stamp concern — it is
+// `mustWrite` lives here rather than beside any stamp code — there is no content-stamp sidecar to
+// sit next to (the store cutover, charly#896), and it is not a stamp concern anyway — it is
 // the one write-with-assertion helper several unrelated test files reach for (refs_sweep_test.go
 // among them), so deleting the file that happened to carry it left a package that did not compile.
 // It lives here now, on its own, so no future file's deletion can take it down with it.

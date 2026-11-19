@@ -100,8 +100,8 @@ func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerCon
 // seam was needed for the template-plan lookup either: candy/plugin-fleet's OWN node_resolve.go
 // already carried lookupLocalTemplate, a fully plugin-native resolver (the resolved-project
 // envelope + a direct InvokeProvider(kind,"local") call, no LoadUnified) — reusing it (R3) is what
-// finally makes the former core findLocalSpec/resolveLocalRefFor/namespace.go fully dead; all
-// three are DELETED.
+// leaves no core copy of that resolve: findLocalSpec, resolveLocalRefFor and namespace.go have no
+// role on this path.
 
 // dispatchVerifyChecks (the core-side function that drove command:check's OpVerifyChecks in-proc)
 // is GONE (#55 W3 B3 remainder): its production callers are all dead now — verify_local.go

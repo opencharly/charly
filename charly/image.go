@@ -29,37 +29,29 @@ type BoxCmd struct {
 	kong.Plugins
 }
 
-// MIGRATION INVENTORY (north-star §4.4): the box command-dispersal is now COMPLETE for BoxCmd —
-// every `charly box <word>` verb is a command:<word> plugin (candy/plugin-box), so BoxCmd holds no
-// verb of its own (main.go knows zero box verbs; the struct is purely the plugin-attachment holder).
-// Trace: generate/validate/new/pull/build/inspect/list/labels/merge/reconcile externalized
-// across K3/P14/Cutover-B (labels fully in K3, merge at P14, reconcile at Cutover B unit 3+4 [no
-// core-only coupling — candy/plugin-box/reconcile.go]; pull FULLY externalized at K3 #39 —
-// candy/plugin-box's dispatchPull runs the ensure-image work itself via InvokeProvider(build:ensure);
-// BoxPullCmd + the hidden __box-pull reentry are DELETED; build FULLY externalized at P8b —
-// candy/plugin-box's dispatchBuild runs the former BuildCmd.Run body ITSELF (NormalizeBoxArgs →
-// remote-ref pivot via buildkit.DetectRemoteBuildRef + HostBuild("remote-image-resolve") →
-// build-activity flock → InvokeProvider(build:box) → retention prune), so BuildCmd + the hidden
-// __box-build reentry are DELETED, matching the pull move); and feature at cone-C #31 — `charly box
-// feature run` is now candy/plugin-box's command:feature (bridging to the plugin-check engine over
-// InvokeProvider), the former in-core BoxFeatureCmd/BoxFeatureRunCmd + hostFeatureBox DELETED. See
-// sdk/deploykit/write_labels.go + candy/plugin-box/{merge_cmd,reconcile,box}.go's dispatchPull/dispatchBuild.
-// (charly/labels.go, this comment's former citation, no longer exists — the OCI-label surface
-// relocated to sdk/deploykit + spec/container; see /charly-internals:capabilities.)
+// BoxCmd holds no verb of its own: every `charly box <word>` verb is a command:<word> plugin
+// (candy/plugin-box), and main.go knows zero box verbs, so the struct is purely the
+// plugin-attachment holder. candy/plugin-box serves all of them — generate, validate, new, pull,
+// build, inspect, list, labels, merge, reconcile and feature. dispatchPull runs the ensure-image
+// work itself via InvokeProvider(build:ensure); dispatchBuild runs the build body itself
+// (NormalizeBoxArgs → remote-ref pivot via buildkit.DetectRemoteBuildRef +
+// HostBuild("remote-image-resolve") → build-activity flock → InvokeProvider(build:box) →
+// retention prune); and `charly box feature run` is command:feature, bridging to the plugin-check
+// engine over InvokeProvider. reconcile carries no core-only coupling
+// (candy/plugin-box/reconcile.go). See sdk/deploykit/write_labels.go +
+// candy/plugin-box/{merge_cmd,reconcile,box}.go's dispatchPull/dispatchBuild. The OCI-label
+// surface lives in sdk/deploykit + spec/container; see /charly-internals:capabilities.
 //
-// The host-coupled remainder that DID stay core is the genuine floor a sdk-only candy cannot run:
-// the git clone/cache (EnsureRepoDownloaded → clone/cache, K1), reached by the candy over the thin
-// HostBuild("remote-image-resolve") seam (host_build_remote_image_resolve.go — K1 loader wave: the
-// box-RESOLVE moved plugin-side, the backing file DELETED); the
-// build-engine RESOLVE legs (host_build_buildengine.go). The bootstrap-builder pre-pass
-// (ensureBuilderImageBuilt/dispatchBoxBuild) externalized FULLY at K3 vm-build move
-// (coneB-buildremnant): candy/plugin-vm's resolveVmBuild (vm_build_resolve.go) now runs
-// `charly vm build`'s PREP+RESOLVE plugin-side, reaching the builder-image auto-build via
-// InvokeProvider(build, box) instead of a core reentry; charly/host_build_vm_build.go is DELETED.
-// The former core ensure-image helper (core-min wave 3, build-engine cluster
-// relocation) is DELETED — its ensure-image ORCHESTRATION moved to candy/plugin-build's build:ensure
-// word, dispatched via dispatchBuildEnsure (dispatch_build_ensure.go), a thin CLI-independent host
-// helper — not part of this command-dispersal accounting at all.
+// What stays core is the genuine floor a sdk-only candy cannot run: the git clone/cache
+// (EnsureRepoDownloaded → clone/cache, K1), which the candy reaches over the thin
+// HostBuild("remote-image-resolve") seam (host_build_remote_image_resolve.go — the box-RESOLVE
+// runs plugin-side, over that seam); and the build-engine RESOLVE legs
+// (host_build_buildengine.go). `charly vm build`'s PREP+RESOLVE runs plugin-side in
+// candy/plugin-vm's resolveVmBuild (vm_build_resolve.go), reaching the builder-image auto-build
+// via InvokeProvider(build, box) rather than a core reentry. The ensure-image ORCHESTRATION is
+// candy/plugin-build's build:ensure word, dispatched via dispatchBuildEnsure
+// (dispatch_build_ensure.go) — a thin CLI-independent host helper, outside this command-dispersal
+// accounting.
 
 // FormatCLIError wraps top-level Kong errors with a friendly recommendation
 // when the underlying cause is a missing local image (spec.ErrImageNotLocal).

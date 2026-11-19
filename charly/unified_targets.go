@@ -320,8 +320,8 @@ func (t *pluginDeployTarget) Update(ctx context.Context, plans []*spec.InstallPl
 	return nil
 }
 
-// Test (UnifiedDeployTarget's former deploy-scope check-live method) is DELETED (#55 W3 B3
-// remainder): it had ZERO real callers anywhere in the tree — `charly check live` reaches
+// Test (a deploy-scope check-live method on UnifiedDeployTarget) does not exist: it would have ZERO
+// real callers anywhere in the tree — `charly check live` reaches
 // candy/plugin-check directly (live_gather.go's pluginCheckRunLive), never through this adapter —
 // its ONE caller was a unit test (plugin_executor_reverse_e2e_test.go), which now covers the
 // probe-marker check a different way. runUnifiedTargetChecks/TestOpts die with it; dispatchVerifyChecks
@@ -381,8 +381,8 @@ func (t *pluginDeployTarget) bracketedLifecycle() bool {
 // Start dispatches OpStart. When the substrate's DECLARED trait says its lifecycle is bracketed
 // (today only pod) the request carries HasPlan=true, so command:deploy's handleLifecycleSimple
 // brackets its OWN dispatch with the Q1 resource-arbiter claim by InvokeProvider("verb","arbiter")
-// (the "arbiter-bracket-*" HostBuild seam is DELETED, K-wave 2 cone R2 bank E) — FLOOR-SLIM-proper
-// Unit-8's K4-exit: core no longer brackets the dispatch call itself (the former arbiter_bracket.go).
+// (there is no "arbiter-bracket-*" HostBuild seam) — FLOOR-SLIM-proper
+// Unit-8's K4-exit: core does not bracket the dispatch call itself.
 // The opts
 // marshal itself is inherently CLI-invocation-context-bound (podStartOptsFromCtx reads a ctx value
 // only `charly start`'s Kong Run() sets — an out-of-process plugin has no access to it), so the

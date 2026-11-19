@@ -167,8 +167,8 @@ func (h *hostVerbResolver) RunProvisionAct(ctx context.Context, op *spec.Op, ver
 	return h.runProvisionAct(ctx, op, verb)
 }
 
-// The former venueResolver — the `on:` DRIVER venue → kit.VenueResolver adapter for the IN-PROC
-// plan drive — is DELETED (#55 CHECK-ENGINE cone Unit 2): the deploy-scope check DRIVE moved
+// There is no venueResolver — no `on:` DRIVER venue → kit.VenueResolver adapter for an IN-PROC
+// plan drive: the deploy-scope check DRIVE runs
 // PLUGIN-SIDE (command:check OpVerifyChecks), where candy/plugin-check's pluginVenueResolver +
 // members.go rebuild the cross-deployment resolution over the check reverse channel. The core
 // liveTargetResolver/resolveHostVars cluster it wrapped (charly/check_members.go) went dead with it

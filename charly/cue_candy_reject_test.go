@@ -5,9 +5,9 @@ package main
 //
 // Each fixture uses the CURRENT node-form shape (`<name>: {candy: {...}}`); the
 // retired bare `candy:` child-node wrapper is itself rejected as a shape error
-// ("no kind discriminator"), which would make every case pass vacuously. The
-// `missing version` case was DELETED with the schema-versioning removal: there is
-// no mandatory-CalVer rule on a candy any more, so a version-less candy is valid
+// ("no kind discriminator"), which would make every case pass vacuously. There is no
+// `missing version` case: there is no mandatory-CalVer rule on a candy, so a
+// version-less candy is valid
 // (asserted by cue_tighten_test.go's "candy missing version accepted").
 
 import "testing"

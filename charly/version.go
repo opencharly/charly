@@ -68,7 +68,7 @@ func ComputeCalVerAt(t time.Time) string {
 // "YYYY.DDD.HHMM" parser: a non-canonical value parses as ok=false, which the migration runner
 // treats as "older than every real CalVer".
 //
-// The former in-core LatestSchemaVersion() shim was DELETED with the schema-versioning removal
-// cutover: there is no schema HEAD, no version stamp, and no load-time version gate. Compatibility
+// There is no in-core LatestSchemaVersion() shim: no schema HEAD, no version stamp, and no
+// load-time version gate. Compatibility
 // has ONE mechanism — the CLOSED CUE schema, which rejects a leftover `version:` with a hard
 // `field not allowed` error; `charly migrate` strips the key.

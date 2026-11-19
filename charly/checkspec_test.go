@@ -290,10 +290,10 @@ func TestMatcherList_UnmarshalJSON_Shorthand(t *testing.T) {
 	}
 }
 
-// TestTestVarRefPattern_BackwardCompatible (kit.TestVarRefs dedup/order
-// assertion) DELETED as a duplicate of sdk/kit/checkvars_expand_test.go's
-// TestTestVarRefs, which already proves the same function's dedup + order
-// behavior directly in the kit package (#55 K3 Cone 4).
+// kit.TestVarRefs' dedup/order assertion is proved by
+// sdk/kit/checkvars_expand_test.go's TestTestVarRefs, which proves the same
+// function's dedup + order behavior directly in the kit package; there is no
+// duplicate of it here.
 
 // The former TestContainsList_BareSequenceDefaultsToContains /
 // TestContainsList_RealWorldHarnessProbe tested the base #Op `contains` load
@@ -325,7 +325,7 @@ stdout: PONG
 	}
 }
 
-// TestIsRuntimeOnlyVar_DeployName (DEPLOY_NAME is deploy-scope, resolved only
-// against a live deployment) DELETED as a duplicate of sdk/kit/checkvars_expand_test.go's
-// TestIsRuntimeOnlyVar, whose case table already asserts {"DEPLOY_NAME", true}
-// directly in the kit package (#55 K3 Cone 4).
+// DEPLOY_NAME's deploy-scope classification is proved by
+// sdk/kit/checkvars_expand_test.go's TestIsRuntimeOnlyVar, whose case table asserts
+// {"DEPLOY_NAME", true} directly in the kit package; there is no duplicate of it
+// here.

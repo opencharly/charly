@@ -13,8 +13,8 @@ import (
 // candy/plugin-authoring's command:fetch/command:refresh (K3 build-tail tail, coneB-buildremnant):
 // wraps the host-coupled repo resolver (ResolveProjectRepo → EnsureRepoDownloaded, refs.go — the
 // CHARLY_REPO_OVERRIDE + registered refs-backend download + command:migrate auto-migration, none of
-// which an sdk-only plugin can run itself) behind ONE generic seam, replacing the former hidden core
-// `__box-fetch`/`__box-refresh` reentries (charly/box_fetch_reentry.go, DELETED). refs.go's
+// which an sdk-only plugin can run itself) behind ONE generic seam, with no hidden core
+// `__box-fetch`/`__box-refresh` reentry. refs.go's
 // EnsureRepoDownloaded is consumed AS-IS (unmodified) — coneC's P15 refs.go floor-reclassify needs it
 // stable as this seam's callee.
 const boxFetchResolveBuilderKind = "box-fetch-resolve"

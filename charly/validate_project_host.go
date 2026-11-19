@@ -22,8 +22,8 @@ import (
 // live non-marshalable cue.Value graph") was REFUTED — every CUE entry point they call is a FREE
 // FUNCTION in sdk/loaderkit, which has owned its own compiled schema since cone R1 ruling 1, and
 // the ProjectLoader methods the host called were bare forwards to exactly those functions. So all
-// three validators folded into candy/plugin-box (validate_schema_rules.go), which already imports
-// loaderkit, and charly/validate.go is DELETED.
+// three validators live in candy/plugin-box (validate_schema_rules.go), which already imports
+// loaderkit; there is no charly/validate.go.
 //
 // What genuinely cannot follow them is the provider REGISTRY — a kernel M-mechanism. So this file
 // keeps one seam whose entire job is to answer registry questions: the plugin enumerates the words

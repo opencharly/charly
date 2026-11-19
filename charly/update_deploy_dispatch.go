@@ -19,8 +19,8 @@ import (
 // resolution + the disposability transparency note moved PLUGIN-SIDE to candy/plugin-pod
 // (resolveUpdateDeployNode + noteUpdateDisposability there now — the plugin resolves the merged
 // tree via loaderkit.ResolveMergedTreeViaExecutor, looks up the full deploy key, prints the
-// note, and threads the resolved node on the shared #PodLifecycleRequest.node envelope; the
-// former #PodUpdatePayload.tree_json whole-tree thread is DELETED). What stays here is the
+// note, and threads the resolved node on the shared #PodLifecycleRequest.node envelope; no
+// #PodUpdatePayload.tree_json whole-tree thread exists). What stays here is the
 // irreducible core-private dispatch body dispatchByDeployTarget, which CALLS two M-mechanisms a
 // plugin cannot reach:
 //   - loadDeployPlugins (plugin_loader.go) IS the plugin-loading mechanism — it mutates the

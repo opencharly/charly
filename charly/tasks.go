@@ -14,9 +14,9 @@ import (
 // per-verb Containerfile-line emitters live in sdk/deploykit (tasks_emit.go), reached by the
 // candy/plugin layers and by charly's own tests (e.g. deploykit.ResolveUserSpec).
 //
-// The inline-builder seam (resolveInlineBuilderSeam) that used to open this file is DELETED in
-// K-wave 2 cone R1: it was the last claimed host-only render seam, and the claim did not survive
-// inspection — its body was the SAME OpResolve dispatch the detection and external builder legs had
+// There is no inline-builder seam (resolveInlineBuilderSeam): it would be the last claimed
+// host-only render seam, and that claim does not survive
+// inspection — its body would be the SAME OpResolve dispatch the detection and external builder legs have
 // already been running plugin-side, plus a connect step that duplicated the host's own generic
 // connectPluginByWordRef (now reached from the plugin as ops.InvokeProviderOpts.ExtraRef). It lives
 // in sdk/deploykit's NewRenderGeneratorFromProject now, beside its two siblings.
@@ -25,9 +25,9 @@ import (
 // external-STEP emit (dispatchOCIStep, F-STEP-EMIT — the pod-overlay deploykit.OCITarget's
 // compiler-emitted-step build-emit). It Invokes the provider's ops.OpEmit with the already-marshalled
 // params (a step's opaque Payload) and the caller-supplied spec.BuildEnv descriptor, decodes the
-// EmitReply, and returns the Containerfile fragment. (The build-context VERB emit — the
-// former host-side toDeploykit()/invokeVerbBuildEmit EmitPluginOp bridge — was production-dead
-// and DELETED in #55 cone-render Unit A: the live plugin-verb build-emit runs plugin-side in
+// EmitReply, and returns the Containerfile fragment. (There is no build-context VERB emit bridge
+// of the toDeploykit()/invokeVerbBuildEmit EmitPluginOp shape: it would be production-dead, since
+// the live plugin-verb build-emit runs plugin-side in
 // candy/plugin-build via InvokeProvider(ops.OpEmit).) ctx MAY carry an in-proc reverse channel
 // (sdk.ContextWithExecutor) so a HOST-COUPLED step plugin can call back HostBuild during its
 // ops.OpEmit; a PURE step plugin ignores it and returns the fragment directly.

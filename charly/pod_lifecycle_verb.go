@@ -10,7 +10,7 @@ import (
 // pod_lifecycle_verb.go — dispatchLifecycleTarget, the shared core (M) Mechanism behind every pod
 // lifecycle VERB (`charly start`/`stop`/`shell`/`logs`/`cmd`/`service`, the K4 deep-body move): a
 // pod deploy reaches the plugin's OpStart/OpStop/… body (via the F6 dispatch + arbiter bracket,
-// pod_lifecycle_dispatch.go); the former inline runDirect/runQuadlet/StopCmd bodies are DELETED.
+// pod_lifecycle_dispatch.go); no inline runDirect/runQuadlet/StopCmd body exists here.
 // This mirrors `charly update`'s dispatchByDeployTarget (update_deploy_dispatch.go) — one verb, one
 // substrate-agnostic dispatch, no per-kind code. #55 W3 A10 folded the former thin
 // startViaLifecycle/stopViaLifecycle wrappers (each had exactly ONE caller) directly into
@@ -40,9 +40,9 @@ func dispatchLifecycleTarget(verb string, node *spec.DeployNode, deployName stri
 	if err := loadDeployPlugins(dir, deployName, nil); err != nil {
 		return nil, err
 	}
-	// ResolveTarget connects the substrate provider itself (ensureDeployProviderConnected), so the
-	// former node.Target-scoped connectPluginByWord call here is DELETED: it was a second copy of
-	// the same connect step, and keeping it would leave two connect paths for one substrate.
+	// ResolveTarget connects the substrate provider itself (ensureDeployProviderConnected), so no
+	// node.Target-scoped connectPluginByWord call belongs here: it would be a second copy of
+	// the same connect step, leaving two connect paths for one substrate.
 	target, err := ResolveTarget(node, deployName)
 	if err != nil {
 		return nil, err

@@ -22,9 +22,9 @@ func TestResolveImageRefForEnsure_FullRef(t *testing.T) {
 // "remote-image-resolve" seam BEFORE ever calling this function, so resolveImageRefForEnsure no
 // longer has (or needs) a remote-ref branch.
 //
-// The buildableShortNameForEnsure tests that used to live here are DELETED (#55 coneK1 #8): the
-// host buildableShortNameForEnsure is gone (the build:ensure word resolves the build-fallback
-// short name plugin-side now — buildableShortNamePlugin in candy/plugin-build/ensure.go).
+// No buildableShortNameForEnsure test lives here: that host function does not exist, because the
+// build:ensure word resolves the build-fallback short name plugin-side —
+// buildableShortNamePlugin in candy/plugin-build/ensure.go.
 func TestResolveImageRefForEnsure_ShortNameRequiresCfg(t *testing.T) {
 	_, err := resolveImageRefForEnsure("check-target", nil, "")
 	if err == nil {

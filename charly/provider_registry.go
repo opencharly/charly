@@ -21,8 +21,8 @@ import (
 // word resolves through here regardless of transport.
 //
 // Every built-in dispatch is registry-driven: VERBS (C1), KINDS (C2), STEPS (C4),
-// BUILDERS (C5), and DEPLOY TARGETS (C3) all register here and their dispatch
-// switches are DELETED — the call site resolves + dispatches through the registry.
+// BUILDERS (C5), and DEPLOY TARGETS (C3) all register here, and there is no dispatch
+// switch — the call site resolves + dispatches through the registry.
 // The registry also holds every plugin-contributed provider (its first consumer was
 // the example plugin in C0).
 var providerRegistry = newRegistry()

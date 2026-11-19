@@ -13,10 +13,10 @@ import (
 // VNC-password read for check_endpoint_resolve.go's resolveVNCPassword (the ONE remaining
 // in-core consumer). The store itself (keyring + config backends, `charly secrets`, the GPG
 // `.secrets` surface) lives OUT-OF-PROCESS in candy/plugin-secrets; pluginCredentialStore
-// forwards to verb:credential over the registry. K-wave 2 cone CONTESTED THINned 213→~105:
-// the CredentialStore interface, Get/Set/Delete/List/Name, awaitUnlock, and the unreachable
-// Get-fallback are DELETED (zero production callers — the keyring-unlock wait lives
-// plugin-side in candy/plugin-pod's pluginAwaitKeyringUnlock).
+// forwards to verb:credential over the registry. What remains here is deliberately thin: no
+// CredentialStore interface, no Get/Set/Delete/List/Name surface, no awaitUnlock and no
+// Get-fallback (zero production callers — the keyring-unlock wait lives plugin-side in
+// candy/plugin-pod's pluginAwaitKeyringUnlock).
 const CredServiceVNC = "charly/vnc"
 
 // credentialResolver is the richer-resolution seam: a store that classifies a lookup's
