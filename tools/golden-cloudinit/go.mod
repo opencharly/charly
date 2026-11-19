@@ -2,7 +2,7 @@ module github.com/opencharly/charly/tools/golden-cloudinit
 
 go 1.26.8
 
-require github.com/opencharly/sdk v0.2026322.1853
+require github.com/opencharly/sdk v0.2026323.1623
 
 require (
 	cuelang.org/go v0.16.1 // indirect
