@@ -9,9 +9,8 @@ import (
 
 // checkrun_test.go — fakeExecutor / fakeResponse, the shared spec.DeployExecutor fixture for
 // the compiled-in-kit-candy REGISTRY-DISPATCH integration tests (relocated_verb_wiring_test.go
-// + checkrun_act_test.go + external_verb_dispatch_test.go + plugin_test.go — the former
-// plugin_*_relocated_test.go family + plugin_relocated_kit_test.go's assertRelocatedVerbDispatch
-// are DELETED, K-wave 2 test migration, their behavior moved to the owning candies):
+// + checkrun_act_test.go + external_verb_dispatch_test.go + plugin_test.go — the relocated-plugin
+// coverage lives in the owning candies):
 // these prove providerRegistry.ResolveVerb resolves a compiled-in kit candy's CheckVerbProvider
 // and dispatches it via hostVerbResolverFor — charly's OWN registry wiring, not a verb's own
 // RunVerb logic (that coverage now lives beside each verb in its own candy/plugin-<verb> module,
@@ -20,9 +19,9 @@ import (
 // TestRunner_FileVerb / TestRunner_CommandVerb (the verb-logic tests) relocated to
 // candy/plugin-file/plugin_test.go / candy/plugin-command/plugin_test.go.
 // TestRunner_VariableExpansion / TestRunner_SkipFlag / TestRunner_EmptyCheck (kit.RunOne's own
-// wrapper semantics, "command" used only as an incidental payload) relocated to
-// sdk/kit/planrun_dispatch_test.go. newCheckRunner + newFakeRunner (the charly-constructed
-// kit.Runner path production no longer uses) are DELETED — every remaining fakeExecutor consumer
+// wrapper semantics, "command" used only as an incidental payload) lives in
+// sdk/kit/planrun_dispatch_test.go. There is no newCheckRunner and no newFakeRunner, and no
+// charly-constructed kit.Runner path at all: every fakeExecutor consumer
 // dispatches through hostVerbResolverFor directly, never a kit.Runner.
 
 // fakeExecutor records calls and returns canned results by command-prefix.

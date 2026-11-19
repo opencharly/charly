@@ -19,17 +19,17 @@ import (
 // InvokeProvider("build","generate",sdk.OpResolve,{Boxes:[base],ExtraCandyRefs:overlayCandies}) call
 // — the SAME plugin-side resolveBuildEngine pipeline the main build:box/build:generate drive already
 // runs (RDD-proven live: InitSystem/InitDef/BakedMetadata populate on this Op, unlike
-// build:project's deliberately-lean resolve) — instead of this host seam reconstructing a separate
-// *Generator via the now-DELETED NewGenerator. That plugin-side resolveBuildEngine call ALSO
+// build:project's deliberately-lean resolve) — this host seam does not reconstruct a separate
+// *Generator. That plugin-side resolveBuildEngine call ALSO
 // already stages remote add_candy: candy sources (runHostFSPrep's createRemoteCandyCopies, K3
 // host-prep move) and resolves per-candy security (spec.CandyModel.Security is wire-carried; the
 // candy computes it itself via candyByName(dg.Candies,name).Security(), no host fetch needed).
 // candy/plugin-deploy-pod's buildOverlay ALSO resolves the overlay candies' secret_requires:/
 // secret_accepts: env PLUGIN-SIDE (deploykit.SelectCandiesForPlans + ResolveSecretForCandy over
 // deploykit.CredentialAccessViaExecutor + InjectSecretsIntoPlans, mirroring
-// candy/plugin-fleet/secrets_artifacts.go) — the former host-side resolveCandySecrets +
-// InjectSecretsIntoPlans + the enc.go coreCredentialAccess adapter + layer_secrets.go are DELETED
-// in the coneB-br2 cutover (the deploykit import this file carried for them is gone).
+// candy/plugin-fleet/secrets_artifacts.go) — and the HOST resolves none of it: there is no
+// resolveCandySecrets, no plan injection, no coreCredentialAccess adapter and no layer_secrets.go
+// on this side, which is why this file carries no deploykit import for them.
 //
 // What GENUINELY remains host-only here: re-attaching the LIVE plans + parent venue that
 // ride the ctx (overlayBuildInputs, set by the host's own PrepareVenue dispatch, never serialized —
@@ -42,14 +42,11 @@ import (
 // that care about distro/format read their OWN candy-side envelope's box.DistroDef (derived from
 // the box's wire-carried .Distro tag — the base-distro render is plugin-side via
 // dg.Boxes[env.Image].DistroDef in candy/plugin-installstep's emitSystemPackages, K5-A/C1.2), NOT
-// this host struct; the former resolveOverlayBaseDistroDef host resolve (deploykit.ResolveSpecBox
-// for the base .Distro) was DEAD on the step-emit path and is DELETED (R1 doc-divergence: the prior
-// comment claimed it "MUST reflect the base distro" but the trace proved no live reader —
-// dispatchOCIStep never touched it). nil is the safe value (safer than the former
-// detectHostContext() operator-host fallback that was the original cross-distro bug;
-// detectHostContext + resolveDistroDef were DELETED in #55 coneB-br2 Group 2 — their sole caller
-// resolveOverlayBaseDistroDef above was dropped, deadening them; the deploy compile uses the
-// plugin's own twin candy/plugin-fleet/dispatch.go detectHostContext).
+// this host struct; nothing on the step-emit path reads a base distro, so no host resolve of it
+// exists (dispatchOCIStep never touches DistroCfg). nil is the correct — and the safe — value:
+// the alternative is to fall back to the operator host's own distro, which is the cross-distro
+// bug itself. The deploy compile uses the plugin's own twin
+// candy/plugin-fleet/dispatch.go detectHostContext.
 //
 // The candy (plugin-deploy-pod podPrepareVenue) calls this shrunk seam via HostBuild("overlay")
 // FIRST (to learn reply.Plans, needed to compute the overlay candy set), THEN makes its own
@@ -309,11 +306,10 @@ var _ = func() bool {
 // file's header); read by the "oci-emit-step" step-emitter when an OUT-OF-PROCESS caller
 // (candy/plugin-deploy-pod) invokes HostBuild("step-emit", {Word:"oci-emit-step", …}) — the live
 // buildEngineContext cannot cross the wire, so the candy passes only the Dir key + the host looks
-// up the cached context. One entry per dir per process. (It used to mirror renderGenCache, the
-// box-build's per-dir Generator cache for its render-seam; both that cache and the render-seam
-// host-builder are DELETED in K-wave 2 cone R1 — every render seam peer-dispatches now, so no host
-// callback reads a Generator any more. What survives here is only the pod-overlay's own context
-// cache, keyed the same way); this cache holds the buildEngineContext the step-emit emitter needs
+// up the cached context. One entry per dir per process. (Only the pod-overlay's own context cache
+// lives here: every render seam peer-dispatches, so no host callback reads a Generator and there
+// is no per-dir Generator cache to mirror); this cache holds the buildEngineContext the step-emit
+// emitter needs
 // (Box/ImageBuildDir/ContextRelPrefix alongside the Generator — dispatchOCIStep reads only
 // build.Box.Name + build.Generator.DevLocalPkg/ExtraCandyRefs, never DistroCfg).
 var overlayBuildContextCache sync.Map
@@ -364,7 +360,7 @@ func collectOverlayCandies(plans []*spec.InstallPlan, box string) []spec.ExtraCa
 	return out
 }
 
-// readImageRegistry (the standalone `podman inspect --format` registry-label read) is DELETED
-// (K3-W2): candy/plugin-deploy-pod's podPrepareVenue now reads the registry label plugin-side as
-// part of the SAME ExtractMetadata call it makes for User/Security — no second host round-trip,
-// no separate inspect invocation.
+// There is no standalone `podman inspect --format` registry-label read here:
+// candy/plugin-deploy-pod's podPrepareVenue reads the registry label plugin-side as part of the
+// SAME ExtractMetadata call it makes for User/Security — no second host round-trip, no separate
+// inspect invocation.

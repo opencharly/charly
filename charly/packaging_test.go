@@ -280,9 +280,9 @@ func TestPackagingSystemdDeclarations(t *testing.T) {
 	}
 }
 
-// TestPackagingDropsSystemProject — spec#183 DELETED #PackagingConfig (the
-// retired packaging.config section) under the operator directive to fully drop
-// the system project from the package config: /etc/charly/charly.yml stays a
+// TestPackagingDropsSystemProject — there is no #PackagingConfig (no packaging.config
+// section), so the system project is dropped from the package config:
+// /etc/charly/charly.yml stays a
 // READ location only (loaderkit.DefaultSystemConfigPath), with NO package
 // artifact. This test is the witness of the DROP and fails if the deletion is
 // reverted on EITHER the field or a plan run-step. (It replaces the deleted

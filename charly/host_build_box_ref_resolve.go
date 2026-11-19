@@ -1,8 +1,8 @@
 package main
 
 // host_build_box_ref_resolve.go — the host-only box-ref resolve helper retained for the
-// builder-venue reverse leg (#55 coneK1 #8: the "box-ref-resolve" HostBuild seam itself is
-// DELETED — the build:ensure word resolves the box ref PLUGIN-SIDE via the K1 loader reverse
+// builder-venue reverse leg (there is no "box-ref-resolve" HostBuild seam: the build:ensure
+// word resolves the box ref PLUGIN-SIDE via the K1 loader reverse
 // legs, shedding deploykit.ResolveSpecBox from that path; see candy/plugin-build/ensure.go's
 // resolveImageRefPlugin / buildableShortNamePlugin).
 //
@@ -12,9 +12,9 @@ package main
 // plugin_executor_reverse.go:161), which closes over the in-process *Config the deploy walk
 // already holds. Since charly#968 its (registry, leaf) half is also what the pod-overlay prep
 // (build_overlay.go's hostBuildOverlay) uses to name the base image, so an overlay's BaseImage is
-// composed by the SAME rule as the box build that produced it. The former
-// buildableShortNameForEnsure + hostBuildBoxRefResolve host-builder are
-// DELETED — the plugin owns the build-fallback resolve now (buildableShortNamePlugin).
+// composed by the SAME rule as the box build that produced it. No host-side
+// buildableShortNameForEnsure and no hostBuildBoxRefResolve host-builder exists: the plugin owns
+// the build-fallback resolve (buildableShortNamePlugin).
 //
 // #55 coneB-br2: this file SHEDS its deploykit import via the #8 cfg.ResolveBoxRef pattern (the
 // SAME byte-identical shed coneK1 #8 BANKED for candy/plugin-build/ensure.go's resolveImageRefPlugin

@@ -29,9 +29,9 @@ func TestRunPluginVerb_Dispatch(t *testing.T) {
 	}
 }
 
-// TestValidatePluginCandy DELETED (dead-code-radical-removal batch): its subject,
-// validatePluginCandy, was core's per-candy `plugin:` block validator — REMOVED from
-// the per-candy validation loop in c9befd83 (the K3-D+ engine move to candy/plugin-box)
+// No TestValidatePluginCandy lives here: its subject, validatePluginCandy, is not core's
+// per-candy `plugin:` block validator — that check is not on
+// the per-candy validation loop (the K3-D+ engine lives in candy/plugin-box)
 // alongside every other hand-rolled rule in that loop. Confirmed a live, coverage-
 // identical twin at candy/plugin-box/validate_rules.go (the `if v.IsPlugin { ... }`
 // block, whose own comment states it "Mirrors core splitCapability + validatePluginCandy

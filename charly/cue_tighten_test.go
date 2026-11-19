@@ -184,9 +184,9 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 			candy(candyHead + "  plan:\n  - check: c\n    file: /x\n    context: [weird]\n"), true},
 		{"candy check bad matcher op rejected", "candy",
 			candy(candyHead + "  plan:\n  - check: c\n    command: x\n    context: [runtime]\n    stdout:\n    - mystery: \"?\"\n"), true},
-		// The former mcp/spice/libvirt bogus-method and port out-of-range REJECT
-		// cases were DELETED with the live-verb/state-verb extraction: the per-verb
-		// method enums and verb-exclusive field constraints left core #Op — each
+		// There are no mcp/spice/libvirt bogus-method or port out-of-range REJECT
+		// cases here: the per-verb method enums and verb-exclusive field constraints
+		// are not on core #Op — each
 		// lives in its plugin's served input def (#McpInput/#SpiceInput/#LibvirtInput/
 		// #PortInput), validated at dispatch (validateAuthoredPluginInput), not by
 		// the core manifest gate this test exercises.

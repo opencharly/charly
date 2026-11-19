@@ -5,11 +5,11 @@ import "github.com/opencharly/spec/checkhost"
 // checkrun_charly_verbs.go holds the shared host-side helpers the EXTERNAL
 // live-container check verbs (cdp/wl/vnc/dbus/mcp/record/kube/adb/appium/spice/libvirt)
 // rely on. Every live-container verb is now served OUT-OF-PROCESS by its plugin
-// (candy/plugin-*) and dispatches via invokeVerbProvider (the Invoke envelope) — the
-// former compiled-in live-verb subprocess dispatcher + its in-proc method-contract seam
-// were DELETED once the externalization orphaned them. The post-run artifact validators
-// moved to the SDK (sdk.RunArtifactValidators), the ONE copy every out-of-tree verb
-// plugin calls. What remains here is the small host-side surface a marshalled plugin
+// (candy/plugin-*) and dispatches via invokeVerbProvider (the Invoke envelope). There is no
+// compiled-in live-verb subprocess dispatcher and no in-proc method-contract seam here: the
+// post-run artifact validators live in the SDK (sdk.RunArtifactValidators), the ONE copy every
+// out-of-tree verb plugin calls. What remains here is the small host-side surface a marshalled
+// plugin
 // cannot compute for itself.
 
 // resolveCheckApk is the thin hostVerbResolver wrapper around the shared

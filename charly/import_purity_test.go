@@ -102,11 +102,9 @@ var allowedOpencharlyPrefixes = []string{
 // boundary-law violation rather than debt.
 //
 // The relocation that created these: the plugin BUILD CACHE's body left core in the phase-1
-// store cutover (charly#896 / PR #910) — the loader's whole cluster (pluginBuildCacheDir,
-// pluginSourceTag, buildPluginBinary, pluginBuildEnv, both pluginBuildVCSFlag*), all of
-// plugin_build_stamp.go, and the `bin+".lock"` that lived inside the cache tree are DELETED there,
-// with the net core-LOC delta negative. What remains are the call sites that must name the
-// relocated mechanism.
+// store cutover (charly#896 / PR #910) — the loader there names no cache root, no source-PATH
+// digest, no `go build` invocation, no content-stamp sidecar and no in-cache lock file. What
+// remains here are the call sites that must name the relocated mechanism.
 var residualSDKImportSites = map[string]struct {
 	Kit   string
 	Sites []string

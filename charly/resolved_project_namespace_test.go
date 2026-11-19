@@ -66,20 +66,20 @@ func TestProjectTemplates_NamespaceQualified(t *testing.T) {
 	}
 }
 
-// TestFillNamespacedBoxes_QualifiedView moved to
-// candy/plugin-build/resolved_project_projection_test.go (#55 decoupling cone, Batch B): it drove
-// the namespaced-box resolve through testBuildResolvedProject, a test-side reproduction of DELETED
-// production code (charly/resolved_project_host.go's namespaced-box fill) whose production home is
-// now candy/plugin-build (resolveBuildEngine → projectResolvedProjectLeg). The moved test exercises
+// TestFillNamespacedBoxes_QualifiedView lives in
+// candy/plugin-build/resolved_project_projection_test.go: it drives
+// the namespaced-box resolve through testBuildResolvedProject, a test-side reproduction of
+// production code whose home is
+// candy/plugin-build (resolveBuildEngine → projectResolvedProjectLeg). The test exercises
 // that PRODUCTION function directly over a fake executor (the same pattern
 // candy/plugin-deploy-vm/lifecycle_test.go already uses) instead of reproducing charly-core-only
 // loader internals a plugin cannot import. Since K-wave 2 cone R1 A2 unit 3b it stubs NO namespace
 // host leg at all — the whole namespace walk runs plugin-side, and the fake now PANICS on any
 // HostBuild kind other than the generic `loader-threaded` snapshot.
 
-// TestHostBuildDeployEntityResolve_KubernetesNamespaceQualified DELETED (K-wave W3a A3-phase-2): its
-// subject, hostBuildDeployEntityResolve (the "deploy-entity-resolve" HostBuild seam), is deleted —
-// every kind:<word> caller self-loads the project now via sdk/loaderkit.LoadUnifiedViaExecutor,
+// There is no TestHostBuildDeployEntityResolve_KubernetesNamespaceQualified: its
+// subject, hostBuildDeployEntityResolve (the "deploy-entity-resolve" HostBuild seam), does not
+// exist — every kind:<word> caller self-loads the project via sdk/loaderkit.LoadUnifiedViaExecutor,
 // which drives the SAME LoadUnified walk/materialize algorithm TestProjectTemplates_NamespaceQualified
 // above already proves namespace-qualifies correctly (LoadUnifiedViaExecutor's own doc comment:
 // "Returns the fully-merged, validated project the SAME way the compiled-in host loader does" —

@@ -284,9 +284,9 @@ func TestValidate_CargoWithoutSrc(t *testing.T) {
 	mustValidateErr(t, dir, "requires src/")
 }
 
-// TestValidate_CandyMissingVersion was DELETED with the schema-versioning removal:
-// there is no mandatory-CalVer rule on a candy (the `version:` field is gone from
-// #Candy), so a candy with no version is valid by construction. The CUE-closedness
+// There is no TestValidate_CandyMissingVersion, because there is no case to test:
+// no mandatory-CalVer rule applies to a candy (`#Candy` carries no `version:` field),
+// so a candy with no version is valid by construction. The CUE-closedness
 // rejection of a LEFTOVER `version:` is covered by cue_candy_reject_test.go.
 
 // ---------------------------------------------------------------------------

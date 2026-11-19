@@ -4,8 +4,8 @@ package main
 // north-star end-state (kwave-north-star.md) declares "the reverse channel is exactly
 // THREE legs: (1) live venue-executor re-materialization, (2) InvokeProvider peer
 // dispatch, (3) plugin-binary build + CLI reentry — every OTHER host_build_* seam
-// exists only because plugins couldn't load the project or touch state; once the
-// loader is in sdk/loaderkit (W1) those seams are DELETED, not thinned." Reaching
+// exists only because plugins could not load the project or touch state; with the
+// loader in sdk/loaderkit those seams go entirely rather than being thinned." Reaching
 // that count is the LATER waves' work (W1 landed; W2-W4 have been shrinking the
 // residue since); this gate's job TODAY is the drift detector that makes forward
 // progress mechanical and irreversible: it enumerates every LIVE registerHostBuilder

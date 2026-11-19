@@ -63,17 +63,15 @@ type CLI struct {
 	// the gRPC Describe, is not missed). Reuses collectPluginProviders (R3).
 	PluginProviders PluginProvidersCmd `cmd:"" name:"__plugin-providers" hidden:"" help:"internal: print a candy's plugin.providers (one <class>:<word> per line)"`
 
-	// (The former hidden `__cmd` deploy-lifecycle reentry behind `charly cmd` is DELETED — cmd.go's
-	// dissolution: candy/plugin-cmd now drives the "pod-lifecycle" host-builder's op="cmd" (cmd's
-	// slot in the floored pod-lifecycle-dispatch family, joining op="shell" — #55 W3 A10b unified
-	// the former dedicated "pod-cmd" kind into this single op-discriminated one) directly over the
-	// in-proc reverse channel, so the interactive Attach needs no hidden CLI reentry — mirroring
-	// __box-build's earlier removal.)
+	// (`charly cmd` reaches no hidden CLI reentry: candy/plugin-cmd drives the "pod-lifecycle"
+	// host-builder's op="cmd" — cmd's slot in the floored pod-lifecycle-dispatch family, joining
+	// op="shell", one op-discriminated builder rather than a dedicated "pod-cmd" kind — directly
+	// over the in-proc reverse channel, so the interactive Attach needs no hidden CLI reentry.)
 
-	// (P8b: the former hidden __box-build reentry is DELETED. candy/plugin-box's dispatchBuild now
-	// runs the `charly box build` body itself — NormalizeBoxArgs → remote-ref pivot
+	// (`charly box build` reaches no hidden CLI reentry. candy/plugin-box's dispatchBuild runs the
+	// build body itself — NormalizeBoxArgs → remote-ref pivot
 	// (buildkit.DetectRemoteBuildRef + the HostBuild("remote-image-resolve") seam) → build-activity
-	// flock → InvokeProvider(build:box) → retention prune — so the CLI no longer bounces back through
+	// flock → InvokeProvider(build:box) → retention prune — so the CLI never bounces back through
 	// core over HostBuild("cli"). The host-coupled
 	// remainder (the remote-ref clone/cache resolve, the build-engine RESOLVE legs, the bootstrap
 	// builder pre-pass) stays behind thin HostBuild seams the candy invokes.)
@@ -82,9 +80,8 @@ type CLI struct {
 	// reaches verb:retention directly over InvokeProvider (listImageTags, inspect_list.go) — the
 	// SAME peer-dispatch pruneAfterBuild already used in the same module — instead of reentering
 	// core for the store-live tag inventory. The sibling deploy-overlay inspect formats
-	// (tunnel/bind_mounts) moved fully into candy/plugin-box earlier (the former
-	// __box-inspect-overlay reentry is likewise DELETED — it renders from the deploy overlay + the
-	// projector-filled view.Ports, no reentry). `box` now has NO remaining core CLI reentry.
+	// (tunnel/bind_mounts) live entirely in candy/plugin-box — they render from the deploy overlay
+	// + the projector-filled view.Ports, so no reentry exists). `box` has NO core CLI reentry.
 
 	// __box-fetch / __box-refresh are GONE (K3 build-tail tail, coneB-buildremnant): candy/
 	// plugin-authoring's command:fetch/command:refresh now reach the host-coupled repo resolver

@@ -19,10 +19,10 @@ import (
 // PRODUCED for the check reverse channel by plugin_dispatch_reverse.go from the wire CheckEnv
 // snapshot. The IN-PROC plan-drive construction (the former newCheckRunner + carrierFromRunner +
 // resolverEnv) is GONE from production: the deploy-scope check DRIVE moved PLUGIN-SIDE
-// (command:check OpVerifyChecks, #55 CHECK-ENGINE cone Unit 2 — candy/plugin-check's
-// newPluginCheckRunner), so charly core no longer builds a kit.Runner itself and this file no
-// longer imports sdk/kit. The three former constructors are now fully DELETED (#55 decoupling
-// cone, Batch D): charly-side tests drive the live dispatch surface through the PRODUCTION
+// (command:check OpVerifyChecks — candy/plugin-check's newPluginCheckRunner), so charly core
+// never builds a kit.Runner itself and this file does not import sdk/kit. The three constructors
+// have no counterpart here: charly-side tests drive the live dispatch surface through the
+// PRODUCTION
 // OpVerifyChecks seam instead (dispatchCheckOpsMode, checkrun_helpers_test.go); the engine's own
 // semantics (variable expansion, RunPlan keyword/mode handling, ProbeNeverHang) are covered in
 // sdk/kit's own test suite, and each verb's own RunVerb logic in its owning candy/plugin-<verb>

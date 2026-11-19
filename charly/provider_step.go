@@ -9,11 +9,10 @@ import (
 // provider_step.go — the pod-overlay build-emit BIJECTION gate. K5-A item 2 relocated the FULL
 // per-kind dispatch DECISION (which peer renders a given InstallStep's Containerfile fragment) out
 // of core entirely, into candy/plugin-installstep's "oci-dispatch" word — including the ONE
-// remaining kind that used to have an in-proc StepProvider (ExternalPlugin, formerly
-// externalPluginStepProvider.EmitOCI in charly/plugin_step_external.go). That file, the StepProvider
-// interface, builtinStepBase, and stepProviderFor are DELETED (R1/R2: EmitOCI's relocation made them
-// genuinely dead — zero remaining callers — not merely "no longer the primary path"; the F11
-// zero-per-kind-residue self-test caught this). ExternalPlugin's build-emit is now an
+// remaining kind that could carry an in-proc StepProvider (ExternalPlugin). There is no
+// StepProvider interface, no builtinStepBase and no stepProviderFor: they have zero callers
+// (R1/R2 — not merely "not the primary path"; the F11 zero-per-kind-residue self-test asserts it).
+// ExternalPlugin's build-emit is an
 // UNCONDITIONAL Go-level type-switch arm in candy/plugin-installstep/oci_dispatch.go
 // (dispatchExternalPluginVerb), needing no registry entry at all — the plugin resolves ITS
 // class:verb target directly via InvokeProvider, bypassing the (now-deleted) ClassStep

@@ -108,10 +108,9 @@ func testReadCandyRecord(paths *testLedgerPaths, layer string) (*spec.CandyRecor
 //   - Update re-Invokes idempotently (markers stay, reverse op not duplicated);
 //   - Del replays the RECORDED plugin-script reverse op (markers gone, records deleted).
 //
-// A Test step (a host-side `file` check against the probe marker, no plugin call) used to sit
-// between Add and Update — UnifiedDeployTarget.Test is DELETED (#55 W3 B3 remainder, zero real
-// callers anywhere in the tree); it never exercised the reverse channel this test proves anyway
-// (its own former comment said so — "no plugin call"), so removing it costs this test nothing.
+// No Test step sits between Add and Update: UnifiedDeployTarget.Test has zero real
+// callers anywhere in the tree, and a host-side `file` check against the probe marker would make
+// no plugin call, so it never exercises the reverse channel this test proves.
 //
 // Builds + execs a real binary, so it is gated behind -short exactly like
 // TestExternalPluginEndToEnd.

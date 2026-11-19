@@ -23,9 +23,8 @@ package main
 //
 // A byte-identical COPY of this file lived at sdk/kit/plugin_primary.go, whose header claimed
 // charly's two registration call sites called kit.RegisterPluginPrimary directly. They never did —
-// charly core cannot import sdk/kit (import purity), so the K4 relocation was authored but never
-// wired, leaving two SEPARATE mutable maps of the same registry. The sdk copy had zero consumers
-// anywhere and is DELETED (K-wave 2 cone R1 unit C); this is the one live copy.
+// charly core cannot import sdk/kit (import purity), so this registry has ONE mutable map, never
+// two: nothing consumes an sdk-side copy, so none exists. This is the one live copy.
 
 import (
 	"fmt"
@@ -40,9 +39,9 @@ import (
 // consolidation F2.6); the byte-gated prescan registers an external plugin's
 // declared primary before parse, and a connected out-of-process provider's
 // served ProvidedCapability.Primary re-registers the same value at connect.
-// The former FROZEN 11-entry table (the live-container verbs' shared `method`
-// shorthand) is DELETED — it was a hard-coded duplicate of the declared-primary
-// universe the same registration hook serves; the expected set is now a PARITY
+// There is no FROZEN 11-entry table (the live-container verbs' shared `method`
+// shorthand): it would be a hard-coded duplicate of the declared-primary
+// universe the same registration hook serves. The expected set is a PARITY
 // ASSERTION in node_desugar_test.go, so a drift between the served primaries and
 // the parse-time expectation fails a test, never silently desugars wrong.
 // A concurrent roster (many bed runs in one charly process, each re-loading the

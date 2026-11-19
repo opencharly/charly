@@ -128,8 +128,8 @@ var (
 )
 
 // registerLifecycleLivePlanHooks records the F12 attach plan resolver for a substrate word.
-// Called at package-var init (race-free, like registerLifecyclePlanHooks). The former logs
-// resolver slot is DELETED (K-wave 2 cone R5) — Logs() threads its opts unconditionally, which
+// Called at package-var init (race-free, like registerLifecyclePlanHooks). There is no logs
+// resolver slot — Logs() threads its opts unconditionally, which
 // is all candy/plugin-deploy-pod's resolvePodLogsPlan needs.
 func registerLifecycleLivePlanHooks(word string, attach attachPlanResolver) {
 	if word == "" {
@@ -161,9 +161,9 @@ func registerLifecyclePlanHooks(word string, start, stop podLifecyclePlanResolve
 // the plain CUE-generated opts types (spec.PodStartOpts/PodStopOpts/PodAttachOpts) — NOT a
 // resolved plan — reusing the SAME "plan" wire slot (lifecycleParams.Plan) unchanged: the
 // lifecycleStartPlanHooks/lifecycleStopPlanHooks registration MECHANISM (this file) and the
-// arbiter-claim bracket it gates (arbiter_bracket.go, S3b — was substrate_lifecycle_grpc.go
-// before the deploy-dispatch cluster moved) are untouched, only the payload CONTENT changes.
-// Logs registers NO hook (the former logs-resolver slot is DELETED, K-wave 2 cone R5) — Logs()
+// arbiter-claim bracket it gates (arbiter_bracket.go, S3b) are untouched, only the payload
+// CONTENT changes.
+// Logs registers NO hook (there is no logs-resolver slot) — Logs()
 // already threads its DeployTargetLogsOpts unconditionally (extra["opts"]), which is all
 // candy/plugin-deploy-pod's resolvePodLogsPlan needs (box/instance come from the deploy key on
 // lifecycleParams.Name).

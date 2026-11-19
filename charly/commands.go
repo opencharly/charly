@@ -22,8 +22,8 @@ func defaultIsTerminal() bool {
 // podUpdateCmd is the host-side dispatch struct for `charly update` (now command:update in
 // candy/plugin-pod). Constructed at host_build_pod_lifecycle_dispatch.go (op="update") and
 // dispatched via dispatchByDeployTarget (update_deploy_dispatch.go); command:update resolves the
-// deploy node PLUGIN-SIDE and threads it in as Node (#PodLifecycleRequest.node, K-wave 2 cone
-// CONTESTED — the former TreeJSON whole-tree thread is DELETED). The verb handles the destroy-free
+// deploy node PLUGIN-SIDE and threads it in as Node (#PodLifecycleRequest.node); no TreeJSON
+// whole-tree thread rides this path. The verb handles the destroy-free
 // update path for every target and NEVER regenerates the user-overlay deploy entry — user-overlay
 // config (ports/volumes/env/tunnel) is preserved across updates.
 type podUpdateCmd struct {
