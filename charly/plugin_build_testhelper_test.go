@@ -8,8 +8,9 @@ package main
 // pluginBuildCacheDir / pluginSourceTag / the `bin+".lock"` inside the cache / the `.stamp` sidecar
 // in plugin_build_stamp.go — so the suites must be repointed at the ONE remaining implementation,
 // sdk/buildcache.Build. Going through this helper rather than naming buildcache in eight files keeps
-// the STORE ISOLATION in one place: the build cache root is $XDG_CACHE_HOME/charly with
-// $CHARLY_CACHE_DIR as the sole override (storekit.CacheDir), and a test that built into the
+// the STORE ISOLATION in one place: the build cache root is $XDG_CACHE_HOME/charly, relocated by
+// its own overrides — $CHARLY_CACHE_HOME, or $CHARLY_CACHE_DIR (storekit.CacheDir) — and a test
+// that built into the
 // operator's real cache would be a write outside the temp dir (D-STORE-8).
 //
 // The returned path is the store's hardlink VIEW — the same thing the loader hands to
