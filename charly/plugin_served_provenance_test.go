@@ -49,8 +49,9 @@ func captureStderr(t *testing.T, fn func()) string {
 // CHARLY_CACHE_DIR.
 //
 // BOTH cache roots are set deliberately: the phase-1 cutover moved the plugin binary build onto the
-// sdk store, whose cache root is $XDG_CACHE_HOME/charly with $CHARLY_CACHE_DIR as the ONE override
-// (the ONE resolver — `spec/storeroot.CacheDir`, re-exported as `storekit.CacheDir`) —
+// sdk store, whose cache root is $XDG_CACHE_HOME/charly, relocated by its own overrides
+// ($CHARLY_CACHE_HOME, or $CHARLY_CACHE_DIR) through the ONE resolver
+// (`spec/storeroot.CacheDir`, re-exported as `storekit.CacheDir`) —
 // XDG_CACHE_HOME alone would no longer contain it. XDG_RUNTIME_DIR is not
 // pinned here, so the store's per-key build lock lands under the state root; HOME is redirected with
 // the rest so a test never writes into the operator's real roots.

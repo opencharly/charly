@@ -27,9 +27,9 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 	bin := buildCharlyBinary(t)
 
 	cacheRoot := t.TempDir()
-	// Seed BOTH cache layouts so the test exercises both kept overrides:
+	// Seed BOTH cache layouts so the test exercises every kept override:
 	//   - CHARLY_REPO_CACHE names the REPOS directory: <root>/github.com/...
-	//   - CHARLY_CACHE_DIR names the CACHE ROOT: <root>/repos/github.com/...
+	//   - CHARLY_CACHE_HOME / CHARLY_CACHE_DIR name the CACHE ROOT: <root>/repos/github.com/...
 	seed := func(dir string) {
 		t.Helper()
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -58,17 +58,27 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 		{
 			name: "long flag --repo with @ref",
 			args: []string{"--repo", "foo/bar@v1.0.0", "box", "list", "boxes"},
-			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot},
+			env:  []string{"CHARLY_CACHE_HOME=", "CHARLY_CACHE_DIR=", "CHARLY_REPO_CACHE=" + cacheRoot},
 		},
 		{
 			name: "env var CHARLY_PROJECT_REPO",
 			args: []string{"box", "list", "boxes"},
-			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot, spec.ProjectRepoEnv + "=foo/bar@v1.0.0"},
+			env: []string{
+				"CHARLY_CACHE_HOME=", "CHARLY_CACHE_DIR=",
+				"CHARLY_REPO_CACHE=" + cacheRoot, spec.ProjectRepoEnv + "=foo/bar@v1.0.0",
+			},
 		},
 		{
 			name: "root override CHARLY_CACHE_DIR",
 			args: []string{"--repo", "foo/bar@v1.0.0", "box", "list", "boxes"},
-			env:  []string{"CHARLY_CACHE_DIR=" + cacheRoot},
+			// The two cache overrides and the repos override are pinned per case: an
+			// ambient value would otherwise decide which directory the binary reads.
+			env: []string{"CHARLY_CACHE_HOME=", "CHARLY_REPO_CACHE=", "CHARLY_CACHE_DIR=" + cacheRoot},
+		},
+		{
+			name: "root override CHARLY_CACHE_HOME",
+			args: []string{"--repo", "foo/bar@v1.0.0", "box", "list", "boxes"},
+			env:  []string{"CHARLY_CACHE_DIR=", "CHARLY_REPO_CACHE=", "CHARLY_CACHE_HOME=" + cacheRoot},
 		},
 	}
 	for _, tc := range cases {
