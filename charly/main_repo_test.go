@@ -18,7 +18,7 @@ import (
 
 // TestCharlyRepo_FlagChdir verifies that --repo / CHARLY_PROJECT_REPO drives main()
 // to chdir into the cache path before dispatching. Stays hermetic by
-// pre-populating CHARLY_CACHE_DIR with an IMMUTABLE tag ref (v1.0.0), so
+// pre-populating CHARLY_REPO_CACHE with an IMMUTABLE tag ref (v1.0.0), so
 // EnsureRepoDownloaded takes the offline cache-hit fast path and never shells
 // out to git. (A mutable branch ref would delegate to the downloader for the
 // freshness check by design — that path is covered by
@@ -27,10 +27,8 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 	bin := buildCharlyBinary(t)
 
 	cacheRoot := t.TempDir()
-	// Pre-seed the cache root's repos entry at <root>/repos/github.com/foo/bar@v1.0.0/
-	// with a valid project. CHARLY_CACHE_DIR names the ROOT; the repos directory is
-	// one level below it.
-	cachedRepo := filepath.Join(cacheRoot, "repos", "github.com", "foo", "bar@v1.0.0")
+	// Pre-seed cache at <root>/github.com/foo/bar@v1.0.0/ with a valid project.
+	cachedRepo := filepath.Join(cacheRoot, "github.com", "foo", "bar@v1.0.0")
 	if err := os.MkdirAll(cachedRepo, 0o755); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -54,12 +52,12 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 		{
 			name: "long flag --repo with @ref",
 			args: []string{"--repo", "foo/bar@v1.0.0", "box", "list", "boxes"},
-			env:  []string{"CHARLY_CACHE_DIR=" + cacheRoot},
+			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot},
 		},
 		{
 			name: "env var CHARLY_PROJECT_REPO",
 			args: []string{"box", "list", "boxes"},
-			env:  []string{"CHARLY_CACHE_DIR=" + cacheRoot, spec.ProjectRepoEnv + "=foo/bar@v1.0.0"},
+			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot, spec.ProjectRepoEnv + "=foo/bar@v1.0.0"},
 		},
 	}
 	for _, tc := range cases {

@@ -132,7 +132,7 @@ func run() error {
 		if err := copyTree(filepath.Join(consumer, "src/content/docs"), out); err != nil {
 			return err
 		}
-		cache := "CHARLY_CACHE_DIR=" + filepath.Join(proof, attempt+"-cache")
+		cache := "CHARLY_REPO_CACHE=" + filepath.Join(proof, attempt+"-cache")
 		if err := command(inputs, []string{cache}, *generator, "generate", "--root", inputs, "--narrative", *narrative, "--plugins", filepath.Join(*site, "marketplace"), "--out", out); err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func run() error {
 		return fmt.Errorf("independent fresh-cache generation differs: %v", hashes)
 	}
 	out := filepath.Join(proof, "first/src/content/docs")
-	if err := command(inputs, []string{"CHARLY_CACHE_DIR=" + filepath.Join(proof, "first-cache")}, *generator, "generate", "--root", inputs, "--narrative", *narrative, "--plugins", filepath.Join(*site, "marketplace"), "--out", out); err != nil {
+	if err := command(inputs, []string{"CHARLY_REPO_CACHE=" + filepath.Join(proof, "first-cache")}, *generator, "generate", "--root", inputs, "--narrative", *narrative, "--plugins", filepath.Join(*site, "marketplace"), "--out", out); err != nil {
 		return err
 	}
 	hash, err := treeHash(out)
