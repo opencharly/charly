@@ -17,7 +17,7 @@ import:
     # self-contained (import: []) and cachyos imports the `arch` namespace; none
     # imports main back (they reach main's shared candies via @github refs), so the
     # former main↔cachyos / main↔fedora mutual cycles are dissolved.
-    - arch: '@github.com/opencharly/distro-arch:v2026.274.1256'
+    - arch: '@github.com/opencharly/distro-arch:v2026.324.0908'
     # cachyos is a FLOOR, not a ceiling: never pin it below v2026.281.1001 (that was the
     # tag that dropped the retired `pod-openclaw` pins from the CachyOS refs list), but
     # v2026.281.1001 itself carries a DEAD ref — its `box/crabbox-e2e/charly.yml` pins
@@ -27,7 +27,7 @@ import:
     # `charly marketplace generate` and the daily refresh, 2026-11-10..14).
     # v2026.318.1213's `box/crabbox-e2e` composes `pod-crabbox-coordinator:v2026.293.1003`
     # instead (the distro-cachyos 2026.293.1743 fix), so the closure resolves.
-    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.318.1213'
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.324.1709'
     - debian: '@github.com/opencharly/distro-debian:v2026.274.0746'
     - fedora: '@github.com/opencharly/distro-fedora:v2026.319.1306'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.274.0752'
@@ -544,7 +544,7 @@ kimi:
 #
 # Zero-operator-side-effect: pod beds → rootless podman; check-k3s-vm → libvirt
 # qcow2; check-local → a disposable scratch dir. No test writes to ~/.local/bin,
-# ~/.config/opencharly, /etc, /usr, or any operator-side directory.
+# ~/.config/charly, /etc, /usr, or any operator-side directory.
 # =============================================================================
 # check-k3s-vm — disposable libvirt VM running k3s-server. Kubeconfig is
 # pulled back for host-side kubernetes: probes (all 13 methods) via the forwarded
@@ -1667,23 +1667,23 @@ check-structkind:
     check-structkind-vm:
         vm:
             from: eval-vm
-        # NESTED under the vm node (tree position) → the kind:local grandchild deploys INSIDE
+        # NESTED inside the vm body → the kind:local grandchild deploys INSIDE
         # the guest via kit.NestedExecutor. No `host:` field: the venue comes from the parent.
         # Mirror: check-group's check-group-vm → check-group-member.
-        check-structkind-member:
-            local:
-                from: check-structkind-app
-                plan:
-                    - check: command=test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK
-                      id: sk-member-marker-in-guest
-                      description: >-
-                        The reconstructed authored member actually DEPLOYED into the eval VM guest: its composed candy dropped /etc/check-structkind-marker on the GUEST filesystem. Authored on the member's own node plan because a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy.
-                      stdout:
-                        - contains: STRUCTKIND-MEMBER-DEPLOY-OK
-                      context:
-                        - runtime
-                      command:
-                        command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
+            check-structkind-member:
+                local:
+                    from: check-structkind-app
+                    plan:
+                        - check: command=test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK
+                          id: sk-member-marker-in-guest
+                          description: >-
+                            The reconstructed authored member actually DEPLOYED into the eval VM guest: its composed candy dropped /etc/check-structkind-marker on the GUEST filesystem. Authored on the member's own node plan because a composed candy's plan: never reaches a deploy-scope check runner for a non-image deploy.
+                          stdout:
+                            - contains: STRUCTKIND-MEMBER-DEPLOY-OK
+                          context:
+                            - runtime
+                          command:
+                            command: "test -f /etc/check-structkind-marker && echo STRUCTKIND-MEMBER-DEPLOY-OK"
 # charly-dev candy binary-install witness against the LOCAL charly-dev candy (no @github):
 # deploys the charly-dev candy declared in THIS file to a disposable Arch Cloud VM, where
 # the layer's `copy: bin/charly` run step places the in-development binary at
@@ -3921,6 +3921,7 @@ check-r10-stage:
               context: [runtime]
     r10-stage-assertor:
         local:
+            host: local
             from: r10-driver
             plan:
                 - check: member B asserts the marker from the HOST over the writer's resolved identity (stage assert — only valid after stage write drained)

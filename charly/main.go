@@ -47,7 +47,7 @@ type CLI struct {
 	// of cwd / --dir. Spec is OWNER/REPO[@REF] (auto-prefixed with
 	// github.com/) or HOST/OWNER/REPO[@REF]. The literal "default" expands
 	// to opencharly/charly. main() resolves this to a local cache path
-	// (~/.cache/charly/repos/...) and falls through into the existing --dir
+	// (the cache root's repos/...) and falls through into the existing --dir
 	// chdir block, so every os.Getwd() site Just Works. Mutually exclusive
 	// with --dir.
 	Repo string `name:"repo" env:"CHARLY_PROJECT_REPO" placeholder:"OWNER/REPO[@REF]" help:"Read charly.yml from a remote git repo (e.g. opencharly/charly). Use 'default' for opencharly/charly."`

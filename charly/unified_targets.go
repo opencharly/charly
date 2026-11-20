@@ -107,6 +107,8 @@ func (t *pluginDeployTarget) distroCfgJSON() json.RawMessage {
 // dispatch call and threads it on the wire; candy/plugin-fleet forwards it verbatim to every
 // lifecycle Op instead of computing its own (mirrors the pre-move helper's exact fallback chain).
 func hostEnvJSON() json.RawMessage {
+	// Home is the user's home — a host fact for ~ expansion — not a charly root.
+	// Plugins resolve the XDG roots in-process through spec/storeroot (D-STORE-1).
 	home, _ := os.UserHomeDir()
 	charlyBin, err := os.Executable()
 	if err != nil || charlyBin == "" {
