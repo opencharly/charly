@@ -28,7 +28,7 @@ func TestStepToView_CapturesReverseOps(t *testing.T) {
 	t.Run("shell-hook with EnvFile → remove-envd-file", func(t *testing.T) {
 		// EnvFile is set by the host (prepareReverseState) BEFORE projecting; without it
 		// ShellHook.Reverse() is nil (the deploy-time-state dependency Fork A captures).
-		v := spec.StepToView(&spec.ShellHookStep{CandyName: "mycandy", EnvFile: "/home/u/.config/opencharly/env.d/mycandy.env"})
+		v := spec.StepToView(&spec.ShellHookStep{CandyName: "mycandy", EnvFile: "/home/u/.config/charly/env.d/mycandy.env"})
 		if len(v.ReverseOps) != 1 || v.ReverseOps[0].Kind != spec.ReverseOpRemoveEnvdFile {
 			t.Fatalf("ShellHook view ReverseOps = %+v, want one remove-envd-file", v.ReverseOps)
 		}

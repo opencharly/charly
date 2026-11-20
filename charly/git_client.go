@@ -8,7 +8,7 @@ package main
 // git primitives (refs.GitLatestTag / refs.GitDefaultBranch) directly.
 //
 // The cache lives in the `cache:` section of the per-host charly.yml
-// (~/.config/charly/charly.yml) — the single home for local system state
+// ($XDG_CONFIG_HOME/charly/charly.yml) — the single home for local system state
 // (deployments, ledger, system, cache). NewGitClient("") resolves the default
 // deploy config path (honoring the CHARLY_DEPLOY_CONFIG override, so a check
 // bed's per-bed isolation applies uniformly).

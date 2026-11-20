@@ -27,19 +27,25 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 	bin := buildCharlyBinary(t)
 
 	cacheRoot := t.TempDir()
-	// Pre-seed cache at <root>/github.com/foo/bar@v1.0.0/ with a valid project.
-	cachedRepo := filepath.Join(cacheRoot, "github.com", "foo", "bar@v1.0.0")
-	if err := os.MkdirAll(cachedRepo, 0o755); err != nil {
-		t.Fatalf("setup: %v", err)
+	// Seed BOTH cache layouts so the test exercises both kept overrides:
+	//   - CHARLY_REPO_CACHE names the REPOS directory: <root>/github.com/...
+	//   - CHARLY_CACHE_DIR names the CACHE ROOT: <root>/repos/github.com/...
+	seed := func(dir string) {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		writeMinProject(t, dir)
+		// A real fetch ALWAYS writes the v2 provenance sidecar (spec#148 gated
+		// IsRepoCached on it, so a legacy sidecar cannot certify a mutated tree). Seed
+		// it here so the immutable-tag cache-hit fast path is exercised, not a network
+		// fetch.
+		if err := refs.WriteRepoCacheProvenance(dir, "v1.0.0"); err != nil {
+			t.Fatalf("setup: writing cache provenance: %v", err)
+		}
 	}
-	writeMinProject(t, cachedRepo)
-	// A real fetch ALWAYS writes the v2 provenance sidecar (spec#148 gated
-	// IsRepoCached on it, so a legacy sidecar cannot certify a mutated tree). Seed
-	// it here so the immutable-tag cache-hit fast path is exercised, not a network
-	// fetch.
-	if err := refs.WriteRepoCacheProvenance(cachedRepo, "v1.0.0"); err != nil {
-		t.Fatalf("setup: writing cache provenance: %v", err)
-	}
+	seed(filepath.Join(cacheRoot, "github.com", "foo", "bar@v1.0.0"))
+	seed(filepath.Join(cacheRoot, "repos", "github.com", "foo", "bar@v1.0.0"))
 
 	// Spawn from /tmp so a missed chdir would fail loudly.
 	startCwd := os.TempDir()
@@ -58,6 +64,11 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 			name: "env var CHARLY_PROJECT_REPO",
 			args: []string{"box", "list", "boxes"},
 			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot, spec.ProjectRepoEnv + "=foo/bar@v1.0.0"},
+		},
+		{
+			name: "root override CHARLY_CACHE_DIR",
+			args: []string{"--repo", "foo/bar@v1.0.0", "box", "list", "boxes"},
+			env:  []string{"CHARLY_CACHE_DIR=" + cacheRoot},
 		},
 	}
 	for _, tc := range cases {

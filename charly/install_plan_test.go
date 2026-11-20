@@ -233,7 +233,7 @@ func TestShellHookStep(t *testing.T) {
 		CandyName: "pre-commit",
 		EnvVars:   map[string]string{"PIXI_CACHE_DIR": "$HOME/.cache/pixi"},
 		PathAdd:   []string{"/home/user/.pixi/envs/default/bin"},
-		EnvFile:   "/home/user/.config/opencharly/env.d/pre-commit.env",
+		EnvFile:   "/home/user/.config/charly/env.d/pre-commit.env",
 	}
 	if s.Scope() != spec.ScopeUserProfile {
 		t.Errorf("Scope() = %v, want user-profile", s.Scope())
