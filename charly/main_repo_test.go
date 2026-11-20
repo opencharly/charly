@@ -58,12 +58,15 @@ func TestCharlyRepo_FlagChdir(t *testing.T) {
 		{
 			name: "long flag --repo with @ref",
 			args: []string{"--repo", "foo/bar@v1.0.0", "box", "list", "boxes"},
-			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot},
+			env:  []string{"CHARLY_CACHE_HOME=", "CHARLY_CACHE_DIR=", "CHARLY_REPO_CACHE=" + cacheRoot},
 		},
 		{
 			name: "env var CHARLY_PROJECT_REPO",
 			args: []string{"box", "list", "boxes"},
-			env:  []string{"CHARLY_REPO_CACHE=" + cacheRoot, spec.ProjectRepoEnv + "=foo/bar@v1.0.0"},
+			env: []string{
+				"CHARLY_CACHE_HOME=", "CHARLY_CACHE_DIR=",
+				"CHARLY_REPO_CACHE=" + cacheRoot, spec.ProjectRepoEnv + "=foo/bar@v1.0.0",
+			},
 		},
 		{
 			name: "root override CHARLY_CACHE_DIR",
