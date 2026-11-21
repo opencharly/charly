@@ -440,7 +440,8 @@ arch-img:
     description: |-
       arch.
     base: docker.io/library/archlinux:latest
-    build: [pac, aur]
+    distro: [arch]
+    build: [pac]
     candy: [aur-layer]
     plan: [{check: x, command: "true", context: [build]}]`,
 		"candy/aur-layer/charly.yml": `aur-layer:
@@ -484,35 +485,6 @@ fedora-img:
 	})
 	if err := dispatchValidateForTest(dir, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
 		t.Fatalf("Fedora image (build=[rpm]) must not require builder.aur; got: %v", err)
-	}
-}
-
-// TestValidate_AurOnArchImageWithoutAurInBuildFormats ← TestValidateAurOnArchImageWithoutAurInBuildFormats.
-// An Arch image with build=[pac] (no aur) consuming an aur candy: the IR compiler skips aur, so the
-// validator must too.
-func TestValidate_AurOnArchImageWithoutAurInBuildFormats(t *testing.T) {
-	dir := writeValidateFixture(t, map[string]string{
-		"charly.yml": `discover: [{path: candy, recursive: true}]
-arch-pac-only:
-  candy:
-    description: |-
-      arch pac-only.
-    base: docker.io/library/archlinux:latest
-    build: [pac]
-    candy: [aur-layer]
-    plan: [{check: x, command: "true", context: [build]}]`,
-		"candy/aur-layer/charly.yml": `aur-layer:
-  candy:
-    description: |-
-      aur.
-    distro:
-      arch:
-        aur:
-          package: [yay-bin]
-    plan: [{check: x, command: "true", context: [build]}]`,
-	})
-	if err := dispatchValidateForTest(dir, spec.ResolveOpts{}); err != nil && strings.Contains(err.Error(), "no builder.aur configured") {
-		t.Fatalf("Arch image build=[pac] (no aur) must not require builder.aur; got: %v", err)
 	}
 }
 

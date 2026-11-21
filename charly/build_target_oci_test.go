@@ -265,12 +265,12 @@ func TestOCITargetEmitBuilderInlineViaPlugin(t *testing.T) {
 }
 
 // TestOCITargetEmitBuilderMultiStageViaPlugin drives the FULL real chain for a MULTI-STAGE
-// (pixi/npm/aur) builder. Same dispatch path as the inline test (through the compiled-in plugin's
-// ops.OpEmit rendering directly against its resolved-project-built Generator), proving the plugin's
-// emitBuilder reaches dg.BuildStageContext with the box/candy the stubbed envelope carries. An
-// EXTERNALIZED multi-stage builder (pixi) renders its stage via kit.BuilderResolve (the bDef needs
-// only the "pixi" key present, the box's own Builder map resolves the builder ref), so this asserts
-// kit's stage: the `FROM <builder> AS <stage>` line + the pixi cache-dir ENV line kit always emits.
+// (pixi/npm/mise/aur) builder step through the compiled-in step:builder plugin. The step must NOT
+// open a stage: the image (box build or pod overlay) hoists the builder's stage before its main
+// FROM and copies its payload (the Generator's EmitBuilderStages/EmitBuilderArtifacts — D-IR-1,
+// opencharly/sdk#608). A stage rendered here landed mid-overlay, after the main FROM, so the
+// builder stage became the overlay image and nothing was copied back (measured: a pod overlay
+// whose add_candy carried an npm candy). With no declared package output, the step renders nothing.
 func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 	chdirTemp(t)
 	stubResolvedProject(t, spec.ResolvedProject{
@@ -289,12 +289,8 @@ func TestOCITargetEmitBuilderMultiStageViaPlugin(t *testing.T) {
 	if err := tgt.Emit([]*spec.InstallPlan{plan}, spec.EmitOpts{}); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
-	got := tgt.String()
-	if !strings.Contains(got, "FROM ghcr.io/x/builder:latest AS mytool-pixi-build") {
-		t.Errorf("multi-stage builder FROM stage not rendered via the step:builder plugin chain + kit.BuilderResolve: %s", got)
-	}
-	if !strings.Contains(got, "ENV PIXI_CACHE_DIR=/tmp/pixi-cache") {
-		t.Errorf("multi-stage builder body not rendered via the step:builder plugin chain + kit.BuilderResolve: %s", got)
+	if got := tgt.String(); strings.Contains(got, "FROM ") || strings.Contains(got, "PIXI_CACHE_DIR") {
+		t.Errorf("a multi-stage builder step rendered its stage into the step stream (it belongs before the image's main FROM):\n%s", got)
 	}
 }
 

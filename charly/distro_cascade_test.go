@@ -16,7 +16,7 @@ import (
 // --- Parser routing --------------------------------------------------------
 //
 // TestCascade_BareDistroRoutesToTagSection / TestCascade_VersionedAndCompoundKeys /
-// TestCascade_ArchAurStaysFormatSection / TestCascade_TopPackagesNotFoldedAtParse (+ their
+// TestCascade_ArchAurIsATagManager / TestCascade_TopPackagesNotFoldedAtParse (+ their
 // shared deriveCandy helper) relocated to candy/plugin-loader (#55 decoupling; Batch A executed
 // this move on Batch C's behalf per the cross-batch file-ownership matrix) — they exercised
 // loaderkit.ScanInlineCandy's own routing directly, zero charly dep.
@@ -70,7 +70,7 @@ func TestDistroDefVersionInherits(t *testing.T) {
 // parent's package sections. No Go-side hardcoded inheritance table.
 func TestExpandPackageInheritance(t *testing.T) {
 	dc := &spec.DistroConfig{Distro: map[string]*spec.ResolvedDistro{
-		"arch":    {Format: map[string]*spec.Format{"pac": {}, "aur": {Secondary: true}}},
+		"arch":    {Format: map[string]*spec.Format{"pac": {}}},
 		"cachyos": {Inherits: "arch", InheritPackages: true},
 		"debian":  {Format: map[string]*spec.Format{"deb": {}}},
 		"ubuntu":  {Inherits: "debian"}, // format inheritance only
@@ -119,8 +119,10 @@ func TestRejectLegacyTopLevelFormatAndDistroKeys(t *testing.T) {
 		want bool
 	}{
 		// Vocabulary comes from testdata/build.yml: distros arch/debian/fedora/
-		// ubuntu, formats pac/aur/deb/rpm.
-		{"pac", true}, {"deb", true}, {"rpm", true}, {"aur", true},
+		// ubuntu, formats pac/deb/rpm. `aur` is a builder, not a distro format, so this
+		// guard does not name it; a root-level `aur:` is still refused, by #Candy itself
+		// (`field not allowed`).
+		{"pac", true}, {"deb", true}, {"rpm", true}, {"aur", false},
 		{"debian", true}, {"debian:13", true}, {"debian,ubuntu", true},
 		{"arch", true}, {"fedora", true},
 		{"package", false}, {"distro", false}, {"service", false},

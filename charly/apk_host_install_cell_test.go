@@ -15,7 +15,7 @@ import (
 //
 // FAILS without the change: before it, the committed manifest's `apk:` format declared a `container:` cell
 // and no `host:` cell, so a `target: local` (host) venue installed NOTHING — silently — while `deploy del`
-// still recorded a package-remove op. The assertion is structural (every non-secondary format that installs
+// still recorded a package-remove op. The assertion is structural (every format that installs
 // in a container must also install on a host), so a stray `host:` elsewhere in the file cannot satisfy it.
 //
 // HERMETIC, on purpose: it reads the COMMITTED manifest — the one that ships — but parses it directly
@@ -42,13 +42,12 @@ func TestEveryPackageFormatWithContainerInstallAlsoDeclaresHost(t *testing.T) {
 		Container string `yaml:"container"`
 	}
 	type formatNode struct {
-		Secondary *bool `yaml:"secondary"`
-		Phase     struct {
+		Phase struct {
 			Install *installCells `yaml:"install"`
 		} `yaml:"phase"`
 	}
 
-	checked, skipped, distros := 0, []string{}, 0
+	checked, distros := 0, 0
 	for dname, node := range top {
 		var d struct {
 			Distro struct {
@@ -63,14 +62,6 @@ func TestEveryPackageFormatWithContainerInstallAlsoDeclaresHost(t *testing.T) {
 			if f.Phase.Install == nil || f.Phase.Install.Container == "" {
 				continue // not a package-installing format
 			}
-			// A `secondary: true` format is an adjunct to a primary one (aur rides alongside pac).
-			// Whether a host venue supports it is a separate contract question — recorded on
-			// opencharly/charly#963 rather than decided here, which would otherwise force an invented
-			// host-side AUR build path just to turn this assertion green.
-			if f.Secondary != nil && *f.Secondary {
-				skipped = append(skipped, dname+"/"+fname)
-				continue
-			}
 			checked++
 			if f.Phase.Install.Host == "" {
 				t.Errorf("distro %q format %q declares a container: install cell but NO host: cell — "+
@@ -83,6 +74,5 @@ func TestEveryPackageFormatWithContainerInstallAlsoDeclaresHost(t *testing.T) {
 		t.Fatalf("the assertion never ran: %d distro node(s) in %s, none declaring a container: install cell",
 			distros, path)
 	}
-	t.Logf("checked %d container-install format(s) across %d distro(s); skipped %d secondary %v",
-		checked, distros, len(skipped), skipped)
+	t.Logf("checked %d container-install format(s) across %d distro(s)", checked, distros)
 }

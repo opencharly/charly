@@ -99,12 +99,6 @@ func (a *testCandyReader) HasData() bool {
 func (a *testCandyReader) Data() []spec.CandyData { return decodeRawSlice[spec.CandyData](a.m.Data) }
 
 func (a *testCandyReader) Packaging() *spec.Packaging { return a.m.Packaging }
-func (a *testCandyReader) FormatSection(name string) *spec.PackageSection {
-	if s, ok := a.m.FormatSections[name]; ok {
-		return &s
-	}
-	return nil
-}
 func (a *testCandyReader) TagSection(tag string) *spec.TagPkgConfig {
 	if s, ok := a.m.TagSections[tag]; ok {
 		return &s
@@ -162,7 +156,7 @@ func (a *testCandyReader) fileExists(name string) bool {
 }
 
 func (a *testCandyReader) HasFormatPackages() bool {
-	return len(a.m.FormatSections) > 0 || len(a.m.TagSections) > 0 || len(a.m.TopPackages) > 0
+	return len(a.m.TagSections) > 0 || len(a.m.TopPackages) > 0
 }
 func (a *testCandyReader) HasContent() bool             { return a.m.HasContent }
 func (a *testCandyReader) HasInstallFiles() bool        { return a.m.HasInstallFiles }

@@ -181,7 +181,7 @@ func computeGolden(repoRoot string) (map[string]spec.InstallPlanView, error) {
 		}
 
 		hostCtx := spec.HostContext{}
-		needed := deploykit.DetectExternalizedBuilders([]string{name}, map[string]spec.CandyReader{name: layer}, spec.ExternalizedBuilders, img)
+		needed := deploykit.DetectExternalizedBuilders([]string{name}, map[string]spec.CandyReader{name: layer}, img)
 		if len(needed) > 0 {
 			builderCtx, err := collectBuilderContext(layer, img, needed)
 			if err != nil {
@@ -215,20 +215,20 @@ func collectBuilderContext(layer spec.CandyReader, img *buildkit.ResolvedBox, ne
 		if img.BuilderConfig != nil {
 			bDef = img.BuilderConfig.Builder[word]
 		}
-		in := spec.BuilderCollectInput{Candy: layer.GetName(), Builder: word, Home: img.Home}
-		if bDef != nil && bDef.DetectConfig != "" {
-			if sec := layer.FormatSection(bDef.DetectConfig); sec != nil {
-				in.Packages = append([]string(nil), sec.Packages...)
-				if raw, ok := sec.Raw["replaces"]; ok {
-					if list, ok := deploykit.StringSliceFromYAML(raw); ok {
-						in.Replaces = list
-					}
-				}
-			}
+		// The ONE collect-input constructor the deploy pre-pass uses (plugin-fleet), so this golden
+		// is computed from the identical input (R2, opencharly/sdk#608).
+		in, err := deploykit.BuilderCollectInputFor(layer, img, word, bDef)
+		if err != nil {
+			return nil, fmt.Errorf("builder %q collect input: %w", word, err)
 		}
-		collectCtx := kit.BuilderCollectContext(word, in)
+		collectCtx, err := kit.BuilderCollectContext(word, in)
+		if err != nil {
+			return nil, fmt.Errorf("builder %q collect-context: %w", word, err)
+		}
 		reverse := kit.BuilderReverse(word, spec.BuilderReverseInput{Candy: layer.GetName(), Builder: word, Context: collectCtx})
-		out[deploykit.BuilderCtxKey(layer.GetName(), word)] = deploykit.BuilderPreresolved{Context: collectCtx, Reverse: reverse}
+		// The package output is the builder plugin's own declaration (its collect reply carries
+		// kit.BuilderPackageOutput), exactly what the deploy pre-pass stashes.
+		out[deploykit.BuilderCtxKey(layer.GetName(), word)] = deploykit.BuilderPreresolved{Context: collectCtx, Reverse: reverse, Package: kit.BuilderPackageOutput(word, layer.GetName())}
 	}
 	return out, nil
 }
