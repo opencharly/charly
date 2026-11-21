@@ -5539,3 +5539,73 @@ check-seam-proof:
                     n=$(printf %s "$tok" | wc -c)
                     test "$n" -gt 0
                     echo "SEAM-PROOF-OK length=$n"
+repo-cache-check-app:
+    local:
+        description: |-
+            Minimal kind:local template for check-repo-cache-local — no candies; the bed only
+            drives the host binary's --repo resolver.
+        candy: []
+check-repo-cache-local:
+    local:
+        from: repo-cache-check-app
+        host: local
+        disposable: true
+        lifecycle: dev
+        description: >-
+            Sole live proof that the --repo resolver uses the ONE cache root: a seeded immutable
+            entry resolves offline under $XDG_CACHE_HOME/charly/repos/<repo>@<ref>, and under
+            CHARLY_CACHE_DIR/repos. A cache miss would attempt a clone (and fail without a TTY,
+            or hang), so a successful version answer from the seeded entry is the witness.
+        plan:
+            - check: with no root override, the seeded entry resolves under the XDG cache root
+              id: repo-cache-xdg-default
+              context: [runtime]
+              exit_status: 0
+              timeout: 90s
+              command:
+                command: |
+                  set -eu
+                  tmp=$(mktemp -d)
+                  trap 'rm -rf "$tmp"' EXIT
+                  export GIT_TERMINAL_PROMPT=0
+                  entry="$tmp/charly/repos/github.com/opencharly/fixture@v1.0.0"
+                  mkdir -p "$entry/box" "$entry/candy"
+                  printf 'discover: [box, candy]\n' > "$entry/charly.yml"
+                  printf '{"version":2,"commit":"v1.0.0"}\n' > "$entry.ref"
+                  out=$(XDG_CACHE_HOME="$tmp" CHARLY_CACHE_DIR= ${CHARLY_BIN} --repo opencharly/fixture@v1.0.0 version 2>&1)
+                  printf '%s\n' "$out"
+                  case "$out" in
+                    *"Cloning into"*) echo "the resolver missed the seeded XDG cache entry and cloned" >&2; exit 1 ;;
+                  esac
+                  if printf '%s\n' "$out" | grep -qE '^[0-9]{4}\.[0-9]{3}\.[0-9]{4}'; then
+                    echo "resolved offline from the relocated XDG cache root"
+                  else
+                    echo "the resolver did not answer from the seeded XDG cache entry" >&2; exit 1
+                  fi
+                in_container: false
+            - check: CHARLY_CACHE_DIR relocates the same repos entry
+              id: repo-cache-dir-override
+              context: [runtime]
+              exit_status: 0
+              timeout: 90s
+              command:
+                command: |
+                  set -eu
+                  tmp=$(mktemp -d)
+                  trap 'rm -rf "$tmp"' EXIT
+                  export GIT_TERMINAL_PROMPT=0
+                  entry="$tmp/repos/github.com/opencharly/fixture@v1.0.0"
+                  mkdir -p "$entry/box" "$entry/candy"
+                  printf 'discover: [box, candy]\n' > "$entry/charly.yml"
+                  printf '{"version":2,"commit":"v1.0.0"}\n' > "$entry.ref"
+                  out=$(CHARLY_CACHE_DIR="$tmp" ${CHARLY_BIN} --repo opencharly/fixture@v1.0.0 version 2>&1)
+                  printf '%s\n' "$out"
+                  case "$out" in
+                    *"Cloning into"*) echo "the resolver missed the seeded CHARLY_CACHE_DIR entry and cloned" >&2; exit 1 ;;
+                  esac
+                  if printf '%s\n' "$out" | grep -qE '^[0-9]{4}\.[0-9]{3}\.[0-9]{4}'; then
+                    echo "resolved offline from CHARLY_CACHE_DIR/repos"
+                  else
+                    echo "the resolver did not answer from the seeded CHARLY_CACHE_DIR entry" >&2; exit 1
+                  fi
+                in_container: false
