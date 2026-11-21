@@ -5552,10 +5552,17 @@ check-repo-cache-local:
         disposable: true
         lifecycle: dev
         description: >-
-            Sole live proof that the --repo resolver uses the ONE cache root: a seeded immutable
-            entry resolves offline under $XDG_CACHE_HOME/charly/repos/<repo>@<ref>, and under
-            CHARLY_CACHE_DIR/repos. A cache miss would attempt a clone (and fail without a TTY,
-            or hang), so a successful version answer from the seeded entry is the witness.
+            Sole live proof that the --repo resolver reads the ONE cache root, and that each of
+            the three ways of naming it points at the same store: a seeded immutable entry
+            (a fresh root each arm) resolves under $XDG_CACHE_HOME/charly/repos/<repo>@<ref>,
+            under CHARLY_CACHE_DIR/repos/<repo>@<ref>, and through the kept CHARLY_REPO_CACHE
+            override (which names the repos directory itself). The fixture repo exists nowhere,
+            and every arm runs with every github.com clone rewritten to a missing local path,
+            so a PASS can only mean the seeded entry answered — a cache miss fails on the spot
+            instead of reaching the network. The `miss` arm is the control that proves the
+            rewrite is in force: an empty root must attempt that clone and fail. Each arm drives
+            the ONE implementation in scripts/check-repo-cache.sh; only the root it seeds and the
+            variable that names it differ, so a failure names the root.
         plan:
             - check: with no root override, the seeded entry resolves under the XDG cache root
               id: repo-cache-xdg-default
@@ -5563,25 +5570,7 @@ check-repo-cache-local:
               exit_status: 0
               timeout: 90s
               command:
-                command: |
-                  set -eu
-                  tmp=$(mktemp -d)
-                  trap 'rm -rf "$tmp"' EXIT
-                  export GIT_TERMINAL_PROMPT=0
-                  entry="$tmp/charly/repos/github.com/opencharly/fixture@v1.0.0"
-                  mkdir -p "$entry/box" "$entry/candy"
-                  printf 'discover: [box, candy]\n' > "$entry/charly.yml"
-                  printf '{"version":2,"commit":"v1.0.0"}\n' > "$entry.ref"
-                  out=$(XDG_CACHE_HOME="$tmp" CHARLY_CACHE_DIR= ${CHARLY_BIN} --repo opencharly/fixture@v1.0.0 version 2>&1)
-                  printf '%s\n' "$out"
-                  case "$out" in
-                    *"Cloning into"*) echo "the resolver missed the seeded XDG cache entry and cloned" >&2; exit 1 ;;
-                  esac
-                  if printf '%s\n' "$out" | grep -qE '^[0-9]{4}\.[0-9]{3}\.[0-9]{4}'; then
-                    echo "resolved offline from the relocated XDG cache root"
-                  else
-                    echo "the resolver did not answer from the seeded XDG cache entry" >&2; exit 1
-                  fi
+                command: bash scripts/check-repo-cache.sh xdg "${CHARLY_BIN}"
                 in_container: false
             - check: CHARLY_CACHE_DIR relocates the same repos entry
               id: repo-cache-dir-override
@@ -5589,23 +5578,21 @@ check-repo-cache-local:
               exit_status: 0
               timeout: 90s
               command:
-                command: |
-                  set -eu
-                  tmp=$(mktemp -d)
-                  trap 'rm -rf "$tmp"' EXIT
-                  export GIT_TERMINAL_PROMPT=0
-                  entry="$tmp/repos/github.com/opencharly/fixture@v1.0.0"
-                  mkdir -p "$entry/box" "$entry/candy"
-                  printf 'discover: [box, candy]\n' > "$entry/charly.yml"
-                  printf '{"version":2,"commit":"v1.0.0"}\n' > "$entry.ref"
-                  out=$(CHARLY_CACHE_DIR="$tmp" ${CHARLY_BIN} --repo opencharly/fixture@v1.0.0 version 2>&1)
-                  printf '%s\n' "$out"
-                  case "$out" in
-                    *"Cloning into"*) echo "the resolver missed the seeded CHARLY_CACHE_DIR entry and cloned" >&2; exit 1 ;;
-                  esac
-                  if printf '%s\n' "$out" | grep -qE '^[0-9]{4}\.[0-9]{3}\.[0-9]{4}'; then
-                    echo "resolved offline from CHARLY_CACHE_DIR/repos"
-                  else
-                    echo "the resolver did not answer from the seeded CHARLY_CACHE_DIR entry" >&2; exit 1
-                  fi
+                command: bash scripts/check-repo-cache.sh cache-dir "${CHARLY_BIN}"
+                in_container: false
+            - check: the kept CHARLY_REPO_CACHE override still names the repos directory itself
+              id: repo-cache-legacy-override
+              context: [runtime]
+              exit_status: 0
+              timeout: 90s
+              command:
+                command: bash scripts/check-repo-cache.sh legacy "${CHARLY_BIN}"
+                in_container: false
+            - check: CONTROL — an empty cache root attempts the clone and fails offline, so the arms above are not vacuous
+              id: repo-cache-miss-control
+              context: [runtime]
+              exit_status: 0
+              timeout: 90s
+              command:
+                command: bash scripts/check-repo-cache.sh miss "${CHARLY_BIN}"
                 in_container: false
