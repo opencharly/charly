@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sort"
 
 	"github.com/opencharly/spec/spec"
 )
@@ -36,7 +37,7 @@ import (
 // remaining non-registry work moved into the plugin.
 const validateWordSetsBuilderKind = "validate-word-sets"
 
-// hostBuildValidateWordSets answers the two REGISTRY-derived D-data word sets candy/plugin-box's
+// hostBuildValidateWordSets answers the REGISTRY-derived D-data word sets candy/plugin-box's
 // validate rules consume as membership sets, over the inventory the plugin supplies:
 //
 //   - ProviderCapabilities — every compiled-in provider as "<class>:<word>". validatePluginCandy
@@ -44,6 +45,9 @@ const validateWordSetsBuilderKind = "validate-word-sets"
 //   - ActCapableVerbs — the subset of req.PluginWords whose act form has a build/deploy install
 //     path, computed by running the SAME opActsInBuildDeploy the core validator used (so builtin
 //     ProvisionActor / TypedStep / BuildEmitter rejection is preserved byte-for-byte).
+//   - ContentKinds — the kind words whose capability declares `contents` (they serve
+//     ops.OpContent), sorted: the set the build kit asks for owned content (sdk deploykit
+//     owned_content.go), and the set plugin-box asks to diagnose in project scope.
 //
 // req.ExternalProviders carries the `plugin.providers:` capability strings of the project's
 // out-of-tree plugin candies, which the host REGISTERS first: a declared-but-not-yet-connected
@@ -69,7 +73,12 @@ func hostBuildValidateWordSets(_ context.Context, req spec.ValidateWordSetsReque
 	var reply spec.ValidateWordSetsReply
 	for _, p := range providerRegistry.allProviders() {
 		reply.ProviderCapabilities = append(reply.ProviderCapabilities, providerIdentity(p))
+		// The content kinds: read off the capability's own `contents` declaration, by word.
+		if ck, ok := p.(spec.ContentKindCarrier); ok && p.Class() == ClassKind && ck.IsContentKind() {
+			reply.ContentKinds = append(reply.ContentKinds, p.Reserved())
+		}
 	}
+	sort.Strings(reply.ContentKinds)
 
 	seen := map[string]bool{}
 	for _, word := range req.PluginWords {

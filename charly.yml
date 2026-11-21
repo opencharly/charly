@@ -5403,13 +5403,10 @@ charly-skill-shelf:
             tree). It ships no install content and composes no image; it carries the `skill:`
             routing nodes, and the prose lives in `.agents/skills/<name>/SKILL.md`.
         plan:
-            - run: this documentation-only candy ships no install content (it carries the CLI's own skill entities); validate-satisfying no-op
-              command: "true"
-              context:
-                - build
             # validate-satisfying no-op — the assertion is NOT performed by this command; the real
-            # body-existence gate is `charly box validate`, whose CollectSkills path errors with
-            # `skill "<name>": no body …` when a node's SKILL.md is missing (the PR's negative control).
+            # body-existence gate is `charly box validate`, where kind:skill diagnoses every node in
+            # project scope (`skill "<name>": no body …` when a node's SKILL.md is missing). The candy
+            # needs no install step: its owned skill nodes are its install content (opencharly/sdk#598).
             - check: validate-satisfying no-op — the body-existence assertion is `charly box validate`, not this step
               id: charly-skill-shelf-present
               context:

@@ -32,6 +32,7 @@ type capMeta struct {
 	contract         *spec.StepContract       // set ONLY for a class:step capability declaring a StepContract (F3); nil otherwise
 	structural       bool                     // set ONLY for a class:kind capability that decodes a STRUCTURAL entity (F5)
 	validates        bool                     // set ONLY for a class:kind capability serving a deep ops.OpValidate check (F7/C8)
+	contents         bool                     // set ONLY for a class:kind capability serving ops.OpContent (owned content, M1)
 	phase            string                   // the plugin lifecycle phase (F9; sdk.Phase*, normalized — "" → runtime)
 	primary          string                   // set ONLY for a class:verb capability declaring a scalar-sugar primary input field
 	traits           *spec.DeployTraits       // set ONLY for a SUBSTRATE class:kind capability declaring #DeployTraits (P9); nil otherwise
@@ -98,6 +99,10 @@ func (m capMeta) IsStructuralKind() bool { return m.structural }
 // IsValidatingKind implements spec.ValidatingKindCarrier — a class:kind capability serving a deep
 // ops.OpValidate check the host dispatches at load (F7/C8).
 func (m capMeta) IsValidatingKind() bool { return m.validates }
+
+// IsContentKind implements spec.ContentKindCarrier — a class:kind capability serving ops.OpContent,
+// whose word the host publishes in the envelope's content_kinds.
+func (m capMeta) IsContentKind() bool { return m.contents }
 
 // IsCandyKind implements spec.CandyKindCarrier (F3.1) — the class:kind capability whose word is
 // the candy box⊻layer factory kind. The kind-blind dispatch asks THIS (prov.(spec.CandyKindCarrier))
@@ -177,6 +182,10 @@ func buildCapMeta(c *pb.ProvidedCapability) (capMeta, error) {
 	// A class:kind capability may declare a deep ops.OpValidate check (F7/C8).
 	if m.class == ClassKind && c.GetValidates() {
 		m.validates = true
+	}
+	// A class:kind capability may declare it serves ops.OpContent (owned content, M1).
+	if m.class == ClassKind && c.GetContents() {
+		m.contents = true
 	}
 	// Every capability declares a lifecycle PHASE (F9; normalized, default runtime).
 	m.phase = phase.NormalizePhase(c.GetPhase())
