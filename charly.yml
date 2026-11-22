@@ -32,7 +32,11 @@ import:
     # `charly marketplace generate` and the daily refresh, 2026-11-10..14).
     # v2026.318.1213's `box/crabbox-e2e` composes `pod-crabbox-coordinator:v2026.293.1003`
     # instead (the distro-cachyos 2026.293.1743 fix), so the closure resolves.
-    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.324.1709'
+    # distro-cachyos: v2026.326.1804 carries its half of the same cutover — `aur` out of
+    # the boxes' `build:` lists, the `aur` route on its CDI base, and the imports this
+    # tree now pins (opencharly/distro-cachyos#232). An older pin's `charly-selftest`
+    # still carries `build: [pac, aur]`, which the spec this tree ships refuses.
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.326.1804'
     - debian: '@github.com/opencharly/distro-debian:v2026.274.0746'
     - fedora: '@github.com/opencharly/distro-fedora:v2026.319.1306'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.274.0752'
