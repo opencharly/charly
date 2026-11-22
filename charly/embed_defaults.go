@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/opencharly/spec/spec"
@@ -17,6 +19,14 @@ import (
 //
 //go:embed charly.yml
 var embeddedCharlyDefaults []byte
+
+// embeddedDefaultsDigest is the content digest of the binary-embedded defaults — the identity of
+// the default vocabulary every materialize merges (hostWalkProject stamps it on the walk envelope,
+// so the materialized-tree cache re-keys when it changes).
+func embeddedDefaultsDigest() string {
+	sum := sha256.Sum256(embeddedCharlyDefaults)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
 
 // embeddedDefaults parses the binary-embedded node-form defaults into a spec.UnifiedFile
 // through the SAME per-document routing (kit.ClassifyDoc → #NodeDoc gate → parse →

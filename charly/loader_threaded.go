@@ -131,7 +131,17 @@ func parseCandyYAML(path string) (*spec.CandyYAML, error) {
 // candy/plugin-loader's WalkProject when the host leaves these zero) rather than charly core
 // holding that logic just to thread a function value through a struct literal.
 func hostWalkProject(dir string, rootData []byte) (spec.LoadedProject, error) {
-	return requireProjectWalker().WalkProject(dir, rootData, "", hostWalkSeams())
+	lp, err := requireProjectWalker().WalkProject(dir, rootData, "", hostWalkSeams())
+	if err != nil {
+		return lp, err
+	}
+	// The embedded default vocabulary is a MATERIALIZE input (ApplyEmbeddedDefaults merges it into
+	// the tree), so its digest rides the envelope the materialized-tree cache keys on. Without it a
+	// binary whose embedded charly.yml changed was served the previous vocabulary's cached tree
+	// whenever the spec and sdk versions stayed put (measured: a parity golden failing only on a
+	// warm cache).
+	lp.EmbeddedDefaultsDigest = embeddedDefaultsDigest()
+	return lp, nil
 }
 
 // hostWalkSeams builds the spec.WalkSeams every registry-coupled walk-level entry point threads

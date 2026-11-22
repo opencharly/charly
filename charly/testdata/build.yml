@@ -9,20 +9,6 @@ arch:
                 - dst: /var/cache/pacman/pkg
                   sharing: locked
         format:
-            aur:
-                cache_mount:
-                    - dst: /var/cache/pacman/pkg
-                      sharing: locked
-                section_field:
-                    option: list
-                    package: list
-                phase:
-                    install:
-                        container: |
-                            COPY --from={{.StageName}} /tmp/aur-pkgs/ /tmp/aur-pkgs/
-                            RUN {{cacheMounts .CacheMounts}} \
-                                pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
-                                rm -rf /tmp/aur-pkgs
             pac:
                 cache_mount:
                     - dst: /var/cache/pacman/pkg
@@ -152,13 +138,9 @@ ubuntu:
             cache_mount: []
 aur:
     builder:
-        detect_config: aur
         cache_mount:
             - dst: /var/cache/pacman/pkg
               sharing: locked
-        copy_artifact:
-            - src: /tmp/aur-pkgs/
-              dst: /tmp/aur-pkgs/
 cargo:
     builder:
         detect_file:
@@ -178,10 +160,6 @@ npm:
             - package.json
         cache_mount:
             - dst: /tmp/npm-cache
-        copy_artifact:
-            - src: '{{.Home}}'
-              dst: '{{.Home}}'
-              chown: true
 pixi:
     builder:
         detect_file:
@@ -198,13 +176,6 @@ pixi:
             pyproject.toml: pixi install --manifest-path pyproject.toml
         manylinux_fix: |
             RUN grep -q 'system-requirements' {{.Manifest}} || printf '\n[system-requirements]\nlibc = { family = "glibc", version = "2.39" }\n' >> {{.Manifest}}
-        copy_artifact:
-            - src: '{{.Home}}'
-              dst: '{{.Home}}'
-              chown: true
-        copy_binary:
-            src: /usr/local/bin/pixi
-            dst: /usr/local/bin/pixi
         env:
             PIXI_CACHE_DIR: /tmp/pixi-cache
             RATTLER_CACHE_DIR: /tmp/rattler-cache

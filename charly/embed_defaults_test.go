@@ -159,10 +159,10 @@ func TestEmbeddedDefaults_AllVocabKindsOverridable(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "charly.yml", `pixi:
   builder:
-    detect_config: marker99
+    detect_file: [marker99.toml]
 mybuilder:
   builder:
-    detect_config: custom
+    detect_file: [custom.toml]
 systemd:
   init:
     model: file_copy
@@ -188,11 +188,11 @@ amd-gpu:
 
 	// builder: override wins WHOLESALE (gap-fill replaces, never deep-merges), a
 	// new entry coexists, an untouched embedded entry survives.
-	if b := builders["pixi"]; b == nil || b.DetectConfig != "marker99" {
+	if b := builders["pixi"]; b == nil || !slices.Equal(b.DetectFiles, []string{"marker99.toml"}) {
 		t.Errorf("builder pixi override lost (embed wrongly won); got %+v", builders["pixi"])
 	}
-	if b := builders["pixi"]; b != nil && len(b.DetectFiles) != 0 {
-		t.Errorf("builder pixi override must replace wholesale (embed DetectFiles must be gone); got %+v", b.DetectFiles)
+	if b := builders["pixi"]; b != nil && (len(b.InstallCommands) != 0 || len(b.PathContributions) != 0) {
+		t.Errorf("builder pixi override must replace wholesale (the embedded install_command/path_contribution must be gone); got %+v", b)
 	}
 	if builders["mybuilder"] == nil {
 		t.Error("project-added builder mybuilder missing")
@@ -293,7 +293,7 @@ func TestEmbeddedMiseBuilderVocabulary(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "charly.yml", `pixi:
   builder:
-    detect_config: marker99
+    detect_file: [marker99.toml]
 `)
 	uf, _, err := LoadUnified(dir)
 	if err != nil {

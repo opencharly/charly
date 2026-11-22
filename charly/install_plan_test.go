@@ -93,18 +93,23 @@ func TestSystemPackagesStepReverse(t *testing.T) {
 }
 
 func TestBuilderStepScopeByBuilder(t *testing.T) {
+	// Scope is read from the step's data: a builder whose plugin declared an OS package output
+	// (aur's pac packages, BuilderStep.Package) installs at system scope; every other builder
+	// installs at user scope (opencharly/sdk#608 — never a word check).
+	pac := &spec.BuilderPackage{Format: "pac", Dir: "/tmp/aur-pkgs/c", Glob: "*.pkg.tar.zst"}
 	tests := []struct {
 		builder string
+		pkg     *spec.BuilderPackage
 		want    spec.Scope
 	}{
-		{"aur", spec.ScopeSystem},
-		{"pixi", spec.ScopeUser},
-		{"npm", spec.ScopeUser},
-		{"cargo", spec.ScopeUser},
+		{"aur", pac, spec.ScopeSystem},
+		{"pixi", nil, spec.ScopeUser},
+		{"npm", nil, spec.ScopeUser},
+		{"cargo", nil, spec.ScopeUser},
 	}
 	for _, tc := range tests {
 		t.Run(tc.builder, func(t *testing.T) {
-			s := &spec.BuilderStep{Builder: tc.builder}
+			s := &spec.BuilderStep{Builder: tc.builder, Package: tc.pkg}
 			if got := s.Scope(); got != tc.want {
 				t.Errorf("Scope() = %v, want %v", got, tc.want)
 			}

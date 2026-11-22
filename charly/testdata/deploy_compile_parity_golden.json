@@ -307,6 +307,15 @@
         "kind": "Builder",
         "scope": 1,
         "venue": 1,
+        "reverse_ops": [
+          {
+            "kind": "npm-uninstall-g",
+            "targets": [
+              "markdownlint-cli"
+            ],
+            "scope": 1
+          }
+        ],
         "candy_name": "pre-commit",
         "candy_dir": "${REPO_ROOT}/.parity/candy/pre-commit",
         "phase": 1,
@@ -314,7 +323,10 @@
         "raw_stage_context": {
           "builder": "npm",
           "home": "/home/user",
-          "layer": "pre-commit"
+          "layer": "pre-commit",
+          "packages": [
+            "markdownlint-cli"
+          ]
         },
         "builder_def": {
           "detect_file": [

@@ -296,7 +296,12 @@ debootstrap:
         output_artifact: /out/rootfs.tar.gz
 aur:
     builder:
-        detect_config: aur
+        # aur is a builder like every other (opencharly/sdk#608): a candy declares its packages under
+        # a distro tag (`distro: arch: aur: package: [...]`), the image honours them when its tag
+        # chain selects the tag, and its route (`builder: aur: <box>`) names the builder box. What
+        # aur produces (pac packages in the candy's own directory, installed through a pac distro's
+        # local_pkg contract, or its extracted tree on any other distro) is the aur builder plugin's
+        # own declaration — never authored here (DESIGN.cue #BuilderAlt).
         cache_mount:
             - dst: /var/cache/pacman/pkg
               sharing: locked
@@ -320,12 +325,11 @@ aur:
                     chown user:user /tmp/makepkg.conf
                     pacman -Syu --noconfirm
                     sudo -u user -- yay -S --noconfirm --needed --builddir /tmp/aur-build --makepkgconf /tmp/makepkg.conf{{range .Packages}} {{shquote .}}{{end}}
-                    mkdir -p /tmp/aur-pkgs
-                    for src in /tmp/aur-build /home/user/.cache/yay /root/.cache/yay; do
-                      [ -d "$src" ] && find "$src" -name '*.pkg.tar.zst' -exec cp {} /tmp/aur-pkgs/ \; 2>/dev/null || true
-                    done
+                    mkdir -p {{shquote .PkgDir}}
+                    find /tmp/aur-build -name '*.pkg.tar.zst' -exec cp {} {{shquote .PkgDir}}/ \;
+                    ls {{shquote .PkgDir}}/*.pkg.tar.zst >/dev/null 2>&1 || { echo 'charly aur builder: yay produced ZERO .pkg.tar.zst artifacts for a non-empty aur: package list — a package listed under aur: is likely now a repo package (yay -S --needed installs it from the repo without building). Move it to the package: list.' >&2; exit 1; }
                     echo 'aur artifacts staged for host install:' >&2
-                    ls -la /tmp/aur-pkgs/ >&2
+                    ls -la {{shquote .PkgDir}}/ >&2
 cargo:
     builder:
         detect_file:
@@ -533,21 +537,6 @@ arch:
                 - dst: /var/cache/pacman/pkg
                   sharing: locked
         format:
-            aur:
-                secondary: true
-                cache_mount:
-                    - dst: /var/cache/pacman/pkg
-                      sharing: locked
-                section_field:
-                    option: list
-                    package: list
-                phase:
-                    install:
-                        container: |
-                            COPY --from={{.StageName}} /tmp/aur-pkgs/ /tmp/aur-pkgs/
-                            RUN {{cacheMounts .CacheMounts}} \
-                                pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
-                                rm -rf /tmp/aur-pkgs
             pac:
                 cache_mount:
                     - dst: /var/cache/pacman/pkg

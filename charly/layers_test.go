@@ -144,8 +144,8 @@ func TestCandyPixi(t *testing.T) {
 	if !pixi.HasTasks() {
 		t.Error("pixi should have tasks:")
 	}
-	if pixi.FormatSection("rpm") != nil {
-		t.Error("pixi should not have rpm format section")
+	if pixi.TagSection("rpm") != nil {
+		t.Error("pixi should not have an rpm package section")
 	}
 	if pixi.HasFile("pixi.toml") {
 		t.Error("pixi should not have pixi.toml")
@@ -191,9 +191,6 @@ func TestCandyNodejs(t *testing.T) {
 	if !reflect.DeepEqual(nodejs.TopPackages(), []string{"nodejs", "npm"}) {
 		t.Errorf("nodejs.TopPackages() = %v, want [nodejs npm]", nodejs.TopPackages())
 	}
-	if nodejs.FormatSection("rpm") != nil || nodejs.FormatSection("deb") != nil || nodejs.FormatSection("pac") != nil {
-		t.Error("nodejs should have no format sections (top-level packages are the base, not a format section)")
-	}
 	if nodejs.TagSection("fedora") != nil || nodejs.TagSection("debian") != nil {
 		t.Error("nodejs should have no tag sections (no distro: map authored)")
 	}
@@ -210,9 +207,10 @@ func TestCandyPacTool(t *testing.T) {
 		t.Fatal("pac-tool candy not found")
 	}
 
-	// pac-tool declares distro.arch → the per-distro "arch" TAG section (bare
-	// distro keys route to tag sections now, not a shared format section). The
-	// arch.aur sub-block keeps its dedicated "aur" FORMAT section.
+	// pac-tool declares distro.arch → the per-distro "arch" TAG section. Its arch.aur
+	// sub-block is a build-time MANAGER declaration recorded on that same tag section
+	// (TagPkgConfig.Managers), so it reaches an image only through the arch tag
+	// (opencharly/sdk#608) — never an image-independent format section.
 	arch := pacTool.TagSection("arch")
 	if arch == nil {
 		t.Fatal("pac-tool should have an arch tag section")
@@ -220,8 +218,8 @@ func TestCandyPacTool(t *testing.T) {
 	if !reflect.DeepEqual(arch.Package, []string{"neovim", "ripgrep"}) {
 		t.Errorf("TagSection(arch).Package = %v, want [neovim ripgrep]", arch.Package)
 	}
-	if pacTool.FormatSection("pac") != nil {
-		t.Error("pac-tool should have no pac format section (distro.arch → tag section)")
+	if pacTool.TagSection("pac") != nil {
+		t.Error("pac-tool should have no pac section (distro.arch → the arch tag section)")
 	}
 	// Test raw fields accessible for templates
 	repos := toMapSliceFixture(arch.Raw["repo"])
@@ -233,13 +231,13 @@ func TestCandyPacTool(t *testing.T) {
 		t.Errorf("arch options = %v, want [--needed]", options)
 	}
 
-	// Test aur config via generic FormatSection (aur stays a build-format section)
-	aur := pacTool.FormatSection("aur")
-	if aur == nil {
-		t.Fatal("pac-tool should have aur format section")
+	// The aur declaration lives on the arch tag section's managers.
+	aur, ok := arch.Managers["aur"]
+	if !ok {
+		t.Fatal("pac-tool's arch tag section should carry its aur manager declaration")
 	}
 	if !reflect.DeepEqual(aur.Packages, []string{"yay-bin", "neovim-nightly-bin"}) {
-		t.Errorf("FormatSection(aur).Packages = %v, want [yay-bin neovim-nightly-bin]", aur.Packages)
+		t.Errorf("TagSection(arch).Managers[aur].Packages = %v, want [yay-bin neovim-nightly-bin]", aur.Packages)
 	}
 
 	// Test HasFormatPackages (replaces HasAur)
@@ -273,8 +271,7 @@ func TestCandyCargoTool(t *testing.T) {
 }
 
 func TestHasInstallFiles(t *testing.T) {
-	// Format-section detection depends on RegisterBuildVocabulary being called first
-	// (so unknown top-level keys get routed to FormatSections, not discarded).
+	// Distro-key routing depends on RegisterBuildVocabulary being called first.
 	RegisterBuildVocabulary(testDistroConfig())
 
 	layers, err := ScanCandy("testdata")

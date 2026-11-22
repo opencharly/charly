@@ -90,8 +90,8 @@ func TestLoadDistroConfigFromFile(t *testing.T) {
 	if archResolved.Format["pac"] == nil {
 		t.Error("arch should have pac format")
 	}
-	if archResolved.Format["aur"] == nil {
-		t.Error("arch should have aur format")
+	if archResolved.Format["aur"] != nil {
+		t.Error("arch declares an aur format: aur is a builder (builder.aur), not a distro format")
 	}
 }
 
@@ -99,7 +99,8 @@ func TestAllFormatNames(t *testing.T) {
 	dc := testDistroConfig()
 	names := dc.AllFormatNames()
 	// apk joined the vocabulary with the alpine distro entity.
-	want := []string{"apk", "aur", "deb", "pac", "rpm"}
+	// aur is a builder, never a distro format (opencharly/sdk#608).
+	want := []string{"apk", "deb", "pac", "rpm"}
 	if len(names) != len(want) {
 		t.Errorf("expected %d format names, got %d: %v", len(want), len(names), names)
 	}
@@ -115,10 +116,14 @@ func TestAllFormatNames(t *testing.T) {
 func TestValidFormat(t *testing.T) {
 	dc := testDistroConfig()
 	// apk is valid since the alpine distro entity declares it.
-	for _, name := range []string{"rpm", "deb", "pac", "aur", "apk"} {
+	for _, name := range []string{"rpm", "deb", "pac", "apk"} {
 		if !dc.ValidFormat(name) {
 			t.Errorf("expected format %q to be valid", name)
 		}
+	}
+	// aur is a build-time manager, not a box build format.
+	if dc.ValidFormat("aur") {
+		t.Error("aur is still a valid build format")
 	}
 	// Negative control — an nFPM format the build vocabulary does NOT declare.
 	// Without a rejected case this test could not tell ValidFormat from a
@@ -197,14 +202,22 @@ func TestLegacyTopLevelFormatKeyRejected(t *testing.T) {
 	}
 }
 
-func TestAurBuilderDetectConfig(t *testing.T) {
+// TestEmbeddedBuildersAuthorNoInstallBehaviour proves the embedded builder nodes stay authored DATA
+// only. What a builder installs is the builder PLUGIN's own knowledge (kit), never the authored node,
+// whose DESIGN shape is a manager map (DESIGN.cue #BuilderAlt under D-PLUG-2; opencharly/sdk#608). The
+// authored `copy_artifact`/`copy_binary`/`detect_config` fields no longer EXIST (opencharly/spec#421),
+// so the absence is now a property of the schema rather than of this vocabulary: what is left to
+// assert here is the aur host template, which guards its own output instead of swallowing a failure
+// with `|| true`.
+func TestEmbeddedBuildersAuthorNoInstallBehaviour(t *testing.T) {
 	builderCfg := testBuilderCfg()
-	aur := builderCfg.Builder["aur"]
-	if aur == nil {
-		t.Fatal("expected aur builder definition")
+	for _, word := range []string{"aur", "npm", "pixi", "mise", "cargo"} {
+		if builderCfg.Builder[word] == nil {
+			t.Fatalf("expected a %s builder definition", word)
+		}
 	}
-	if aur.DetectConfig != "aur" {
-		t.Errorf("aur detect_config = %q, want \"aur\"", aur.DetectConfig)
+	if strings.Contains(spec.BuilderPhaseTemplate(builderCfg.Builder["aur"], spec.PhaseInstall, spec.VenueHostNative), "|| true") {
+		t.Error("the aur host template swallows a failure with `|| true`")
 	}
 }
 
@@ -277,19 +290,23 @@ func TestDnfConfigInherit(t *testing.T) {
 	}
 }
 
-// TestDistroDefPrimaryFormat proves PrimaryFormat returns the base format
-// (rpm/deb/pac), skipping the secondary `aur` builder format, deterministically.
+// TestDistroDefPrimaryFormat proves PrimaryFormat returns the distro's OS package format
+// deterministically, and that the embedded arch distro declares no `aur` format: aur is a
+// builder, never a distro format (opencharly/sdk#608).
 func TestDistroDefPrimaryFormat(t *testing.T) {
-	arch := &spec.ResolvedDistro{Format: map[string]*spec.Format{"pac": {}, "aur": {Secondary: true}}}
+	arch := &spec.ResolvedDistro{Format: map[string]*spec.Format{"pac": {}}}
 	if got := arch.PrimaryFormat(); got != "pac" {
-		t.Errorf("arch PrimaryFormat = %q, want pac (aur is secondary)", got)
+		t.Errorf("arch PrimaryFormat = %q, want pac", got)
 	}
 	fedora := &spec.ResolvedDistro{Format: map[string]*spec.Format{"rpm": {}}}
 	if got := fedora.PrimaryFormat(); got != "rpm" {
 		t.Errorf("fedora PrimaryFormat = %q, want rpm", got)
 	}
-	if got := (&spec.ResolvedDistro{Format: map[string]*spec.Format{"aur": {Secondary: true}}}).PrimaryFormat(); got != "" {
-		t.Errorf("aur-only PrimaryFormat = %q, want empty (no base format)", got)
+	if got := (&spec.ResolvedDistro{Format: map[string]*spec.Format{}}).PrimaryFormat(); got != "" {
+		t.Errorf("format-less PrimaryFormat = %q, want empty", got)
+	}
+	if cfg := testDistroConfig(); cfg.Distro["arch"] != nil && cfg.Distro["arch"].Format["aur"] != nil {
+		t.Error("the arch distro still declares an `aur` format: aur is a builder (builder.aur), not a distro format")
 	}
 	if got := (*spec.ResolvedDistro)(nil).PrimaryFormat(); got != "" {
 		t.Errorf("nil PrimaryFormat = %q, want empty", got)
