@@ -203,23 +203,17 @@ func TestLegacyTopLevelFormatKeyRejected(t *testing.T) {
 }
 
 // TestEmbeddedBuildersAuthorNoInstallBehaviour proves the embedded builder nodes stay authored DATA
-// only: no builder carries a payload (copy_artifact, copy_binary) or a config-section trigger
-// (detect_config).
-// What a builder installs is the builder PLUGIN's own knowledge (kit), never the authored node,
-// whose DESIGN shape is a manager map (DESIGN.cue #BuilderAlt, D-IR-7; opencharly/sdk#608). The
-// aur host template guards its own output instead of swallowing a failure with `|| true`.
+// only. What a builder installs is the builder PLUGIN's own knowledge (kit), never the authored node,
+// whose DESIGN shape is a manager map (DESIGN.cue #BuilderAlt under D-PLUG-2; opencharly/sdk#608). The
+// authored `copy_artifact`/`copy_binary`/`detect_config` fields no longer EXIST (opencharly/spec#421),
+// so the absence is now a property of the schema rather than of this vocabulary: what is left to
+// assert here is the aur host template, which guards its own output instead of swallowing a failure
+// with `|| true`.
 func TestEmbeddedBuildersAuthorNoInstallBehaviour(t *testing.T) {
 	builderCfg := testBuilderCfg()
 	for _, word := range []string{"aur", "npm", "pixi", "mise", "cargo"} {
-		b := builderCfg.Builder[word]
-		if b == nil {
+		if builderCfg.Builder[word] == nil {
 			t.Fatalf("expected a %s builder definition", word)
-		}
-		if len(b.CopyArtifacts) != 0 {
-			t.Errorf("%s builder authors a copy_artifact payload %+v: the payload is the builder plugin's", word, b.CopyArtifacts)
-		}
-		if b.CopyBinary != nil {
-			t.Errorf("%s builder authors a copy_binary %+v: the builder's tool copy is the builder plugin's", word, b.CopyBinary)
 		}
 	}
 	if strings.Contains(spec.BuilderPhaseTemplate(builderCfg.Builder["aur"], spec.PhaseInstall, spec.VenueHostNative), "|| true") {
