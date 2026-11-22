@@ -36,9 +36,11 @@ import:
     # the boxes' `build:` lists, the `aur` route on its CDI base, and the imports this
     # tree now pins (opencharly/distro-cachyos#232). An older pin's `charly-selftest`
     # still carries `build: [pac, aur]`, which the spec this tree ships refuses.
+    # (charly#1236 advanced this same line to v2026.326.1724; 1804 is that release plus
+    # the cutover, so the newer tag subsumes it.)
     - cachyos: '@github.com/opencharly/distro-cachyos:v2026.326.1804'
     - debian: '@github.com/opencharly/distro-debian:v2026.274.0746'
-    - fedora: '@github.com/opencharly/distro-fedora:v2026.319.1306'
+    - fedora: '@github.com/opencharly/distro-fedora:v2026.325.1900'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.274.0752'
     # The `vm:` substrate. check-sidecar-pod declares a deploy-level VM member
     # (`from: eval-vm`) and BringUpMembers dispatches `deploy add` for it, so the
