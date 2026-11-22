@@ -17,7 +17,12 @@ import:
     # self-contained (import: []) and cachyos imports the `arch` namespace; none
     # imports main back (they reach main's shared candies via @github refs), so the
     # former main↔cachyos / main↔fedora mutual cycles are dissolved.
-    - arch: '@github.com/opencharly/distro-arch:v2026.324.0908'
+    # distro-arch: v2026.326.1455 is the release where `aur` is a ROUTED BUILDER rather
+    # than a box `build:` format (distro-arch#77, opencharly/sdk#608); its `arch-test`
+    # carries `build: [pac]`, which the spec this tree ships requires. An older pin is
+    # refused at load time (`#CandyValue.base: field not allowed` is the cascade of that
+    # `build:` disjunction), so this is a floor, not a preference.
+    - arch: '@github.com/opencharly/distro-arch:v2026.326.1455'
     # cachyos is a FLOOR, not a ceiling: never pin it below v2026.281.1001 (that was the
     # tag that dropped the retired `pod-openclaw` pins from the CachyOS refs list), but
     # v2026.281.1001 itself carries a DEAD ref — its `box/crabbox-e2e/charly.yml` pins
@@ -315,14 +320,23 @@ charly-dev:
             # they must be PINNED here for the connect path's pass-1 (the project's own candy
             # closure) to vendor them by tag — a version-less remote ref would fall to the
             # mutable default branch and hang on the freshness check.
-            - '@github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi:v2026.271.2348'
-            - '@github.com/opencharly/plugin-builder-npm/candy/plugin-builder-npm:v2026.271.2311'
-            - '@github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo:v2026.271.2314'
-            - '@github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur:v2026.271.2317'
+            #
+            # These four — and mise — are pinned at the UNIFIED BUILDER releases
+            # (opencharly/sdk#608): a builder's install comes from its own OpResolve reply
+            # (`BuilderPackageOutput`), so a plugin older than that contract returns a payload
+            # with no package, the render copies the payload and installs nothing, and the
+            # image ships WITHOUT the package while the build stays green (opencharly/sdk#615,
+            # measured through a probe box: v2026.271.2317's reply left `yay-bin` copied to
+            # /tmp/aur-pkgs and never installed). Any future pin below these releases
+            # reintroduces that silent loss.
+            - '@github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi:v2026.326.0834'
+            - '@github.com/opencharly/plugin-builder-npm/candy/plugin-builder-npm:v2026.326.0744'
+            - '@github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo:v2026.326.0746'
+            - '@github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur:v2026.326.0746'
             # The mise builder (builder:mise) — external out-of-process, pinned here for the
             # connect path's pass-1 (the P3 detection integration; the plugin repo is
             # opencharly/plugin-mise).
-            - '@github.com/opencharly/plugin-mise/candy/plugin-mise:v2026.274.2100'
+            - '@github.com/opencharly/plugin-mise/candy/plugin-mise:v2026.326.0858'
             # The example plugins the test fixtures + check beds host-build/connect by word ref —
             # pinned here (post-cutover) so the project closure vendors them and the lazy-connect
             # pass-1 finds them by word without a version-less remote fetch.
