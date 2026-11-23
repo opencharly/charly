@@ -335,14 +335,14 @@ charly-dev:
             # measured through a probe box: v2026.271.2317's reply left `yay-bin` copied to
             # /tmp/aur-pkgs and never installed). Any future pin below these releases
             # reintroduces that silent loss.
-            - '@github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi:v2026.326.0834'
-            - '@github.com/opencharly/plugin-builder-npm/candy/plugin-builder-npm:v2026.326.0744'
-            - '@github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo:v2026.326.0746'
-            - '@github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur:v2026.326.0746'
+            - '@github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi:v2026.326.2258'
+            - '@github.com/opencharly/plugin-builder-npm/candy/plugin-builder-npm:v2026.327.0024'
+            - '@github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo:v2026.326.2259'
+            - '@github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur:v2026.327.0012'
             # The mise builder (builder:mise) — external out-of-process, pinned here for the
             # connect path's pass-1 (the P3 detection integration; the plugin repo is
             # opencharly/plugin-mise).
-            - '@github.com/opencharly/plugin-mise/candy/plugin-mise:v2026.326.0858'
+            - '@github.com/opencharly/plugin-mise/candy/plugin-mise:v2026.327.0012'
             # The example plugins the test fixtures + check beds host-build/connect by word ref —
             # pinned here (post-cutover) so the project closure vendors them and the lazy-connect
             # pass-1 finds them by word without a version-less remote fetch.
