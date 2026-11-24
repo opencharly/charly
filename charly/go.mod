@@ -12,7 +12,7 @@ require (
 	github.com/opencharly/plugin-agentteams/candy/plugin-agentteams v0.2026271.2238
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244
-	github.com/opencharly/plugin-box/candy/plugin-box v0.2026326.938
+	github.com/opencharly/plugin-box/candy/plugin-box v0.2026327.2335
 	github.com/opencharly/plugin-build/candy/plugin-build v0.2026328.1
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026326.951
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314

@@ -155,8 +155,8 @@ github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241 h1:KGMVvZR
 github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241/go.mod h1:cOUrusScSXBVWb/neZKdcml1IraRw/T6m9pvTjQV/fA=
 github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244 h1:Fc/FICvZU+x1B7+WBw+fZbiaYoV+kuJVHrIHUa9RHEQ=
 github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244/go.mod h1:75qGMGoV+CKerAkpOQQlRggw/4oNg66nI3EtUhQDq4w=
-github.com/opencharly/plugin-box/candy/plugin-box v0.2026326.938 h1:M3mk1hJLHubX+IVOykV5YJEGHhajiV7PO74GXuHn/BA=
-github.com/opencharly/plugin-box/candy/plugin-box v0.2026326.938/go.mod h1:e6rn++Cggup2ftM7qzlHuPyUdRoHYtBFuhTn10ECRls=
+github.com/opencharly/plugin-box/candy/plugin-box v0.2026327.2335 h1:wOJ3oRbwC6p9Inqp3HIZh0EplXnfw8wFxhx0nSbsNm0=
+github.com/opencharly/plugin-box/candy/plugin-box v0.2026327.2335/go.mod h1:e6rn++Cggup2ftM7qzlHuPyUdRoHYtBFuhTn10ECRls=
 github.com/opencharly/plugin-build/candy/plugin-build v0.2026328.1 h1:/Pul+ylpANIOpdRJVsyOYqxNyE5w93IKz0/VNtIN1Zs=
 github.com/opencharly/plugin-build/candy/plugin-build v0.2026328.1/go.mod h1:BlLnj2rQYaR6mmODchqIrq9SGkTEXD/f+/LpLOP4RNM=
 github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026326.951 h1:jEINENDKHkCNIHI46XWORq2G7wZVFo5A7fZpKpLbusQ=
