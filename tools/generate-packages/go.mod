@@ -4,7 +4,7 @@ go 1.26.8
 
 require (
 	github.com/opencharly/plugin-generate-packages/candy/generate-packages v0.2026230.708
-	github.com/opencharly/sdk v0.2026328.1130
+	github.com/opencharly/sdk v0.2026328.1805
 )
 
 require (
