@@ -13,7 +13,7 @@ require (
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244
 	github.com/opencharly/plugin-box/candy/plugin-box v0.2026326.938
-	github.com/opencharly/plugin-build/candy/plugin-build v0.2026325.959
+	github.com/opencharly/plugin-build/candy/plugin-build v0.2026328.1
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026326.951
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026318.2233
@@ -68,7 +68,7 @@ require (
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433
 	github.com/opencharly/plugin-user/candy/plugin-user v0.2026272.424
 	github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026319.925
-	github.com/opencharly/sdk v0.2026327.625
+	github.com/opencharly/sdk v0.2026327.1021
 	golang.org/x/term v0.45.0
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1
