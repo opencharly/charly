@@ -621,3 +621,94 @@ func pluginDir(suffix string) string {
 	}
 	return "bin/plugins-" + suffix + "/*"
 }
+
+// refsInCandyList walks a manifest down `keys` to a `candy:` list — the authored
+// `@github…:tag` pins the project closure vendors when that candy is composed —
+// and returns repo path (`host/owner/repo`) -> the tag it is pinned at. A
+// version-less ref (no `:tag`) tracks the default branch and is not a pin, so it
+// is skipped. The walk is by key path rather than a typed struct because the two
+// manifests declare the list under different candies (the project manifest under
+// its `charly-dev:` candy, the packaged layer under `charly:`).
+func refsInCandyList(t *testing.T, manifest string, keys ...string) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatalf("read %s: %v", manifest, err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse %s: %v", manifest, err)
+	}
+	var node any = doc
+	for i, key := range keys {
+		mapping, ok := node.(map[string]any)
+		if !ok {
+			t.Fatalf("%s: %v is not a mapping", manifest, keys[:i])
+		}
+		node, ok = mapping[key]
+		if !ok {
+			t.Fatalf("%s has no %v", manifest, keys[:i+1])
+		}
+	}
+	list, ok := node.([]any)
+	if !ok {
+		t.Fatalf("%s: %v is not a list", manifest, keys)
+	}
+	out := make(map[string]string, len(list))
+	for _, item := range list {
+		ref, ok := item.(string)
+		if !ok {
+			t.Fatalf("%s: %v carries a non-string entry %v", manifest, keys, item)
+		}
+		refPath, tag, ok := strings.Cut(strings.TrimPrefix(ref, "@"), ":")
+		if !ok {
+			continue
+		}
+		segs := strings.Split(refPath, "/")
+		if len(segs) < 3 {
+			t.Fatalf("%s: ref %q names no host/owner/repo", manifest, ref)
+		}
+		out[strings.Join(segs[:3], "/")] = tag
+	}
+	return out
+}
+
+// TestPackagingPluginPinsMatchTheProjectManifest — the packaged `charly` candy
+// (packaging/charly.yml) ships the SAME plugin set the project manifest's
+// `charly-dev:` candy (charly.yml: the local-source binary install the check beds
+// build against) pins, at the SAME tags.
+//
+// The pairing is deliberate and was established by hand in CHANGELOG
+// 2026.327.0947 ("the packaging manifest stops drifting from the binary's
+// plugin set"), but nothing enforced it: the packaging tests assert plugin NAMES
+// against scripts/host-command-plugins.txt, never the tags, so a manifest bump
+// that edits one file and not the other passes every gate. Measured: an external
+// builder's tag is what the CONNECT path vendors, so a packaged layer pinned at
+// an older builder release ships the pre-fix plugin while the tree claims the
+// new one — the stale-binary class that made every consumer check reading
+// <home>/.pixi red (opencharly/pod-comfyui#51). This test makes such a
+// half-cutover a red gate instead of a silent drift.
+func TestPackagingPluginPinsMatchTheProjectManifest(t *testing.T) {
+	project := refsInCandyList(t, rootCharlyYML, "charly-dev", "candy", "candy")
+	pkg := refsInCandyList(t, candyCharlyYML, "charly", "candy", "candy")
+	if len(pkg) == 0 {
+		t.Fatalf("%s declares no pinned plugin ref", candyCharlyYML)
+	}
+	repos := make([]string, 0, len(pkg))
+	for repo := range pkg {
+		repos = append(repos, repo)
+	}
+	sort.Strings(repos)
+	for _, repo := range repos {
+		projectTag, ok := project[repo]
+		if !ok {
+			t.Errorf("%s pins %s at %s, but %s does not pin it at all — the packaged layer would vendor a plugin the project closure never builds",
+				candyCharlyYML, repo, pkg[repo], rootCharlyYML)
+			continue
+		}
+		if projectTag != pkg[repo] {
+			t.Errorf("%s pins %s at %s while %s pins it at %s — the packaged layer drifted from the binary's plugin set; bump BOTH manifests in one change",
+				candyCharlyYML, repo, pkg[repo], rootCharlyYML, projectTag)
+		}
+	}
+}

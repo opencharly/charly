@@ -21,7 +21,7 @@ charly:
             # they must be PINNED here for the connect path's pass-1 (the project's own candy
             # closure) to vendor them by tag — a version-less remote ref would fall to the
             # mutable default branch and hang on the freshness check.
-            - '@github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi:v2026.326.2258'
+            - '@github.com/opencharly/plugin-builder-pixi/candy/plugin-builder-pixi:v2026.327.1705'
             - '@github.com/opencharly/plugin-builder-npm/candy/plugin-builder-npm:v2026.327.0024'
             - '@github.com/opencharly/plugin-builder-cargo/candy/plugin-builder-cargo:v2026.326.2259'
             - '@github.com/opencharly/plugin-builder-aur/candy/plugin-builder-aur:v2026.327.0012'
