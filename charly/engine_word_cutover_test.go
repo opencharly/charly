@@ -124,3 +124,21 @@ func TestPluginRefsIndexUsesContainerdWords(t *testing.T) {
 		}
 	}
 }
+
+// TestPluginRefsIndexCarriesTheDistroKinds pins the two distro KIND words in the generated
+// word->provider index. The index is regenerated from the corpus repos' DEFAULT BRANCHES, so a
+// word a corpus plugin starts declaring is served only after the table is refreshed — this test
+// is what fails when that refresh is skipped (opencharly/charly#1268).
+func TestPluginRefsIndexCarriesTheDistroKinds(t *testing.T) {
+	const wantRef = "github.com/opencharly/plugin-distro/candy/plugin-distro"
+	for _, word := range []string{"kind:os", "kind:source"} {
+		ref, ok := pluginProviderRefs[word]
+		if !ok {
+			t.Errorf("pluginProviderRefs[%q] is missing — the index was not refreshed from the corpus", word)
+			continue
+		}
+		if ref != wantRef {
+			t.Errorf("pluginProviderRefs[%q] = %q, want %q", word, ref, wantRef)
+		}
+	}
+}
