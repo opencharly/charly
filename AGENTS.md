@@ -2,7 +2,7 @@
 
 **The org-wide rulebook comes first and applies here in full.** It is the umbrella
 `AGENTS.md` in [opencharly/opencharly](https://github.com/opencharly/opencharly/blob/main/AGENTS.md):
-R0 Skills first and its Skill Dispatcher, Candyboxing, RDD, ADE, SDD, R1–R10,
+R0 Skills first and its Skill Dispatcher, Candyboxing, RDD, ADE, SDD, R1–R12,
 Disposable-Only Autonomy, Hard Cutover, the Acceptance checklist, landing, and AI
 attribution. Read it before acting. This file adds only the rules specific to the charly
 core — the Go kernel / plugin host in this repository — and does not restate the umbrella's.
