@@ -156,6 +156,17 @@ func decodeLifecyclePayload[T any](op string, payload []byte) (T, error) {
 	return v, nil
 }
 
+// runServiceCapture runs a service argv on lt, CAPTURING its output when the target supports it and
+// relaying it otherwise. A non-capturing target keeps the old behaviour exactly: it prints and
+// signals failure by its error, so `captured` is false and the caller returns an empty reply.
+func runServiceCapture(lt spec.LifecycleTarget, argv []string) (out string, code int, captured bool, err error) {
+	if c, ok := lt.(shellCaptureTarget); ok {
+		o, c2, e := c.shellCapture(context.Background(), argv)
+		return o, c2, true, e
+	}
+	return "", 0, false, lt.Shell(context.Background(), argv)
+}
+
 // hostBuildPodLifecycle is the ONE op-discriminated handler behind the "pod-lifecycle" HostBuild
 // kind (#55 W3 A10b). It decodes req.Payload into the #PodXPayload matching req.Op only once op is
 // known — mirrors typedHostBuilder's own outer decode-then-run shape one level down, exactly like
@@ -226,10 +237,26 @@ func hostBuildPodLifecycle(_ context.Context, req spec.PodLifecycleRequest, _ bu
 		if perr != nil {
 			return spec.PodLifecycleReply{}, perr
 		}
+		// CAPTURE rather than relay: the caller (`charly service …`) must judge the init tool's
+		// output, because the one-shot declaration it is judged against is image metadata only the
+		// plugin reads. The exit code rides the reply for the same reason `cmd`'s does — the typed
+		// error would be stringified by the HostBuild error return. A target with no capture
+		// capability (any non-plugin lifecycle target) keeps today's relay-and-error behaviour.
+		var out string
+		var code int
+		captured := false
 		err := dispatchAndRunLifecycle("service", req.Node, req.Box, req.Instance, func(lt spec.LifecycleTarget) error {
-			return lt.Shell(context.Background(), p.Argv)
+			var e error
+			out, code, captured, e = runServiceCapture(lt, p.Argv)
+			return e
 		})
-		return spec.PodLifecycleReply{}, err
+		if err != nil {
+			return spec.PodLifecycleReply{}, err
+		}
+		if !captured {
+			return spec.PodLifecycleReply{}, nil
+		}
+		return spec.PodLifecycleReply{ExitCode: code, Output: out}, nil
 
 	case "cmd":
 		// The container command's non-zero exit rides the REPLY's ExitCode field, NOT the HostBuild

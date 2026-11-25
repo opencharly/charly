@@ -448,19 +448,37 @@ func (t *pluginDeployTarget) Logs(ctx context.Context, opts spec.DeployTargetLog
 	return err
 }
 
-func (t *pluginDeployTarget) Shell(ctx context.Context, cmd []string) error {
+// shellCapture runs cmd on the target and hands back its stdout and exit code WITHOUT printing.
+// It exists for the one caller that must JUDGE the output instead of relaying it: op="service",
+// whose reply carries the init tool's status table to a plugin that knows which services the
+// image declares run-to-completion — a distinction the exit code alone cannot make.
+func (t *pluginDeployTarget) shellCapture(ctx context.Context, cmd []string) (string, int, error) {
 	if !t.hasLifecycle {
-		return fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
+		return "", 0, fmt.Errorf("external deploy %q: %w", t.name, ErrNotSupportedOnExternal)
 	}
 	reply, err := t.dispatch(ctx, spec.DeployTargetDispatchRequest{Op: "shell", Cmd: cmd})
 	if err != nil {
+		return "", 0, err
+	}
+	return reply.Output, int(reply.ExitCode), nil
+}
+
+// shellCaptureTarget is the optional capability hostBuildPodLifecycle's op="service" branch uses.
+// A target that does not implement it keeps the relay-and-error behaviour of Shell.
+type shellCaptureTarget interface {
+	shellCapture(ctx context.Context, cmd []string) (string, int, error)
+}
+
+func (t *pluginDeployTarget) Shell(ctx context.Context, cmd []string) error {
+	out, code, err := t.shellCapture(ctx, cmd)
+	if err != nil {
 		return err
 	}
-	if reply.Output != "" {
-		fmt.Print(reply.Output)
+	if out != "" {
+		fmt.Print(out)
 	}
-	if reply.ExitCode != 0 {
-		return &exitcode.ExitCodeError{Code: int(reply.ExitCode)}
+	if code != 0 {
+		return &exitcode.ExitCodeError{Code: code}
 	}
 	return nil
 }
