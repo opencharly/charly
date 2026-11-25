@@ -5,6 +5,12 @@
 > gate scripts, `.claude/settings.json`, and `opencode.json` this document references
 > have MOVED there; `charly/` no longer carries any of them. Read the paths below as
 > `<umbrella>/…`. The mechanism is unchanged — the gates still run, from the umbrella.
+>
+> **UPDATE (the spine is R0–R12, opencharly/opencharly#1278):** the org rulebook's
+> ground-truth rules now run R0–R12. R11 conforms to DESIGN; R12 says to spike every
+> candidate solution before implementing. Read the `R0–R10` below as the spine as it stood
+> when this programme was written. The pi binding now injects the section headed
+> `The ground-truth rules R1–R12`.
 
 **North-star:** Pi sessions on the charly repository follow the same R0–R10
 discipline as Claude Code sessions, enforced mechanically where possible and
