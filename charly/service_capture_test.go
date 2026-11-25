@@ -13,12 +13,13 @@ type captureTarget struct {
 	spec.LifecycleTarget
 	out  string
 	code int
+	err  error
 	ran  []string
 }
 
 func (c *captureTarget) shellCapture(_ context.Context, cmd []string) (string, int, error) {
 	c.ran = cmd
-	return c.out, c.code, nil
+	return c.out, c.code, c.err
 }
 
 func (c *captureTarget) Shell(context.Context, []string) error {
@@ -65,5 +66,17 @@ func TestRunServiceCapture(t *testing.T) {
 	}
 	if len(relay.ran) != len(argv) {
 		t.Fatalf("argv did not reach the relaying target: %v", relay.ran)
+	}
+
+	// A capturing target that fails: the error reaches the caller, and the reply is still
+	// reported as captured (the caller decides what an empty/partial capture means).
+	boom := errors.New("capture failed")
+	failing := &captureTarget{err: boom}
+	out, code, captured, err = runServiceCapture(failing, argv)
+	if !errors.Is(err, boom) {
+		t.Fatalf("a failing capture must surface its error, got %v", err)
+	}
+	if !captured || out != "" || code != 0 {
+		t.Fatalf("a failing capture still reports %v/%q/%d", captured, out, code)
 	}
 }
