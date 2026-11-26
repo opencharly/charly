@@ -258,7 +258,7 @@
         "op": {
           "plugin": "command",
           "plugin_input": {
-            "command": "if [ -f /usr/bin/batcat ] \u0026\u0026 [ ! -e /usr/bin/bat ]; then\n  ln -sf /usr/bin/batcat /usr/bin/bat\nfi\n"
+            "command": "if [ -f /usr/bin/batcat ] && [ ! -e /usr/bin/bat ]; then\n  ln -sf /usr/bin/batcat /usr/bin/bat\nfi\n"
           },
           "run_as": "root"
         },
@@ -339,7 +339,7 @@
           ],
           "phase": {
             "install": {
-              "host": "set -e\nif [ ! -f /work/package.json ]; then echo 'no package.json in /work' \u003e\u00262; exit 1; fi\nSTAGE=$(mktemp -d)\ncp /work/package.json \"$STAGE/package.json\"\ncd \"$STAGE\"\nnode -e 'var d=require(\"./package.json\").dependencies||{};for(var[n,v]of Object.entries(d))console.log(v===\"*\"?n:n+\"@\"+v)' | xargs -r npm install -g\nrm -rf \"$STAGE\"\n"
+              "host": "set -e\nif [ ! -f /work/package.json ]; then echo 'no package.json in /work' >&2; exit 1; fi\nSTAGE=$(mktemp -d)\ncp /work/package.json \"$STAGE/package.json\"\ncd \"$STAGE\"\nnode -e 'var d=require(\"./package.json\").dependencies||{};for(var[n,v]of Object.entries(d))console.log(v===\"*\"?n:n+\"@\"+v)' | xargs -r npm install -g\nrm -rf \"$STAGE\"\n"
             }
           },
           "kind": "",
@@ -381,28 +381,22 @@
           "cache_mount": [
             {
               "dst": "/tmp/pixi-cache"
-            },
-            {
-              "dst": "/tmp/rattler-cache"
             }
           ],
           "env": {
-            "PIXI_CACHE_DIR": "/tmp/pixi-cache",
-            "RATTLER_CACHE_DIR": "/tmp/rattler-cache"
+            "PIXI_CACHE_DIR": "/tmp/pixi-cache"
           },
           "runtime_env": {
-            "PIXI_CACHE_DIR": "~/.cache/pixi",
-            "RATTLER_CACHE_DIR": "~/.cache/rattler"
+            "PIXI_CACHE_DIR": "~/.cache/pixi"
           },
-          "manylinux_fix": "RUN grep -q 'system-requirements' {{.Manifest}} || printf '\\n[system-requirements]\\nlibc = { family = \"glibc\", version = \"2.39\" }\\n' \u003e\u003e {{.Manifest}}\n",
           "build_script": "build.sh",
           "phase": {
             "install": {
-              "host": "set -e\ncd \"$HOME\"\nif [ -f /work/pixi.toml ]; then manifest=pixi.toml\nelif [ -f /work/pyproject.toml ]; then manifest=pyproject.toml\nelif [ -f /work/environment.yml ]; then manifest=environment.yml\nelse echo 'no pixi manifest found in /work' \u003e\u00262; exit 1; fi\ncp /work/$manifest $manifest\nif [ -f /work/pixi.lock ]; then cp /work/pixi.lock pixi.lock; fi\n# Ensure manylinux glibc requirement is present so cross-distro compat holds.\ngrep -q 'system-requirements' $manifest || printf '\\n[system-requirements]\\nlibc = { family = \"glibc\", version = \"2.39\" }\\n' \u003e\u003e $manifest\ncase \"$manifest\" in\n  pixi.toml)\n    if [ -f pixi.lock ]; then pixi install --frozen\n    else pixi install; fi ;;\n  pyproject.toml) pixi install --manifest-path pyproject.toml ;;\n  environment.yml) pixi project import environment.yml \u0026\u0026 pixi install ;;\nesac\nif [ -f /work/build.sh ]; then bash /work/build.sh; fi\nrm -f $manifest pixi.lock\n"
+              "host": "set -e\ncd \"$HOME\"\nif [ -f /work/pixi.toml ]; then manifest=pixi.toml\nelif [ -f /work/pyproject.toml ]; then manifest=pyproject.toml\nelif [ -f /work/environment.yml ]; then manifest=environment.yml\nelse echo 'no pixi manifest found in /work' >&2; exit 1; fi\ncp /work/$manifest $manifest\nif [ -f /work/pixi.lock ]; then cp /work/pixi.lock pixi.lock; fi\ncase \"$manifest\" in\n  pixi.toml)\n    if [ -f pixi.lock ]; then pixi install --frozen\n    else pixi install; fi ;;\n  pyproject.toml) pixi install --manifest-path pyproject.toml ;;\n  environment.yml) pixi project import environment.yml && pixi install ;;\nesac\nif [ -f /work/build.sh ]; then bash /work/build.sh; fi\nrm -f $manifest pixi.lock\n"
             }
           },
           "install_command": {
-            "environment.yml": "pixi project import environment.yml \u0026\u0026 pixi install",
+            "environment.yml": "pixi project import environment.yml && pixi install",
             "pixi.toml": "pixi install",
             "pixi.toml+lock": "pixi install --frozen",
             "pyproject.toml": "pixi install --manifest-path pyproject.toml"
