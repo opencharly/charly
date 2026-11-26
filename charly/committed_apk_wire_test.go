@@ -12,7 +12,7 @@ package main
 //     step's relative `apk:` path against the AUTHORING candy's source tree —
 //     exactly like the out-of-pod path (TestResolveCheckApk in apk_format_test.go).
 //     Without the unwrap a baked-plan install step
-//     (check-android-emulator-pod's adb-install-apidemos) reported
+//     (an in-venue adb-install-apidemos step) reported
 //     "0 candies scanned".
 //  2. snapshotCheckEnv RE-EMITS the carrier's CandyDirs out to a nested
 //     out-of-process verb dispatch, so the map survives the second hop.
@@ -42,7 +42,7 @@ func TestResolveCheckApk_InPodWireCarrier(t *testing.T) {
 	if err := os.WriteFile(apk, []byte("PK\x03\x04"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	authorDir := filepath.Join(repo, "candy", "android-emulator-layer")
+	authorDir := filepath.Join(repo, "candy", "pod-testapi")
 	if err := os.MkdirAll(authorDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -51,10 +51,10 @@ func TestResolveCheckApk_InPodWireCarrier(t *testing.T) {
 	// 23393dd threading): the candy map folds onto the env the runner marshals
 	// into every in-pod verb dispatch.
 	env := spec.CheckEnv{
-		Box:        "check-android-emulator-pod",
+		Box:        "check-pod",
 		Mode:       "live",
 		Distros:    []string{"cachyos"},
-		CandyDirs:  map[string]string{"pod-android-emulator-layer": authorDir},
+		CandyDirs:  map[string]string{"pod-testapi": authorDir},
 		MCPProvide: []spec.CandyMCPProvide{},
 	}
 	wire, err := json.Marshal(env)
@@ -81,7 +81,7 @@ func TestResolveCheckApk_InPodWireCarrier(t *testing.T) {
 
 	// In-pod committed-APK step: origin "candy:<candy-key>", apk relative —
 	// anchored against the AUTHORING candy's source tree.
-	got, err := hvr.resolveCheckApk("./tests/data/x.apk", "candy:pod-android-emulator-layer")
+	got, err := hvr.resolveCheckApk("./tests/data/x.apk", "candy:pod-testapi")
 	if err != nil {
 		t.Fatalf("in-pod resolveCheckApk = %v, want nil (candy dir must be unwrapped from the wire env)", err)
 	}
@@ -93,7 +93,7 @@ func TestResolveCheckApk_InPodWireCarrier(t *testing.T) {
 	// step fails with the "0 candies scanned" error, so the test cannot pass
 	// vacuously through a different leg.
 	empty := &hostCheckCarrier{candyDirs: nil}
-	if _, err := (&hostVerbResolver{cc: empty}).resolveCheckApk("./tests/data/x.apk", "candy:pod-android-emulator-layer"); err == nil {
+	if _, err := (&hostVerbResolver{cc: empty}).resolveCheckApk("./tests/data/x.apk", "candy:pod-testapi"); err == nil {
 		t.Error("empty-candyDirs carrier must error (the pre-fix 0-candies failure), got nil")
 	}
 }
@@ -104,13 +104,13 @@ func TestResolveCheckApk_InPodWireCarrier(t *testing.T) {
 func TestSnapshotCheckEnvCarriesCandyDirs(t *testing.T) {
 	cc := &hostCheckCarrier{
 		mode: spec.CheckModeLive,
-		box:  "check-android-emulator-pod",
+		box:  "check-pod",
 		candyDirs: map[string]string{
-			"pod-android-emulator-layer": "/srv/charly/candy/android-emulator-layer",
+			"pod-testapi": "/srv/charly/candy/pod-testapi",
 		},
 	}
 	ce := snapshotCheckEnv(cc, nil)
-	if len(ce.CandyDirs) != 1 || ce.CandyDirs["pod-android-emulator-layer"] != "/srv/charly/candy/android-emulator-layer" {
+	if len(ce.CandyDirs) != 1 || ce.CandyDirs["pod-testapi"] != "/srv/charly/candy/pod-testapi" {
 		t.Fatalf("snapshotCheckEnv lost the candy_dirs map: got %+v", ce.CandyDirs)
 	}
 	// Round-trips through the wire JSON (the field's json tag is what crosses).
@@ -122,7 +122,7 @@ func TestSnapshotCheckEnvCarriesCandyDirs(t *testing.T) {
 	if err := json.Unmarshal(wire, &back); err != nil {
 		t.Fatal(err)
 	}
-	if len(back.CandyDirs) != 1 || back.CandyDirs["pod-android-emulator-layer"] != "/srv/charly/candy/android-emulator-layer" {
+	if len(back.CandyDirs) != 1 || back.CandyDirs["pod-testapi"] != "/srv/charly/candy/pod-testapi" {
 		t.Errorf("candy_dirs did not survive the wire round-trip: %+v", back.CandyDirs)
 	}
 }

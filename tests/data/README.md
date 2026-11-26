@@ -29,14 +29,14 @@ sha256sum tests/data/ApiDemos-debug.apk
 ## api-demos-caps.json
 
 W3C WebDriver capabilities for `charly check appium session-create` against
-the ApiDemos APK on the check-android-emulator-pod deploy. Uses the flat (non-
+the ApiDemos APK on a running Android venue (the retired emulator bed was one). Uses the flat (non-
 alwaysMatch-wrapped) form — the appium session-create verb wraps it
 under W3C `alwaysMatch` automatically.
 
 Used by R10 step 8 (manual CLI smoke):
 
 ```bash
-charly check appium session-create check-android-emulator-pod \
+charly check appium session-create <android-venue> \
   --caps @tests/data/api-demos-caps.json
 ```
 

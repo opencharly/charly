@@ -20,8 +20,8 @@ import (
 // that dispatches over the wire — the exact path runOne takes for the `appium:` verb
 // (else-branch → invokeVerbProvider). A box-mode Invoke round-trips author → wire →
 // external process → result WITHOUT a live emulator (the verb skips in box mode), which
-// is enough to prove load + dispatch; the live W3C behaviour is proved by the
-// check-android-emulator-pod R10 bed.
+// is enough to prove load + dispatch; the live W3C behaviour needs a running
+// Android venue (no in-repo bed after the emulator retirement, opencharly/charly#1286).
 func TestAppiumExternalPluginLoads(t *testing.T) {
 	t.Cleanup(snapshotProviderState())
 	if testing.Short() {
@@ -89,7 +89,7 @@ func TestAppiumExternalPluginLoads(t *testing.T) {
 	}
 	out, err := prov.Invoke(ctx, &Operation{
 		Reserved: "appium", Op: ops.OpRun,
-		Params: params, Env: []byte(`{"box":"check-android-emulator-pod","mode":"box"}`),
+		Params: params, Env: []byte(`{"box":"check-pod","mode":"box"}`),
 	})
 	if err != nil {
 		t.Fatalf("Invoke (out-of-proc): %v", err)
