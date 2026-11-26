@@ -1,5 +1,5 @@
 {
   "debootstrap-builder": "v2026.314.0705",
-  "dev-tools": "v2026.314.0705",
-  "pre-commit": "v2026.314.0709"
+  "dev-tools": "v2026.328.0734",
+  "pre-commit": "v2026.328.2242"
 }

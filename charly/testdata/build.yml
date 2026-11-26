@@ -168,14 +168,10 @@ pixi:
             - environment.yml
         cache_mount:
             - dst: /tmp/pixi-cache
-            - dst: /tmp/rattler-cache
         install_command:
             environment.yml: pixi project import environment.yml && pixi install
             pixi.toml: pixi install
             pixi.toml+lock: pixi install --frozen
             pyproject.toml: pixi install --manifest-path pyproject.toml
-        manylinux_fix: |
-            RUN grep -q 'system-requirements' {{.Manifest}} || printf '\n[system-requirements]\nlibc = { family = "glibc", version = "2.39" }\n' >> {{.Manifest}}
         env:
             PIXI_CACHE_DIR: /tmp/pixi-cache
-            RATTLER_CACHE_DIR: /tmp/rattler-cache
