@@ -245,7 +245,7 @@ func (s *executorReverseServer) invokeProvider(ctx context.Context, req *pb.Invo
 				// committed-APK anchor resolveCheckApk → checkhost.ResolveCommittedApk reads
 				// h.cc.CandyDirs(), so an in-pod step's relative `apk:` path anchors against the
 				// AUTHORING candy's source tree IDENTICALLY to an out-of-pod step. Without this
-				// unwrap a baked-plan install step (check-android-emulator-pod's
+				// unwrap a baked-plan install step (an in-venue
 				// adb-install-apidemos) reported "0 candies scanned".
 				candyDirs: env.CandyDirs,
 			}

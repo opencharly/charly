@@ -27,7 +27,7 @@ before the first tool call of every task, and produces PR bodies that pass the
 | Mechanical gates (force-push, direct-main push, commit bypass, aliases) | `.pi/extensions/charly-gates.ts` intercepts `tool_call` for bash, runs `.claude/hooks/pre-commit-gate.sh` + `pre-push-gate.sh` via stdin | Exit 2 → `{ block: true }`. Guards mechanics only, per AGENTS.md "Hooks" doctrine. |
 | Rulebook context | Pi auto-loads `AGENTS.md` as a context file (it exists at repo root) | Loaded in startup header, included in system prompt. Survives `/reload`. |
 | Skill discovery | Pi auto-discovers `~/.agents/skills/` and `.agents/skills/` (project) | 150+ skills visible via `<skill>` tags in system prompt. Agent must `read` SKILL.md to load content. |
-| Project packages | `settings.json` pins pi-mcp-adapter, pi-subagents, pi-plan-mode, pi-memory, pi-ollama-cloud, rpiv-todo | Installed automatically on project trust. |
+| Project packages | `settings.json` pins pi-mcp-adapter, pi-subagents, pi-plan-mode, pi-memory, pi-ollama-cloud | Installed automatically on project trust. |
 | git-flow test suite | `gate_test.py` covers commit + push gate edges | Run via `python3 -B gate_test.py` from `.claude/hooks/`. |
 
 ### What Pi has that Claude Code does not
