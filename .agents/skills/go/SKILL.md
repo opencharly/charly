@@ -232,7 +232,7 @@ environmental, not code defects. On such a host:
   its own lint temp dirs to `~/.cache/charly-gate-lint/` and creates the TMPDIR/GOTMPDIR
   subdirs, so it is unaffected by the cap wherever it runs. It is wired as a
   `PreToolUse(Bash)` hook in every harness that roots here — `.claude/settings.json`
-  (Claude Code, since umbrella `5e485a8`), `.reasonix/settings.json`, and
+  (Claude Code, since umbrella `5e485a8`) and
   `~/.kimi-code/config.toml` which delegates to `.claude/hooks/` — so under Claude Code
   the staged-Go-lint smoke runs automatically at commit time (the two bullets above
   still apply for anything the hook does not cover).
