@@ -318,8 +318,8 @@ func TestCapMeta_DeclaredKindInputDefLiftedFromTheWireCapability(t *testing.T) {
 // nothing is composed at all.
 func TestKindValueDefValue_MaterializesBuiltinUnitsOnMiss(t *testing.T) {
 	// Control in this process: the def is already composed, so a plain lookup succeeds.
-	if _, err := kindValueDefValue("#SubstratePlugin"); err != nil {
-		t.Fatalf("#SubstratePlugin must resolve once the builtin units are composed: %v", err)
+	if _, err := kindValueDefValue("#SubstrateProvider"); err != nil {
+		t.Fatalf("#SubstrateProvider must resolve once the builtin units are composed: %v", err)
 	}
 
 	cmd := exec.Command(os.Args[0], "-test.run=^TestKindValueDefValueMissHelperProcess$")
@@ -344,10 +344,10 @@ func TestKindValueDefValueMissHelperProcess(t *testing.T) {
 	if _, ok := composedSchema(); ok {
 		t.Fatal("the builtin gate ran before the helper — the miss path cannot be exercised")
 	}
-	if d := sharedCueSchema().LookupPath(cue.ParsePath("#SubstratePlugin")); d.Err() == nil {
-		t.Fatal("#SubstratePlugin is declared by the base — the fixture no longer isolates the miss")
+	if d := sharedCueSchema().LookupPath(cue.ParsePath("#SubstrateProvider")); d.Err() == nil {
+		t.Fatal("#SubstrateProvider is declared by the base — the fixture no longer isolates the miss")
 	}
-	def, err := kindValueDefValue("#SubstratePlugin")
+	def, err := kindValueDefValue("#SubstrateProvider")
 	if err != nil {
 		t.Fatalf("the miss path must materialize the builtin units and resolve the def: %v", err)
 	}

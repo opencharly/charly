@@ -257,6 +257,8 @@ github.com/opencharly/plugin-status/candy/plugin-status v0.2026331.916 h1:vYo3yF
 github.com/opencharly/plugin-status/candy/plugin-status v0.2026331.916/go.mod h1:avYIM2gVnXLImYIw9RL5PuaLAlSOtomrjymfK5CONko=
 github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.933 h1:9F4Sgoe6mw8JgximlzPKHQ5izRlb96Qg8O5+KzoZb5k=
 github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.933/go.mod h1:BdDA3+l9NQi0xMS8wqOi5BbmD1gTCU2uIvKQ0zJdTXI=
+github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.1555 h1:b6YBa7sTtqHg/aTHUOzQC+lcUv3Yc5qT23Qx0Ho619I=
+github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.1555/go.mod h1:BdDA3+l9NQi0xMS8wqOi5BbmD1gTCU2uIvKQ0zJdTXI=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347 h1:V53hvW7MDUEAP2CCOT1OP9Y+x2OiUmBlP97DOUE3+RY=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347/go.mod h1:BPbZsO1SrO6TLIseVrVG+jC9R1zrnLWxvd9qgmNZIic=
 github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422 h1:Gp6VfQpixzrAZKeL8i7rs7YCLtSqJJSZzoIHo7eDivU=
