@@ -2565,7 +2565,7 @@ check-commands-app:
             - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.331.0902'
             - '@github.com/opencharly/plugin-authoring/candy/plugin-authoring:v2026.271.2244'
             - '@github.com/opencharly/plugin-status/candy/plugin-status:v2026.331.0916'
-            - '@github.com/opencharly/plugin-substrate/candy/plugin-substrate:v2026.331.0933'
+            - '@github.com/opencharly/plugin-substrate/candy/plugin-substrate:v2026.331.1555'
 check-commands-local:
     local:
         from: check-commands-app
