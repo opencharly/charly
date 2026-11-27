@@ -5,16 +5,16 @@
 
 **The agentic DevOps tool for you and your agents.**
 
-Write one list of **candies**. `charly` turns it into a container, a VM, a Kubernetes workload, a
-host install, or an Android device — proves it on a throwaway test bed before anything real sees
+Write one list of **candies**. `charly` turns it into a container, a VM, a Kubernetes workload, or a
+host install — proves it on a throwaway test bed before anything real sees
 it — and hands the whole loop to your agents through the same CLI you use.
 
 ---
 
 ## What charly can do
 
-- **One recipe, seven destinations.** The same candy list deploys to `pod`, `vm`, `local`,
-  `android`, `kubernetes`, `kindcluster` and `kubevirt`. Moving a deploy is a keyword change, not a
+- **One recipe, six destinations.** The same candy list deploys to `pod`, `vm`, `local`,
+  `kubernetes`, `kindcluster` and `kubevirt`. Moving a deploy is a keyword change, not a
   rewrite.
 - **Rootless by default.** Containers run as user-level systemd quadlets at uid 1000, VMs as
   rootless libvirt guests (`qemu:///session`), and a candybox can run its own rootless podman with
@@ -39,7 +39,6 @@ flowchart LR
     P --> pod["pod<br/>podman · docker · containerd"]
     P --> vm["vm<br/>rootless libvirt"]
     P --> local["local<br/>this host or SSH"]
-    P --> android["android<br/>device or emulator"]
     P --> k8s["kubernetes<br/>Kustomize + Helm"]
     P --> kind["kindcluster<br/>kind on your engine"]
     P --> kv["kubevirt<br/>VMs on Kubernetes"]
@@ -55,9 +54,9 @@ flowchart LR
 | **Deploy** | Seven substrates, sidecars, Tailscale/Cloudflare tunnels, encrypted volumes, reversible host installs | `deploy add` `deploy del` `start` `stop` `config` |
 | **VMs** | Rootless libvirt guests from seven sources, cloud-init, UEFI/Secure Boot, snapshots, GPU passthrough with a preemption arbiter | `charly vm` · `libvirt:` `spice:` |
 | **Kubernetes** | Kustomize + Helm deploys, kind clusters, k3s inside a VM, the KubeVirt platform | `kubernetes:` `kindcluster:` `kubevirt:` · `kube:` `helm:` |
-| **Test & verify** | More than 60 check verbs for files, ports, HTTP, browsers, Wayland/VNC desktops, Android, clusters and more; agent-graded steps for what a regex can't judge | `check box` `check live` `check run` · `cdp` `wl` `vnc` `adb` `kube` |
+| **Test & verify** | More than 60 check verbs for files, ports, HTTP, browsers, Wayland/VNC desktops, clusters and more; agent-graded steps for what a regex can't judge | `check box` `check live` `check run` · `cdp` `wl` `vnc` `kube` |
 | **Agents** | MCP server, daemon-free agent sessions over local/SSH/gRPC, TUI, tmux terminals, pipelines, PR review, a skill marketplace | `mcp serve` `agent` `tui` `pipeline` `review` |
-| **Desktops & devices** | Desktop themes and sessions, streaming hosts, JetKVM IP-KVM control (charly even installs onto the device), GPU udev rules, eBPF readiness | `theme` `session` · `jetkvm` `punktfunk` · `udev` `bpf` |
+| **Desktops & devices** | Desktop themes and sessions, streaming hosts, GPU udev rules, eBPF readiness | `theme` `session` · `punktfunk` · `udev` `bpf` |
 | **Packaging** | Signed native packages for six distro families; turn any candy's `packaging:` into deb/rpm/apk/pacman/ipk | `generate-packages` |
 
 The reference pages on [opencharly.ai](https://opencharly.ai/reference/providers/) are generated from
@@ -113,8 +112,8 @@ sudo apk update && sudo apk add charly
 
 On arm64, replace `amd64` with `arm64` in the repository URLs. Each package comes in three
 variants — `charly` (the everyday set), `charly-full` (adds GPU udev rules and the preemption
-arbiter) and `charly-minimal` (doctor, clean, settings). There is also an OpenWrt feed and a
-build for the JetKVM appliance; [all install options →](https://opencharly.ai/start/install/)
+arbiter) and `charly-minimal` (doctor, clean, settings). There is also an OpenWrt feed;
+[all install options →](https://opencharly.ai/start/install/)
 
 Check the install:
 
@@ -256,9 +255,9 @@ each word to whichever one claims it; there is no `pod` case in a switch stateme
 
 | Role | Examples |
 |---|---|
-| **substrate** — where a deploy lands (registered as a `kind` plus a `deploy` backend) | `pod` `vm` `local` `android` `kubernetes` `kindcluster` `kubevirt` |
+| **substrate** — where a deploy lands (registered as a `kind` plus a `deploy` backend) | `pod` `vm` `local` `kubernetes` `kindcluster` `kubevirt` |
 | **kind** — the entity keywords | `candy` `distro` `agent` `theme` `task` |
-| **verb** — probes a `plan:` can call | `file` `http` `cdp` `vnc` `adb` `kube` |
+| **verb** — probes a `plan:` can call | `file` `http` `cdp` `vnc` `kube` |
 | **command** — `charly` subcommands | `deploy` `check` `vm` `mcp` `agent` |
 | **step** — install operations | `service-custom` `helm-release` `reboot` |
 | **builder** — multi-stage build patterns | `pixi` `npm` `cargo` `aur` `mise` |
@@ -335,7 +334,7 @@ directly against the engine.
 | **box** | a candy that composes other candies into a buildable machine (it has `base:` or `from:`) |
 | **candybox** | the running, isolated form of a box — a container or VM guest. **The security boundary** |
 | **deploy** | a named placement of a box on a substrate; `charly deploy add` / `del` manage the deploys on a machine |
-| **substrate** | where a deploy lands — `pod` `vm` `local` `android` `kubernetes` `kindcluster` `kubevirt` |
+| **substrate** | where a deploy lands — `pod` `vm` `local` `kubernetes` `kindcluster` `kubevirt` |
 | **plugin** / **provider** | a candy that teaches charly words; each word it registers is a provider |
 | **plan** | a candy's ordered acceptance test, baked into its image |
 | **install plan** | the target-neutral form of what a deploy installs, realised by each substrate |

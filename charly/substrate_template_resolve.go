@@ -1,15 +1,15 @@
 package main
 
-// substrate_template_resolve.go — the HOST side of the local + android substrate
+// substrate_template_resolve.go — the HOST side of the local + vm substrate
 // TEMPLATES after the substrate-template de-type (Cutover I). The kernel stores
-// local:/android: template bodies opaquely (uf.Local / uf.Android are
+// local:/vm: template bodies opaquely (uf.Local / uf.Vm are
 // map[string]json.RawMessage) and consumes candy/plugin-substrate's ops.OpResolve
-// projection (spec.ResolvedLocal / spec.ResolvedAndroid) — never spec.Local / spec.Android.
-// (W0: the former ResolvedLocal/ResolvedAndroid/ResolvedKubernetes in-package aliases are deleted — every
+// projection (spec.ResolvedLocal / spec.ResolvedVm) — never spec.Local / spec.Vm.
+// (W0: the former ResolvedLocal/ResolvedKubernetes in-package aliases are deleted — every
 // caller reads spec.* directly; resolveKubernetesViaPlugin died with its only caller, findKubernetesSpec,
 // relocated into the former host_build_deploy_entity_resolve.go's kind-blind resolveEntityTemplate
 // — itself deleted now, K-wave W3a A3-phase-2: every kind:<word> caller self-loads the project
-// plugin-side via sdk/loaderkit's Resolve{Kubernetes,Vm,Android}EntityViaExecutor instead.)
+// plugin-side via sdk/loaderkit's Resolve{Kubernetes,Vm}EntityViaExecutor instead.)
 
 import (
 	"context"
@@ -60,24 +60,6 @@ func resolveLocalViaPlugin(body json.RawMessage) (*spec.ResolvedLocal, error) {
 	return reply.Resolved, nil
 }
 
-// resolveAndroidViaPlugin projects one opaque android template body into a
-// *spec.ResolvedAndroid.
-func resolveAndroidViaPlugin(body json.RawMessage) (*spec.ResolvedAndroid, error) {
-	out, err := invokeSubstrateTemplateResolve(spec.SubstrateTemplateResolveRequest{
-		Android: &spec.AndroidResolveInput{Android: body},
-	})
-	if err != nil {
-		return nil, err
-	}
-	var reply spec.AndroidResolveReply
-	if len(out) > 0 {
-		if err := json.Unmarshal(out, &reply); err != nil {
-			return nil, fmt.Errorf("android resolve: decode reply: %w", err)
-		}
-	}
-	return reply.Resolved, nil
-}
-
 func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([]byte, error) {
 	// The substrate provider serves every substrate word; any resolves the template legs.
 	prov, ok := providerRegistry.ResolveKind("local")
@@ -86,10 +68,3 @@ func invokeSubstrateTemplateResolve(req spec.SubstrateTemplateResolveRequest) ([
 	}
 	return invokeTyped[spec.SubstrateTemplateResolveRequest, json.RawMessage](context.Background(), prov, "local", ops.OpResolve, req)
 }
-
-// resolveAndroidViaPlugin is the android RESOLVE callback the host threads into
-// loaderkit.ValidateAndroidDevices (the box⊻adb XOR validator relocated to
-// sdk/loaderkit); its former map-shaped wrapper resolveAndroids (the sole caller of which was the
-// relocated validateAndroidDevices) is deleted with the move. Its sibling resolveLocals died with
-// the validate ENGINE (task #60 — the host's only caller, validateLocalTemplates, moved to
-// plugin-box, which decodes Templates.Local itself off the resolved-project envelope).

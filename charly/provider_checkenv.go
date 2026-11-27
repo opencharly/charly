@@ -40,7 +40,7 @@ func snapshotCheckEnv(cc *hostCheckCarrier, _ *spec.Op) *spec.CheckEnv {
 	// Box is the verb's TARGET name across the wire. For a VM deployment it must be the per-deploy
 	// DOMAIN IDENTITY (VmTargetName) — the out-of-process vm/spice/libvirt plugins prefix charly-
 	// onto it to address the live domain and cannot LoadUnified to compute it themselves (the
-	// go-libvirt shed dropped that in-core remap). A pod/kubernetes/android deployment leaves VmName empty,
+	// go-libvirt shed dropped that in-core remap). A pod/kubernetes deployment leaves VmName empty,
 	// so VmTargetName() == Box (unchanged).
 	ce := &spec.CheckEnv{Box: cc.VmTargetName(), Instance: cc.Instance(), Distros: cc.Distros(), Mode: runModeName(cc.Mode()), DialTimeoutNs: int64(cc.DialTimeout()), MCPProvide: cc.MCPProvide(), CandyDirs: cc.CandyDirs()}
 	// The container name is meaningful only for a live (non-box) run with a real box —
@@ -183,28 +183,6 @@ func (h *hostVerbResolver) runPluginVerb(ctx context.Context, c *spec.Op) spec.C
 // when its implementation moves out-of-tree. The caller sets res.Verb.
 func (h *hostVerbResolver) invokeVerbProvider(ctx context.Context, prov Provider, word string, c *spec.Op) spec.CheckResult {
 	res := spec.CheckResult{}
-	// Resolve a relative committed-APK path (appium: install-app, `apk: ./tests/data/…`)
-	// against the ORIGINATING candy's source tree HOST-side, BEFORE marshaling — an
-	// out-of-process verb has no CandyDirs, so it cannot anchor the fixture itself.
-	// Same candy-anchored walk-up the host APK resolver uses (R3); the plugin then sees
-	// an absolute, candy-anchored path.
-	if apk := spec.InputStr(c, "apk"); apk != "" {
-		resolved, err := h.resolveCheckApk(apk, c.Origin)
-		if err != nil {
-			res.Status = spec.StatusFail
-			res.Message = fmt.Sprintf("verb %q: %v", word, err)
-			return res
-		}
-		if resolved != apk {
-			cc := *c
-			cc.PluginInput = make(map[string]any, len(c.PluginInput))
-			for k, v := range c.PluginInput {
-				cc.PluginInput[k] = v
-			}
-			cc.PluginInput["apk"] = resolved
-			c = &cc
-		}
-	}
 	// A host-coupled verb resolves its own inputs through the GENERIC CheckContextService
 	// reverse-legs (cc.ResolveEndpoint / ResolveGraphicsEndpoint / ResolveImageLabel) — this
 	// dispatch stays verb-agnostic (the Uniform API Invariant). Those

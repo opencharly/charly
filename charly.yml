@@ -7,7 +7,7 @@ repo: github.com/opencharly/charly
 import:
     # After the 2026-06 box inversion main owns NO boxes — it imports the five
     # active distro submodules ONE-DIRECTIONALLY to reference their relocated boxes
-    # in the inline check/vm/local/kubernetes/android orchestration below (e.g. the
+    # in the inline check/vm/local/kubernetes orchestration below (e.g. the
     # check-cross-* mechanism beds reference `fedora.web` / `fedora.chrome-headless`).
     # The published-repo install beds that lived here — check-arch-repo /
     # check-fedora-repo / check-debian-repo / check-ubuntu-repo / check-alpine-repo
@@ -38,7 +38,7 @@ import:
     # still carries `build: [pac, aur]`, which the spec this tree ships refuses.
     # (charly#1236 advanced this same line to v2026.326.1724; 1804 is that release plus
     # the cutover, so the newer tag subsumes it.)
-    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.326.1804'
+    - cachyos: '@github.com/opencharly/distro-cachyos:v2026.331.0903'
     - debian: '@github.com/opencharly/distro-debian:v2026.274.0746'
     - fedora: '@github.com/opencharly/distro-fedora:v2026.325.1900'
     - ubuntu: '@github.com/opencharly/distro-ubuntu:v2026.274.0752'
@@ -2557,15 +2557,15 @@ check-commands-app:
             the P15 `charly box …` build verbs (generate/validate/new/pkg), AND the P14b `charly box …`
             authoring verbs (set/add-candy/rm-candy/write/cat, nested under the box grammar group), AND
             (K5) `charly reap-orphans` (candy/plugin-substrate's command:reap-orphans, alongside its
-            existing kind:pod/vm/kubernetes/local/android substrate capabilities) host-side.
+            existing kind:pod/vm/kubernetes/local substrate capabilities) host-side.
         candy:
             - '@github.com/opencharly/plugin-clean/candy/plugin-clean:v2026.271.2313'
             - '@github.com/opencharly/plugin-settings/candy/plugin-settings:v2026.272.0410'
             - '@github.com/opencharly/plugin-candy/candy/plugin-candy:v2026.281.0948'
-            - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.301.1542'
+            - '@github.com/opencharly/plugin-box/candy/plugin-box:v2026.331.0902'
             - '@github.com/opencharly/plugin-authoring/candy/plugin-authoring:v2026.271.2244'
-            - '@github.com/opencharly/plugin-status/candy/plugin-status:v2026.272.0442'
-            - '@github.com/opencharly/plugin-substrate/candy/plugin-substrate:v2026.274.0652'
+            - '@github.com/opencharly/plugin-status/candy/plugin-status:v2026.331.0916'
+            - '@github.com/opencharly/plugin-substrate/candy/plugin-substrate:v2026.331.0933'
 check-commands-local:
     local:
         from: check-commands-app

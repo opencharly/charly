@@ -23,7 +23,7 @@ import (
 // provider (a deploy-target / step / builder — derived from cross-refs or candy-internal, never
 // user-authored, so no authored input to validate). NO KIND provider remains here: EVERY authoring
 // kind is now an externalized plugin candy routed through runPluginKind — the substrate kinds
-// pod/vm/kubernetes/local/android/kindcluster/kubevirt (candy/plugin-substrate, C2-substrate),
+// pod/vm/kubernetes/local/kindcluster/kubevirt (candy/plugin-substrate, C2-substrate),
 // and the LAST one, the candy box⊻layer factory (candy/plugin-candy-kind, C2-candy). All are
 // COMPILED-IN, host-decoding into the typed core maps (substrates → uf.Deploy/uf.Pod/uf.VM/…; candy
 // → uf.Box/uf.Candy via the bootstrap-critical candyIsImage + buildCandy that STAY core) and
@@ -44,9 +44,8 @@ var builtinProviderInstances = []Provider{
 	// (candy/plugin-wl), like dbus/record/cdp/vnc/mcp. wl was the LAST live-container verb
 	// compiled into charly; after it externalized, ZERO check verbs are in-core and the
 	// compiled-in live-verb seam was deleted (the live-verb externalization orphaned it).
-	// `appium` (FIRST), `adb` (SECOND),
-	// `kube` (THIRD), and `spice` (FOURTH) are the dep-shedders already EXTRACTED: each is
-	// an external-charly-verb (candy/plugin-appium, candy/plugin-adb, candy/plugin-kube,
+	// `kube` and `spice` are dep-shedders already EXTRACTED: each is
+	// an external-charly-verb (candy/plugin-kube,
 	// candy/plugin-spice, source github.com/…) served out-of-process — NOT a compiled-in
 	// instance, absent from this slice AND the providers: manifest; its grpcProvider
 	// registers at loadProjectPlugins time. NO dep-shedder remains here.
@@ -54,7 +53,7 @@ var builtinProviderInstances = []Provider{
 	// kinds (ClassKind) — NONE remain here, and NONE are dedicated-builtin KindProviders anymore:
 	// EVERY authoring kind is an externalized plugin candy routed through runPluginKind. The tier-1
 	// kinds (agent/module/sidecar/package-group/distro/builder/init/resource/target) + the substrate
-	// kinds pod/vm/kubernetes/local/android/kindcluster/kubevirt
+	// kinds pod/vm/kubernetes/local/kindcluster/kubevirt
 	// (candy/plugin-substrate, C2-substrate) + the LAST one, the candy box⊻layer factory
 	// (candy/plugin-candy-kind, C2-candy — candyIsImage + buildCandy → uf.Box/uf.Candy, the
 	// bootstrap-critical routing) are all COMPILED-IN plugins. So spec.KindWords is
@@ -64,7 +63,7 @@ var builtinProviderInstances = []Provider{
 	// the spec.Threaded.Kinds snapshot — not a #Node arm nor an in-proc KindProvider).
 	// deploy targets (ClassDeployTarget) — ALL self-register from their dedicated
 	// plugin_deploy_<name>.go files (the externalizable dedicated-provider pattern):
-	// local, pod, vm, kubernetes, android.
+	// local, pod, vm, kubernetes.
 	// steps (ClassStep) — there is NO in-proc StepProvider at all anymore (K5-A item 2 deleted the
 	// category entirely, including the former ExternalPlugin dedicated provider — zero live callers
 	// once its EmitOCI dispatch relocated). EVERY builtin step kind's BUILD-emit dispatch DECISION

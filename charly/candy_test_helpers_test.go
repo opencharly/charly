@@ -51,11 +51,10 @@ func (a *testCandyReader) Reboot() bool         { return a.m.Reboot }
 func (a *testCandyReader) GetRemote() bool      { return a.v.Remote }
 func (a *testCandyReader) GetRepoPath() string  { return a.v.RepoPath }
 
-func (a *testCandyReader) Vars() map[string]string    { return a.m.Vars }
-func (a *testCandyReader) PlanSteps() []spec.Step     { return a.m.Plan }
-func (a *testCandyReader) Apk() []spec.ApkPackageSpec { return a.m.Apk }
-func (a *testCandyReader) TopPackages() []string      { return a.m.TopPackages }
-func (a *testCandyReader) ServiceFiles() []string     { return a.m.ServiceFiles }
+func (a *testCandyReader) Vars() map[string]string { return a.m.Vars }
+func (a *testCandyReader) PlanSteps() []spec.Step  { return a.m.Plan }
+func (a *testCandyReader) TopPackages() []string   { return a.m.TopPackages }
+func (a *testCandyReader) ServiceFiles() []string  { return a.m.ServiceFiles }
 
 // decodeRawSlice / decodeRawPtr decode the RawBody sub-shapes back into the spec types a reader
 // returns. The spec's authored-def extraction left CandyView/CandyModel fields as opaque json
@@ -82,6 +81,19 @@ func decodeRawPtr[T any](raw spec.RawBody) *T {
 		return nil
 	}
 	return &out
+}
+
+// rawTemplateMap marshals a typed substrate-template map into the opaque
+// map[string]json.RawMessage the loader stores after the Cutover I de-type.
+// (Relocated here from a retired loader test after the device-substrate removal;
+// refs_test.go still seeds a local template.)
+func rawTemplateMap[T any](m map[string]*T) map[string]json.RawMessage {
+	out := make(map[string]json.RawMessage, len(m))
+	for k, v := range m {
+		b, _ := json.Marshal(v)
+		out[k] = b
+	}
+	return out
 }
 
 func (a *testCandyReader) RelayPorts() []int { return a.m.PortRelayPorts }

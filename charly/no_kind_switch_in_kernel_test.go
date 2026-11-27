@@ -7,7 +7,7 @@ package main
 // P9) — that gate only catches a bare `.Target == "word"` BinaryExpr over the substrate
 // words across charly/+sdk/deploykit; THIS gate catches the broader STRUCTURAL shape —
 // an actual `switch` statement or an if/else-if chain of >=3 arms — dispatching on ANY
-// of the full deploy-substrate vocabulary (pod/vm/kubernetes/local/android/kindcluster/
+// of the full deploy-substrate vocabulary (pod/vm/kubernetes/local/kindcluster/
 // kubevirt, plus the entity words candy/deploy), scoped to charly/ core only (the kernel).
 //
 // A single stray `if x == "candy"` (kind-recognition Data — the loader/materialize
@@ -36,13 +36,13 @@ import (
 )
 
 // kindSwitchVocabulary is the deploy-substrate + entity kind-word vocabulary this gate
-// polices, per the W5 brief: the 7 deploy substrates (pod/vm/kubernetes/local/android/
+// polices, per the W5 brief: the 6 deploy substrates (pod/vm/kubernetes/local/
 // kindcluster/kubevirt) plus the 2 entity/verb words (candy/deploy) whose
 // accidental re-introduction as a dispatch key would also be a kernel/plugin boundary
 // violation. The former "group" word DIED with the group-kind
 // removal (Cutover C task 1) — it is no longer a kind word in any vocabulary.
 var kindSwitchVocabulary = map[string]bool{
-	"pod": true, "vm": true, "kubernetes": true, "local": true, "android": true, "kindcluster": true, "kubevirt": true,
+	"pod": true, "vm": true, "kubernetes": true, "local": true, "kindcluster": true, "kubevirt": true,
 	"candy": true, "deploy": true,
 }
 

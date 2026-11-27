@@ -1,9 +1,7 @@
 package main
 
-import "github.com/opencharly/spec/checkhost"
-
 // checkrun_charly_verbs.go holds the shared host-side helpers the EXTERNAL
-// live-container check verbs (cdp/wl/vnc/dbus/mcp/record/kube/adb/appium/spice/libvirt)
+// live-container check verbs (cdp/wl/vnc/dbus/mcp/record/kube/spice/libvirt)
 // rely on. Every live-container verb is now served OUT-OF-PROCESS by its plugin
 // (candy/plugin-*) and dispatches via invokeVerbProvider (the Invoke envelope). There is no
 // compiled-in live-verb subprocess dispatcher and no in-proc method-contract seam here: the
@@ -11,16 +9,6 @@ import "github.com/opencharly/spec/checkhost"
 // out-of-tree verb plugin calls. What remains here is the small host-side surface a marshalled
 // plugin
 // cannot compute for itself.
-
-// resolveCheckApk is the thin hostVerbResolver wrapper around the shared
-// checkhost.ResolveCommittedApk (spec fabric slice github.com/opencharly/spec/checkhost) — anchoring a relative
-// committed-APK path against the AUTHORING candy's source tree, so a check resolves its
-// fixture whether the candy is local OR fetched via @github. This wrapper's sole job is
-// supplying the two host-only inputs the pure resolver needs: h.cc.CandyDirs() (from
-// ScanAllCandyWithConfig + candyDirsFromScan, checkrun.go) and h.cc.CandyScanErr().
-func (h *hostVerbResolver) resolveCheckApk(apk, origin string) (string, error) {
-	return checkhost.ResolveCommittedApk(apk, origin, h.cc.CandyDirs(), h.cc.CandyScanErr())
-}
 
 // noVmDisplayDeviceErr is the substring the VM-target resolver (charly/vm_target.go)
 // emits when a VM declares no graphics device of the requested kind ("VM <name> has

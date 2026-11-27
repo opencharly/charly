@@ -22,17 +22,6 @@ func hostVerbResolverFor(exec spec.DeployExecutor, mode spec.CheckRunMode) *host
 	}}
 }
 
-// hostVerbResolverWithCandyDirs builds a *hostVerbResolver over a hostCheckCarrier carrying the
-// given committed-APK anchoring state — for exercising resolveCheckApk directly.
-func hostVerbResolverWithCandyDirs(dirs map[string]string, scanErr error) *hostVerbResolver {
-	return &hostVerbResolver{cc: &hostCheckCarrier{
-		dialTimeout:  3 * time.Second,
-		httpBase:     &http.Client{Timeout: 10 * time.Second},
-		candyDirs:    dirs,
-		candyScanErr: scanErr,
-	}}
-}
-
 // testdataDir is the project directory used by test fixtures. Tests read
 // build config via LoadBuildConfigForBox(testdataDir) which goes through
 // the unified loader (charly.yml + includes).

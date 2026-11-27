@@ -297,7 +297,7 @@ func recognizedDeploySubstrate(word string) bool {
 //
 //   - A NON-kind word (e.g. exampledeploy, not in resourceKindSet) is external iff
 //     recognized — a connected provider OR a pre-scanned declaration.
-//   - A CUE-kind substrate word (pod/vm/kubernetes/local/android/kindcluster/kubevirt ∈ resourceKindSet) is
+//   - A CUE-kind substrate word (pod/vm/kubernetes/local/kindcluster/kubevirt ∈ resourceKindSet) is
 //     external iff it has been MIGRATED to an external plugin (externalizedDeploySubstrates,
 //     F1) AND a plugin declaring it is recognized. A still-builtin substrate kind is NOT
 //     external — its in-proc DeployTargetProvider serves it. (The targetless deploy group
@@ -305,9 +305,9 @@ func recognizedDeploySubstrate(word string) bool {
 //
 // A true result makes the bed runner treat the deploy like a kind:local deploy (no
 // image build, no config/start, deploy-del teardown). This classification is keyed on
-// the ROOT deploy node: the android R10 bed is a POD root with NESTED target:android
+// the ROOT deploy node: a bed whose ROOT deploy node is a POD with NESTED target:local
 // children — its pod root is NOT externalized (returns false → normal image-build +
-// charly start), while each nested android child resolves to the external plugin
+// charly start), while each nested external child resolves to the external plugin
 // through its own per-child ResolveTarget dispatch, not this root classifier.
 func isExternalDeploySubstrate(target string) bool {
 	if target == "" {

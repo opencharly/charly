@@ -28,7 +28,7 @@ import (
 //
 // SCOPE NOTE: spec.Op carries only the GENERIC install-verb discriminators (mkdir/copy/write/… +
 // the generic `plugin` dispatcher) plus shared modifiers — the 11 externalized live verbs
-// (cdp/vnc/mcp/spice/libvirt/kube/adb/appium/wl/dbus/record) are NOT fields on spec.Op: each is
+// (cdp/vnc/mcp/spice/libvirt/kube/wl/dbus/record) are NOT fields on spec.Op: each is
 // served by its plugin's own `#*Input` def and desugared into the generic `plugin`/`plugin_input`
 // pair before spec.Op validates. Those verb words enter the FORBIDDEN-WORD universe below via the
 // compiled-in providers' Reserved() words (NOT spec.Op); the CUE slices spec.OpVerbs/OpFields/
@@ -130,7 +130,7 @@ var genericConceptCollisions = map[string]bool{
 // surface — the UNION of every CUE-derived authored-config word slice (spec.OpVerbs act-verbs ∪
 // spec.KindWords ∪ spec.OpFields ∪ spec.AuthoringVerbs — the GENERIC config vocabulary) PLUS every
 // compiled-in NON-command provider's Reserved() word, which is where the externalized check verbs
-// (cdp/vnc/mcp/kube/libvirt/spice/adb/appium/…) enter, since they are plugin-served and NOT spec.Op
+// (cdp/vnc/mcp/kube/libvirt/spice/…) enter, since they are plugin-served and NOT spec.Op
 // fields — MINUS genericConceptCollisions. This SUBSUMES "no provider word" (every plugin word is
 // one of these CUE-derived names or a registered provider word) and additionally keeps the API
 // surface's names disjoint from the config vocabulary. The drift-guarded CUE slices + the live

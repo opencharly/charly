@@ -61,13 +61,6 @@ func (hostLoaderExecutor) MaterializeLoadedProject(lp *spec.LoadedProject, merge
 	return requireProjectLoader().MaterializeLoadedProject(lp, merged, byID, hostMaterializeProjectSeams())
 }
 
-// ValidateAndroidDevices enforces the kind:android box⊻adb XOR. The VALIDATION LOGIC lives in
-// loaderkit (reached through the plugin-loader seam); this leg supplies ONLY the host registry-resolve
-// callback (resolveAndroidViaPlugin) — the genuine host coupling.
-func (hostLoaderExecutor) ValidateAndroidDevices(uf *spec.UnifiedFile) error {
-	return requireProjectLoader().ValidateAndroidDevices(uf, resolveAndroidViaPlugin)
-}
-
 // ValidatePreemptible validates preemptible / requires_exclusive / requires_shared across the deploy
 // map, including the resource-vocabulary cross-check. The VALIDATION LOGIC lives in loaderkit (reached
 // through the plugin-loader seam); this leg supplies ONLY the host registry-resolve callbacks

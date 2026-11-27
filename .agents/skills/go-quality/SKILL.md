@@ -186,7 +186,7 @@ dead code/`unused`, `ineffassign`, `unconvert`, `staticcheck` correctness, `gocr
   against a charly-managed resource OUTSIDE the orchestration path.
 - Idiomatic `errcheck` ignores: `defer x.Close()`, `fmt.Fprint*` to stderr/stdout, `os.Setenv`
   in tests — the fix is an explicit `_ = …` (makes intent visible), not handling.
-- Named, justified `time.Sleep` polls in device/container/mount liveness (adb, gocryptfs) where
+- Named, justified `time.Sleep` polls in device/container/mount liveness (gocryptfs) where
   no event/sync primitive is exposed by the underlying tool.
 - Standard mode bits (`0o755`/`0o644`/`0o600`), well-known ports/IDs documented in domain code.
 

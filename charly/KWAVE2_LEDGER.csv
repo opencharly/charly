@@ -46,7 +46,6 @@ charly/host_build_cli.go,90,STAY,,CONTESTED
 charly/readiness_config.go,75,STAY,,CONTESTED
 charly/vm_lifecycle_preresolve.go,46,DELETE,0,CONTESTED
 charly/validate.go,181,DELETE,0,R1
-charly/cue_kind_android_reg.go,7,DELETE,0,R1
 charly/cue_kind_box.go,9,DELETE,0,R1
 charly/cue_kind_candy.go,11,DELETE,0,R1
 charly/cue_kind_check.go,3,DELETE,0,R1
