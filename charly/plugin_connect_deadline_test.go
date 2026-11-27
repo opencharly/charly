@@ -78,7 +78,7 @@ func TestConnectPluginReady_BoundsAStuckDescribe(t *testing.T) {
 			Args:         []string{"-test.run=TestConnectDeadlineHelperStuckPluginChild"},
 			ReadyTimeout: bound,
 		},
-		"plugin-adb", "github.com/opencharly/plugin-adb")
+		"plugin-kube", "github.com/opencharly/plugin-kube")
 	elapsed := time.Since(start)
 	if err == nil {
 		t.Fatalf("connect of a plugin that never answers Describe returned (unit=%v closer=%v) — charly#588", unit != nil, closer != nil)
@@ -90,10 +90,10 @@ func TestConnectPluginReady_BoundsAStuckDescribe(t *testing.T) {
 		t.Errorf("error %v is not a deadline error — the caller must be able to tell a bound from a refusal", err)
 	}
 	for _, want := range []string{
-		"plugin-adb",
+		"plugin-kube",
 		"did not become ready within 5s", // the bound that ACTUALLY applied, not the package default
 		"describe phase",
-		"github.com/opencharly/plugin-adb",
+		"github.com/opencharly/plugin-kube",
 		"readiness read timed out after 5s",
 	} {
 		if !strings.Contains(err.Error(), want) {
@@ -138,11 +138,11 @@ func TestConnectPluginReady_HonorsACallerCancellation(t *testing.T) {
 // to EVERY connect failure, not only the deadline one: the phase that failed comes through with the
 // plugin and its source.
 func TestConnectPluginReady_NamesThePluginAndSourceOnAnyFailure(t *testing.T) {
-	_, _, err := connectPluginReady(&failingTransport{err: errors.New("handshake refused")}, "plugin-adb", "github.com/opencharly/plugin-adb")
+	_, _, err := connectPluginReady(&failingTransport{err: errors.New("handshake refused")}, "plugin-kube", "github.com/opencharly/plugin-kube")
 	if err == nil {
 		t.Fatal("a failing transport produced no error")
 	}
-	for _, want := range []string{"plugin-adb", "github.com/opencharly/plugin-adb", "phase", "handshake refused"} {
+	for _, want := range []string{"plugin-kube", "github.com/opencharly/plugin-kube", "phase", "handshake refused"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %q", err, want)
 		}
@@ -157,7 +157,7 @@ func TestConnectPluginReady_NamesThePluginAndSourceOnAnyFailure(t *testing.T) {
 // failure with nothing pointing at it).
 func TestConnectPluginReady_ClosesTheCloserOfAFailedConnect(t *testing.T) {
 	closer := &reapTrackingCloser{}
-	if _, _, err := connectPluginReady(&failingTransport{closer: closer, err: errors.New("boom")}, "plugin-adb", "src"); err == nil {
+	if _, _, err := connectPluginReady(&failingTransport{closer: closer, err: errors.New("boom")}, "plugin-kube", "src"); err == nil {
 		t.Fatal("a failing transport produced no error")
 	}
 	if closer.closes != 1 {
@@ -170,7 +170,7 @@ func TestConnectPluginReady_ClosesTheCloserOfAFailedConnect(t *testing.T) {
 func TestConnectPluginReady_ReadyReturnsPromptlyWithItsCloser(t *testing.T) {
 	closer := &reapTrackingCloser{}
 	start := time.Now()
-	unit, gotCloser, err := connectPluginReady(&immediateTransport{unit: &PluginUnit{}, closer: closer}, "plugin-adb", "src")
+	unit, gotCloser, err := connectPluginReady(&immediateTransport{unit: &PluginUnit{}, closer: closer}, "plugin-kube", "src")
 	if err != nil {
 		t.Fatalf("healthy connect error = %v", err)
 	}

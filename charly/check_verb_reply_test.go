@@ -6,7 +6,7 @@ package main
 // checkResultFromVerbReply is the ONE place the host turns a verb provider's wire reply into the
 // CheckResult the plan carries and the ledger records. It decodes through the contract module's
 // own decoder, so the producer's CapturedValue — sent by the SDK's ServeCheckVerb on the
-// out-of-process family (cdp/kube/appium/adb/wl/…) — reaches the ledger instead of being dropped
+// out-of-process family (cdp/kube/wl/…) — reaches the ledger instead of being dropped
 // by a locally re-declared {status,message} shape.
 
 import (

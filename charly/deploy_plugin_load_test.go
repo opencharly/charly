@@ -93,7 +93,6 @@ func TestDeploySubstrateCanonicalRef(t *testing.T) {
 		"vm":         "@github.com/opencharly/plugin-deploy-vm/candy/plugin-deploy-vm",
 		"pod":        "@github.com/opencharly/plugin-deploy-pod/candy/plugin-deploy-pod",
 		"local":      "@github.com/opencharly/plugin-deploy-local/candy/plugin-deploy-local",
-		"android":    "@github.com/opencharly/plugin-adb/candy/plugin-adb",
 		"kubernetes": "@github.com/opencharly/plugin-kube/candy/plugin-kube",
 	}
 	for word, exp := range want {

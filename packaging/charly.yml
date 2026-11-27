@@ -210,7 +210,6 @@ charly:
                         kubectl: Kubernetes deploys + charly eval k8s probes + the `kindcluster` deploy substrate's workload apply (`kubectl apply -k`)
                         kind: local Kubernetes-in-Docker clusters — the `kindcluster` deploy substrate (docker/podman/containerd engines)
                         virtctl-bin: the KubeVirt client — the `kubevirt:` deploy substrate manages the guest-ssh `virtctl port-forward` host-side (AUR; the upstream kubevirt/kubevirt release binary is the fallback)
-                        android-tools: "host adb for the remote `target: android` package-download install path"
                         libsecret: secret-tool CLI + pinentry-qt Secret Service passphrase auto-retrieval; the bundled plugin-secrets credential store uses the pure-Go go-keyring D-Bus client
                         dmidecode: SMBIOS inspection inside guests when debugging VM key-injection
                         openbsd-netcat: remote virt-manager/virt-viewer SPICE console over qemu+ssh (charly eval spice connects directly without it)

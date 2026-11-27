@@ -29,15 +29,15 @@ import (
 // code, so a reader that stops at "prereq skip" reads exit 3 as narrower than it is.
 // The `charly check` CLI + its exit-code plumbing live in command:check (candy/plugin-check).
 
-// resolveCheckRunnerContext computes the committed-APK anchoring + loads the OUT-OF-TREE plugin
+// resolveCheckRunnerContext computes the candy source-dir anchoring + loads the OUT-OF-TREE plugin
 // candies a live baked-plan runner needs, so `charly check live` and `charly check feature run`
-// resolve adb/appium `apk:` checks IDENTICALLY (R3). They previously diverged — only check live
-// populated CandyDirs, so a committed-APK check passed under check live yet failed to anchor
+// resolve committed-artifact checks IDENTICALLY (R3). They previously diverged — only check live
+// populated CandyDirs, so such a check passed under check live yet failed to anchor
 // ("0 candies scanned") under feature run. Any RunModeLive runner that executes a baked plan
 // MUST fold its result into the RunnerConfig (CandyDirs + CandyScanErr).
 func resolveCheckRunnerContext(box, dir string, cfg *spec.Config) checkRunnerContext {
 	// Scan the RESOLVED candy set ONCE (local + @github-fetched): it carries each
-	// candy's SourceDir (committed-APK anchoring) AND its `plugin:` block, so one
+	// candy's SourceDir (committed-artifact anchoring) AND its `plugin:` block, so one
 	// scan feeds BOTH consumers (R3). A box that vendors all its candies via @github
 	// (every box/<distro>) has no project-local Candy map, so the plugin set MUST
 	// come from this scan — never from LoadUnified.

@@ -168,7 +168,7 @@ transitional alias the move obsoletes — never re-export it. Rule of thumb: reu
 or delete the duplicate — rarely invent a new one; most seams the boundary law needs already exist.
 
 **Realized architecture (present state).** The SDK boundary (`github.com/opencharly/sdk`) is extracted;
-every verb / kind / step / builder / command, all five deploy substrates (local/pod/vm/kubernetes/android) with
+every verb / kind / step / builder / command, all four deploy substrates (local/pod/vm/kubernetes) with
 their pod + vm venue lifecycles, and egress / k8sgen / gpu / arbiter / secrets / enc / tunnel are plugin
 candies over the generic seams (`HostBuild("overlay"/"cli"/"step-emit")`, the `candy/plugin-fleet`
 `OpDeployDispatch` orchestration + each substrate's own `InvokeProvider` lifecycle/preresolve legs (S3b,

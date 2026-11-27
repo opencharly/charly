@@ -6,11 +6,11 @@ import (
 	"github.com/opencharly/spec/spec"
 )
 
-// checkrun.go — the check-verdict result helpers + the committed-APK anchoring data.
+// checkrun.go — the check-verdict result helpers + the candy source-dir anchoring data.
 //
 // candyDirsFromScan / checkRunnerContext relocated here from check_cmd.go (K-wave 2 cone R4):
-// the candy-name → SourceDir map and its carrier are the data checkrun_charly_verbs.go's
-// resolveCheckApk reads off h.cc.CandyDirs()/h.cc.CandyScanErr(), and resolveCheckRunnerContext
+// the candy-name → SourceDir map and its carrier are the data forwarded onto the wire CheckEnv
+// (h.cc.CandyDirs()/h.cc.CandyScanErr()), and resolveCheckRunnerContext
 // (check_cmd.go) still folds the same map into the check-load-plugins side effect.
 //
 // The check-engine driver itself is kit.Runner (sdk/kit/runner.go). The host-coupled surfaces —
@@ -58,7 +58,7 @@ func skipf(c *spec.Op, msg string) spec.CheckResult {
 // set. Keyed by the candy MAP KEY — the check's Origin form: a bare name for a
 // local candy ("sshd"), the bare @github ref for a fetched one
 // ("github.com/owner/repo/candy/<name>"). CollectDescriptions stamps
-// Origin = "candy:" + this same key, so resolveCheckApk's CandyDirs[origin]
+// Origin = "candy:" + this same key, so the CandyDirs[origin]
 // lookup matches in BOTH cases. The SAME scanned map drives the plugin loader
 // (R3 — one scan, both consumers).
 func candyDirsFromScan(candyMap map[string]spec.CandyReader) map[string]string {
@@ -74,7 +74,7 @@ func candyDirsFromScan(candyMap map[string]spec.CandyReader) map[string]string {
 	return out
 }
 
-// checkRunnerContext carries the committed-APK anchoring (CandyDirs / CandyScanErr) a live
+// checkRunnerContext carries the candy source-dir anchoring (CandyDirs / CandyScanErr) a live
 // baked-plan runner folds into its RunnerConfig. resolveCheckRunnerContext (check_cmd.go)
 // computes it (and performs the plugin-load side effect); the caller wires the fields into
 // kit.RunnerConfig.

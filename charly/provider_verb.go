@@ -22,7 +22,7 @@ type CheckVerbProvider interface {
 	RunVerb(ctx context.Context, h *hostVerbResolver, op *spec.Op) spec.CheckResult
 }
 
-// The EXTERNAL-CHARLY-VERBS kube/adb/appium/spice/mcp/record/cdp/vnc/dbus/wl/libvirt are
+// The EXTERNAL-CHARLY-VERBS kube/spice/mcp/record/cdp/vnc/dbus/wl/libvirt are
 // live-container verbs served OUT-OF-PROCESS (candy/plugin-*); they are reached via the
 // generic `plugin:` Invoke envelope (invokeVerbProvider), NOT a typed in-proc contract —
 // their method allowlist + required-modifier checks live in the plugin, and their

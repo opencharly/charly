@@ -129,7 +129,7 @@ func TestCueBox_Corpus(t *testing.T) {
 
 func nodeFormCorpusFiles() []string {
 	return []string{
-		"../charly.yml",          // repo root (pod/local/kubernetes/vm/check/android entities)
+		"../charly.yml",          // repo root (pod/local/kubernetes/vm/check entities)
 		"../box/arch/charly.yml", // box submodule stacks
 		"../box/fedora/charly.yml",
 		"../box/debian/charly.yml",
@@ -151,7 +151,7 @@ func TestCueKinds_Corpus(t *testing.T) {
 	// C2-candy: every authoring kind is externalized — #Node is an OPEN struct with NO arms, so
 	// KindWords is EMPTY and the #NodeDoc per-entity grammar is structural-only (validating a node
 	// against it is now vacuous). The corpus VALUE gate moved to the per-kind value defs the
-	// PROVIDER declares (kindValueDefPath: candy → #CandyValue, pod/vm/kubernetes/local/android/
+	// PROVIDER declares (kindValueDefPath: candy → #CandyValue, pod/vm/kubernetes/local/
 	// kindcluster/kubevirt → #<Kind>Value, falling back to spec.KindValueDefs while a body still
 	// lives in the base) — the SAME host-side gate the loader runs (validateKindValueCUE). So this
 	// corpus test validates each node's inline discriminator value against its declared value def

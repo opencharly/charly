@@ -24,7 +24,7 @@ import (
 //     compiled-in live-verb seam was deleted (the live-verb externalization orphaned it);
 //     every live-container verb now dispatches out-of-process via invokeVerbProvider.
 // All relocated verbs are absent from builtinProviderInstances + the `providers:` manifest;
-// they dispatch identically through providerRegistry. kube/adb/appium/spice are the four
+// they dispatch identically through providerRegistry. kube/spice are the two
 // out-of-process external-charly-verbs (below).
 
 // kube is NOT a built-in verb — it is an EXTERNAL-CHARLY-VERB served out-of-process by
@@ -38,21 +38,6 @@ import (
 // post-provision finalization (kubeconfig rewrite + merge) is reached PEER-TO-PEER now too —
 // candy/plugin-fleet's k3sPostProvision (secrets_artifacts.go) InvokeProviders verb:kube
 // directly, replacing the former core registry-dance seam this comment used to name.
-
-// adb is NOT a built-in verb — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-// candy/plugin-adb (the second dep-shed: the goadb ADB-wire dependency left charly's
-// core go.mod). It keeps its `adb:` discriminator + modifiers on core #Op (authoring
-// unchanged) but is NOT a CheckVerbProvider, so it dispatches via invokeVerbProvider (the
-// else-branch in runOne) once the loader registers its grpcProvider — never through this
-// in-proc set. The SAME plugin also serves the `deploy:android` SUBSTRATE (the
-// externalized `target: android` deploy, F1) and the goadb-backed status device probe,
-// so ALL Android device interaction — verb, deploy, status — lives in candy/plugin-adb.
-
-// appium is NOT a built-in verb — it is an EXTERNAL-CHARLY-VERB served out-of-process by
-// candy/plugin-appium (the first dep-shed: tebeka/selenium left charly's core go.mod). It
-// keeps its `appium:` discriminator + modifiers on core #Op (authoring unchanged) but is
-// NOT a CheckVerbProvider, so it dispatches via invokeVerbProvider (the else-branch in
-// runOne) once the loader registers its grpcProvider — never through this in-proc set.
 
 // spice is NOT a built-in verb — it is an EXTERNAL-CHARLY-VERB served out-of-process by
 // candy/plugin-spice (the fourth dep-shed: the upstream SPICE wire client library + its

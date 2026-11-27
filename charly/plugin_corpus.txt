@@ -1,10 +1,8 @@
-github.com/opencharly/plugin-adb
 github.com/opencharly/plugin-addr
 github.com/opencharly/plugin-agent
 github.com/opencharly/plugin-agent-pi
 github.com/opencharly/plugin-agentteams
 github.com/opencharly/plugin-alias
-github.com/opencharly/plugin-appium
 github.com/opencharly/plugin-authoring
 github.com/opencharly/plugin-boot-kind
 github.com/opencharly/plugin-box
@@ -64,7 +62,6 @@ github.com/opencharly/plugin-http
 github.com/opencharly/plugin-init
 github.com/opencharly/plugin-installstep
 github.com/opencharly/plugin-interface
-github.com/opencharly/plugin-jetkvm
 github.com/opencharly/plugin-k8sgen
 github.com/opencharly/plugin-kernel-param
 github.com/opencharly/plugin-kube

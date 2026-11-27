@@ -6,7 +6,7 @@ package main
 //
 // RCA this pins (RC3): two ~20-minute bed runs were discarded because the run log could not say
 // which plugin binary served the verbs. The only line naming the plugin resolved a TAG
-// ("Resolved @github.com/opencharly/plugin-adb -> v2026.251.0449 (latest tag)"), while the bytes
+// ("Resolved @github.com/opencharly/plugin-kube -> v2026.251.0449 (latest tag)"), while the bytes
 // that actually executed came from a different build; the served binary was identified only
 // afterwards, by reading strings out of it. Each case below fails on the old behaviour.
 

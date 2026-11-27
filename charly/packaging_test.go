@@ -536,9 +536,7 @@ const releaseWorkflow = "../.github/workflows/release-binary.yml"
 // charly binary, a welded-plugin tarball, a CalVer stamp check, and an entry in
 // the release upload list. An arch added to one of those but not the others
 // ships a half-built release (a binary with no plugins, or an artifact that is
-// built but never uploaded). armv7 was added for a 32-bit appliance target (a
-// JetKVM's uClibc armv7l userland), which is why the set exceeds the historical
-// amd64+arm64 pair.
+// built but never uploaded). The set is the amd64+arm64 pair.
 //
 // The check is deliberately shape-agnostic about WHERE the plugins land: amd64
 // alone builds into unsuffixed `bin/plugins/` and regenerates each `.providers`
@@ -552,7 +550,7 @@ func TestReleaseWorkflowPublishesEveryArchitecture(t *testing.T) {
 	}
 	src := string(data)
 
-	arches := []string{"amd64", "arm64", "armv7"}
+	arches := []string{"amd64", "arm64"}
 	for _, a := range arches {
 		// 1. The build: a `go build` invocation targeting this arch.
 		if build := "GOOS=linux GOARCH=" + goArchFor(a); !strings.Contains(src, build) {
@@ -588,18 +586,10 @@ func TestReleaseWorkflowPublishesEveryArchitecture(t *testing.T) {
 		}
 	}
 
-	// The armv7 build needs GOARM=7: the appliance is ARMv7, not Go's default
-	// GOARM=5, so a missing GOARM ships a binary the target cannot run.
-	if !strings.Contains(src, "GOOS=linux GOARCH=arm GOARM=7") {
-		t.Error("release-binary.yml has no `GOOS=linux GOARCH=arm GOARM=7` build — the armv7 artifact would target the wrong ARM ABI")
-	}
 }
 
 // goArchFor maps the artifact arch suffix to the GOARCH value the workflow passes.
 func goArchFor(arch string) string {
-	if arch == "armv7" {
-		return "arm"
-	}
 	return arch
 }
 
@@ -614,7 +604,7 @@ func pluginDirSuffix(arch string) string {
 }
 
 // pluginDir renders the glob the workflow's stripped-binary loop uses for an
-// arch, e.g. `bin/plugins/*` (amd64) or `bin/plugins-armv7/*`.
+// arch, e.g. `bin/plugins/*` (amd64) or `bin/plugins-arm64/*`.
 func pluginDir(suffix string) string {
 	if suffix == "" {
 		return "bin/plugins/*"

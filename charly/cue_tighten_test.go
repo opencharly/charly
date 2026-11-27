@@ -114,18 +114,6 @@ func TestCueTightening_RejectsAndAccepts(t *testing.T) {
 		{"box retired port field rejected", "box",
 			"name: x\nport: [\"8080:8080\"]\n", true},
 
-		// --- candy apk: exactly-one package/apk + closed (the matchN→disjunction fix) ---
-		{"candy apk package only accepted", "candy",
-			candy(candyHead + candyPlan + "  apk:\n  - package: com.x\n"), false},
-		{"candy apk both package and apk rejected", "candy",
-			candy(candyHead + candyPlan + "  apk:\n  - package: com.x\n    apk: /tmp/x.apk\n"), true},
-		{"candy apk neither rejected", "candy",
-			candy(candyHead + candyPlan + "  apk:\n  - arch: x86_64\n"), true},
-		{"candy apk unknown field rejected", "candy",
-			candy(candyHead + candyPlan + "  apk:\n  - package: com.x\n    bogus: 1\n"), true},
-		{"candy apk bad source rejected", "candy",
-			candy(candyHead + candyPlan + "  apk:\n  - package: com.x\n    source: apk-mirror\n"), true},
-
 		// --- vm ssh: port⊕port_auto mutex + closed (the matchN→disjunction fix) ---
 		{"vm ssh port only accepted", "vm",
 			"source:\n  kind: cloud_image\n  url: http://x\nssh:\n  port: 2222\n", false},

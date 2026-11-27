@@ -10,7 +10,7 @@ import (
 // materialize algorithm every kind:<word> template lookup relies on, whether reached in-proc
 // (this test, and the deleted "deploy-entity-resolve" HostBuild seam that used to wrap it) or
 // PLUGIN-SIDE over the reverse channel (sdk/loaderkit.LoadUnifiedViaExecutor, K-wave W3a
-// A3-phase-2's Resolve{Kubernetes,Vm,Android}EntityViaExecutor — LoadUnifiedViaExecutor's own doc
+// A3-phase-2's Resolve{Kubernetes,Vm}EntityViaExecutor — LoadUnifiedViaExecutor's own doc
 // comment: "Returns the fully-merged, validated project the SAME way the compiled-in host loader
 // does"). The former "deploy-entity-resolve" seam + its
 // TestHostBuildDeployEntityResolve_KubernetesNamespaceQualified functional-proof test are BOTH deleted

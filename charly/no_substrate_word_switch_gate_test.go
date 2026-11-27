@@ -22,8 +22,7 @@ import (
 // kernel consults it BY TRAIT.
 //
 // The gate parses each production file's AST and flags any binary comparison of a `.Target`
-// selector against a concrete substrate-word string literal ("pod"/"vm"/"local"/"kubernetes"/
-// "android"). It ALLOWLISTS the surfaces where reading the substrate WORD is legitimate and
+// selector against a concrete substrate-word string literal ("pod"/"vm"/"local"/"kubernetes"). It ALLOWLISTS the surfaces where reading the substrate WORD is legitimate and
 // NOT a behaviour-branch (kernel-recognition Data or work the P9 contract deliberately did not
 // touch): the loader/classifier (produces the word for dispatch), the validators (P13/P15 —
 // they check the word is a recognized kind), and the status collectors (P14, not yet moved).
@@ -31,7 +30,7 @@ import (
 // consult file trips this gate.
 func TestNoSubstrateWordSwitchInDeployConsult(t *testing.T) {
 	substrateWords := map[string]bool{
-		"pod": true, "vm": true, "local": true, "kubernetes": true, "android": true, "kindcluster": true, "kubevirt": true,
+		"pod": true, "vm": true, "local": true, "kubernetes": true, "kindcluster": true, "kubevirt": true,
 	}
 	// Allowlisted files: reading the substrate WORD here is classification / validation /
 	// status-reporting, NOT a substrate-behaviour branch. Keep this list tight — a new deploy

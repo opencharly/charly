@@ -17,7 +17,7 @@ func TestPluginPrimaries_ParseTimeParity(t *testing.T) {
 	expected := map[string]string{
 		"cdp": "method", "wl": "method", "dbus": "method", "vnc": "method",
 		"mcp": "method", "record": "method", "spice": "method", "libvirt": "method",
-		"kube": "method", "adb": "method", "appium": "method",
+		"kube": "method",
 	}
 	for word, want := range expected {
 		got, ok := pluginPrimaryFor(word)

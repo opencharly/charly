@@ -7,8 +7,8 @@ package main
 // left behind once the deploy dispatch orchestration moved to candy/plugin-fleet over the ONE
 // generic ops.OpDeployDispatch envelope, see candy/plugin-fleet/deploy_target.go and
 // CHANGELOG/2026.203.0212.md for the full migration narrative), and the ResolveTarget dispatcher.
-// ALL SEVEN substrates
-// (local/vm/pod/kubernetes/android/kindcluster/kubevirt) are EXTERNAL — each resolves to pluginDeployTarget, which holds ONLY
+// ALL SIX substrates
+// (local/vm/pod/kubernetes/kindcluster/kubevirt) are EXTERNAL — each resolves to pluginDeployTarget, which holds ONLY
 // plain data (name/word/hasLifecycle/hasPreresolve/node) and a live venue executor, never a
 // core-private *grpcProvider (that type is constructed at plugin-CONNECT time — clause-M, cannot
 // move — so nothing holding one can live in a plugin). Every method dispatches to
@@ -144,7 +144,7 @@ func (t *pluginDeployTarget) dispatch(ctx context.Context, req spec.DeployTarget
 
 // applyParentExecOverride implements the FIX ROUND regression fix (R10 bed-found, S3b
 // follow-up): a NESTED external deploy with no lifecycle hook of its own (a
-// `local:`/`android:`/`kubernetes:` child under a vm/pod, tree position) must apply INSIDE the parent's
+// `local:`/`kubernetes:` child under a vm/pod, tree position) must apply INSIDE the parent's
 // venue, never the operator host — mirrors the pre-move former core-resident deploy target's
 // apply's `else if opts.ParentExec != nil { t.exec = opts.ParentExec }` swap exactly (see
 // CHANGELOG/2026.203.0212.md for the file this moved from; a lifecycle substrate, vm/pod,
@@ -514,7 +514,7 @@ func (t *pluginDeployTarget) Attach(ctx context.Context, cmd []string, tty bool)
 }
 
 // ErrNotSupportedOnExternal is returned by lifecycle methods that have no meaning for a hookless
-// external deploy target (local/android/kubernetes carry no charly-owned runtime). Mirrors
+// external deploy target (local/kubernetes carry no charly-owned runtime). Mirrors
 // ErrNotSupportedOnHost.
 var ErrNotSupportedOnExternal = fmt.Errorf("lifecycle operation not supported on external deploy target")
 
@@ -539,7 +539,7 @@ func ResolveTarget(node *spec.DeployNode, name string) (spec.UnifiedDeployTarget
 	}
 	if node.Target == "" {
 		return nil, fmt.Errorf("deployment %q missing required `target:` field "+
-			"(local|vm|pod|kubernetes|android)", name)
+			"(local|vm|pod|kubernetes)", name)
 	}
 	// Connect the deploy provider for the SUBSTRATE before looking it up. The deploy-substrate
 	// plugins are out-of-process and connected on demand; a deploy name that is NOT already a node
@@ -596,7 +596,7 @@ func unresolvedDeployTargetError(name, target string) error {
 			"is not connected (the %s plugin candy is not compiled-in or failed to load)",
 			name, target, ref)
 	}
-	return fmt.Errorf("deployment %q: unknown target %q (want local|vm|pod|kubernetes|android)", name, target)
+	return fmt.Errorf("deployment %q: unknown target %q (want local|vm|pod|kubernetes)", name, target)
 }
 
 // compile-time assertion: the plugin-dispatch adapter satisfies the interfaces it claims. If any

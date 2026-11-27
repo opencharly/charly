@@ -1051,10 +1051,10 @@ func collectReferencedPluginWords(candies map[string]spec.CandyReader, boxes spe
 		add(w)
 	}
 	// addStep references a step's explicit plugin: word AND its closed-#Op verb discriminator. A
-	// closed-#Op EXTERNAL check verb (libvirt/spice/kube/adb/appium) authored in a candy/box PLAN
+	// closed-#Op EXTERNAL check verb (libvirt/spice/kube) authored in a candy/box PLAN
 	// is NOT a plugin: word, so without op.Kind() the perf-scoping never connects the candy serving
-	// it — e.g. an android bed's `adb:`/`appium:` assertions live in the android-emulator candy
-	// plan, and their plugins must load at BOTH the device deploy and check-live. This MIRRORS the
+	// it — e.g. a bed's `libvirt:` assertion lives in its candy
+	// plan, and its plugin must load at BOTH the deploy and check-live. This MIRRORS the
 	// op.Kind() surfacing deployNodePluginContext already does for the deploy NODE's plan (R3).
 	// Over-load safe: a builtin verb's candy is already registered; a non-plugin verb has no candy.
 	addStep := func(op *spec.Op) {
@@ -1110,7 +1110,7 @@ func pluginProvidesReferencedWord(providers []string, refs map[string]struct{}) 
 // still loads its plugins). refs (from collectReferencedPluginWords) SCOPES the load:
 // a plugin candy NONE of whose providers is referenced is SKIPPED — a host `go build`
 // + connect avoided for a word nothing dispatches (a box/<distro> set vendors many
-// plugin candies — adb/appium/kube/spice/example-* — most unused by any one build or
+// plugin candies — kube/spice/example-* — most unused by any one build or
 // deploy). Errors are returned (not swallowed) so a bed asserting a plugin verb fails
 // loudly if its REFERENCED plugin won't load.
 // resolveMergedDeployTree returns the top-level Deploy (deploy-node) map — the merged project
@@ -1262,7 +1262,7 @@ func deployNodePluginContext(cfg *spec.Config, dir, name string) (addCandy []spe
 				refWords = append(refWords, w)
 			}
 			// Also surface each step's VERB discriminator. A closed-#Op EXTERNAL check verb
-			// (libvirt/spice/kube/adb/appium) is NOT a `plugin:` word, so without this the
+			// (libvirt/spice/kube) is NOT a `plugin:` word, so without this the
 			// loader never build-connects the out-of-process plugin candy serving it — e.g. a
 			// bed's `libvirt: list` step would SKIP with "unknown verb". Over-load safe: a
 			// compiled-in verb's candy is already registered, and a non-plugin verb has none.

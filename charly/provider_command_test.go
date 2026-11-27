@@ -215,7 +215,7 @@ func TestCommandCompileIn_PodInProc(t *testing.T) {
 // `charly reap-orphans`, formerly a dedicated builtin CommandProvider
 // (plugin_command_reap_orphans.go, deleted), is now served by the compiled-in
 // candy/plugin-substrate (command:reap-orphans, alongside its existing kind:pod/vm/kubernetes/
-// local/android + OpStatusCollect capabilities) — registered IN-PROC as a ClassCommand
+// local + OpStatusCollect capabilities) — registered IN-PROC as a ClassCommand
 // inprocProvider (NOT a *grpcProvider, NOT a static builtin CommandProvider), so
 // dispatchCommand routes `charly reap-orphans` to it via Invoke(ops.OpRun) and its liveness
 // probes reach the verb:libvirt peer provider over InvokeProvider (F10) instead of the
