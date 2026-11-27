@@ -255,8 +255,6 @@ github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026272.430 h1:kHW3v6aJXaOP
 github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026272.430/go.mod h1:mQ18blHUPvd8ibP5WBW/g5w3yJOo3TUBzUk31bOpisU=
 github.com/opencharly/plugin-status/candy/plugin-status v0.2026331.916 h1:vYo3yF+oi/fcvkBN8Q0gmdfEZRKw7T2PcbZVNtMQw+M=
 github.com/opencharly/plugin-status/candy/plugin-status v0.2026331.916/go.mod h1:avYIM2gVnXLImYIw9RL5PuaLAlSOtomrjymfK5CONko=
-github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.933 h1:9F4Sgoe6mw8JgximlzPKHQ5izRlb96Qg8O5+KzoZb5k=
-github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.933/go.mod h1:BdDA3+l9NQi0xMS8wqOi5BbmD1gTCU2uIvKQ0zJdTXI=
 github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.1555 h1:b6YBa7sTtqHg/aTHUOzQC+lcUv3Yc5qT23Qx0Ho619I=
 github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.1555/go.mod h1:BdDA3+l9NQi0xMS8wqOi5BbmD1gTCU2uIvKQ0zJdTXI=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347 h1:V53hvW7MDUEAP2CCOT1OP9Y+x2OiUmBlP97DOUE3+RY=
@@ -273,8 +271,6 @@ github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026319.925 h1:F4HzeXU/+mnz28
 github.com/opencharly/plugin-vm/candy/plugin-vm v0.2026319.925/go.mod h1:hdz2kr4NUyYNzowrtV2JX1wFIyaQbIpipcCQ5jL88ac=
 github.com/opencharly/sdk v0.2026331.1440 h1:cktUMXzqT72pzuxF5IfN9JsYhzutApYlXMWPiavdcAc=
 github.com/opencharly/sdk v0.2026331.1440/go.mod h1:pDgPddy0Icv4DYw9vgVEqRz9Mis5AYR/Gya0dacgkps=
-github.com/opencharly/spec v0.2026331.1221 h1:abFRhwdfpUlHN6UBadlPJlrGAe9FZforAiPCGBMAIZw=
-github.com/opencharly/spec v0.2026331.1221/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencharly/spec v0.2026331.1553 h1:iab+dWO+JDxsY52PIjIvTBtfIQNDhsCAQGXtaqPW64M=
 github.com/opencharly/spec v0.2026331.1553/go.mod h1:VrjzjP2glMbDwP4JNm50OV0MraHFZnFKTl+bVlouoso=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
