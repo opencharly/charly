@@ -51,7 +51,7 @@ flowchart LR
 | **Build** | Multi-stage Containerfiles from a candy list; images that carry their own capabilities and tests as `ai.opencharly.*` labels | `box build` `box validate` `box reconcile` · builders `pixi` `npm` `cargo` `aur` `mise` |
 | **Distros** | Ready-made base boxes and coder boxes with the AI coding CLIs, runtimes and nested containers | fedora · arch · cachyos · debian · ubuntu |
 | **Engines & init** | Run on podman, docker or containerd, chosen per host for building and running; declare a `service:` once and charly composes the init the destination needs | `podman` `docker` `containerd` · supervisord · systemd · OpenRC |
-| **Deploy** | Seven substrates, sidecars, Tailscale/Cloudflare tunnels, encrypted volumes, reversible host installs | `deploy add` `deploy del` `start` `stop` `config` |
+| **Deploy** | Six substrates, sidecars, Tailscale/Cloudflare tunnels, encrypted volumes, reversible host installs | `deploy add` `deploy del` `start` `stop` `config` |
 | **VMs** | Rootless libvirt guests from seven sources, cloud-init, UEFI/Secure Boot, snapshots, GPU passthrough with a preemption arbiter | `charly vm` · `libvirt:` `spice:` |
 | **Kubernetes** | Kustomize + Helm deploys, kind clusters, k3s inside a VM, the KubeVirt platform | `kubernetes:` `kindcluster:` `kubevirt:` · `kube:` `helm:` |
 | **Test & verify** | More than 60 check verbs for files, ports, HTTP, browsers, Wayland/VNC desktops, clusters and more; agent-graded steps for what a regex can't judge | `check box` `check live` `check run` · `cdp` `wl` `vnc` `kube` |

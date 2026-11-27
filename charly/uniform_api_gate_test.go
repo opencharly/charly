@@ -27,7 +27,7 @@ import (
 // would falsely fail. Genericity is proven by the word-free SHAPE of the surface, full stop.
 //
 // SCOPE NOTE: spec.Op carries only the GENERIC install-verb discriminators (mkdir/copy/write/… +
-// the generic `plugin` dispatcher) plus shared modifiers — the 11 externalized live verbs
+// the generic `plugin` dispatcher) plus shared modifiers — the 9 externalized live verbs
 // (cdp/vnc/mcp/spice/libvirt/kube/wl/dbus/record) are NOT fields on spec.Op: each is
 // served by its plugin's own `#*Input` def and desugared into the generic `plugin`/`plugin_input`
 // pair before spec.Op validates. Those verb words enter the FORBIDDEN-WORD universe below via the
