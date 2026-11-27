@@ -13,7 +13,7 @@ require (
 	github.com/opencharly/plugin-alias/candy/plugin-alias v0.2026271.2241
 	github.com/opencharly/plugin-authoring/candy/plugin-authoring v0.2026271.2244
 	github.com/opencharly/plugin-box/candy/plugin-box v0.2026331.902
-	github.com/opencharly/plugin-build/candy/plugin-build v0.2026328.1
+	github.com/opencharly/plugin-build/candy/plugin-build v0.2026331.1456
 	github.com/opencharly/plugin-builder/candy/plugin-builder v0.2026326.951
 	github.com/opencharly/plugin-cache/candy/plugin-cache v0.2026271.2314
 	github.com/opencharly/plugin-candy-kind/candy/plugin-candy-kind v0.2026318.2233
@@ -62,7 +62,7 @@ require (
 	github.com/opencharly/plugin-sidecar/candy/plugin-sidecar v0.2026272.438
 	github.com/opencharly/plugin-ssh/candy/plugin-ssh v0.2026272.430
 	github.com/opencharly/plugin-status/candy/plugin-status v0.2026331.916
-	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.933
+	github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.1555
 	github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422
 	github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026272.423
 	github.com/opencharly/plugin-unix-group/candy/plugin-unix-group v0.2026272.433
@@ -141,7 +141,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347
-	github.com/opencharly/spec v0.2026331.808
+	github.com/opencharly/spec v0.2026331.1553
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
