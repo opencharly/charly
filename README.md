@@ -3,7 +3,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/opencharly/charly)
 [![Docs](https://img.shields.io/badge/docs-opencharly.ai-blue)](https://opencharly.ai)
 
-**The agentic DevOps tool for you and your agents.**
+**The Agentic DevOps Factory for you and your agents.**
 
 Write one list of **candies**. `charly` turns it into a container, a VM, a Kubernetes workload, or a
 host install — proves it on a throwaway test bed before anything real sees
