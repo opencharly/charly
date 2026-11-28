@@ -66,7 +66,7 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 	if node.Target == "" || node.Target == "container" {
 		node.Target = "pod"
 	}
-	deployName := c.Box
+	deployName := updateDeployName(c.Box, c.Instance)
 
 	// Connect the deployment's OUT-OF-TREE plugins before ResolveTarget, so an external deploy
 	// SUBSTRATE (the E3-deploy plugin-side deploy target) resolves its grpcProvider for the
@@ -91,4 +91,14 @@ func (c *podUpdateCmd) dispatchByDeployTarget() error {
 			deployName, node.Target)
 	}
 	return lt.Rebuild(context.Background(), spec.DeployTargetRebuildOpts{RebuildImage: c.Build, Tag: c.Tag})
+}
+
+// updateDeployName is the deploy's IDENTITY the rebuild must re-deploy: box + instance
+// (spec.DeployKey), never the box alone. An instance deploy (`-i`) and a namespace-qualified deploy
+// (`ns.entity`, reached through an import) both key their entry on the PAIR, so a rebuild that
+// re-deployed the box alone named a deploy that does not exist — measured on a namespace-imported
+// bed: `charly deploy add kde-vnc-cdp: no <ref> and charly.yml has no entry`
+// (opencharly/opencharly#1316's update leg).
+func updateDeployName(box, instance string) string {
+	return spec.DeployKey(box, instance)
 }
