@@ -496,15 +496,28 @@ func pluginInvokeNoProgress() time.Duration {
 	return loadedReadiness().NoProgress
 }
 
-// pluginInvokeNoProgressFor returns the idle window for one dispatch class. The
+// opRebuildDispatch is the deploy op that runs a box build INSIDE the plugin
+// (`charly box build <box>`), the op the heavy window below exists for.
+const opRebuildDispatch = "rebuild"
+
+// pluginInvokeNoProgressFor returns the idle window for one dispatch. The
 // STEP providers run installs (pacman/apt/buildah/system-packages) that go minutes
 // between host-visible legs — the same sparseness the build steps have — so they
 // get the heavy per-attempt window instead of the probe no_progress. Measured: the
 // CachyOS VM bed's deploy tripped the 90s probe window on step:system-packages after
 // a single reverse leg while pacman was upgrading packages (no cpu advance from the
 // peer tree, no host leg). A genuine hang still trips at the heavy window.
-func pluginInvokeNoProgressFor(class ProviderClass) time.Duration {
-	if class == ClassStep {
+//
+// The deploy REBUILD op gets the same heavy window for the same reason, and it is
+// measured: `charly update <pod> --build` runs `charly box build <box>` inside the
+// deploy plugin, and a cold build can go a long time between host-visible legs while
+// buildkitd does the work in ITS detached daemon (the plugin's own child is buildctl,
+// which shows no CPU). On the 90s probe window that dispatch was cancelled mid-build
+// and reached the operator as a bare `signal: killed` (opencharly/charly#1322);
+// `CHARLY_PLUGIN_NO_PROGRESS=15m` made the same rebuild complete. Scoped to the OP,
+// not the whole deploy class: config/start/stop are fast and keep the probe window.
+func pluginInvokeNoProgressFor(class ProviderClass, op string) time.Duration {
+	if class == ClassStep || op == opRebuildDispatch {
 		return loadedReadiness().PerAttemptHeavy
 	}
 	return pluginInvokeNoProgress()
