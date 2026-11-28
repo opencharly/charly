@@ -108,12 +108,16 @@ control that keeps them honest is `charly task pin-current`, run by
   declares and does not commit, while `status`, `verify` and `currency` only read.
   `pin-current` is the thin wrapper that selects `MODE=currency`, and `ff` selects
   `MODE=ff`; both exist so the mode choice is made once.
-- **The proof that it can fail lives with the producer.** The old six-arm bound proof,
-  and the scratch-fixture script it ran, is deleted with the bound it proved. What
-  proves the strict verdict now is the `git-submodules` verb's own tests in
-  `opencharly/plugin-task`, which owns the verb: they prove `MODE=ff`
-  fast-forwards and that `currency` FAILS on a behind pin. The cross-repo cutover is
-  tracked as opencharly/opencharly#1347.
+- **The control is proved in-repo AND at the producer.** `scripts/check-pin-current.sh`
+  (run by the `pin-current-proof` task, by a step of the `check-task` bed and by the
+  `pin-currency` workflow) proves THIS repo's SHIPPED wiring: it EXTRACTS the
+  `pins`/`pin-current` entities from `charly.yml`, asserts the wrapper carries
+  `MODE=currency` and NO `STALE_AFTER`, then shows a behind pin FAILING with the remedy
+  named and the same pin at the served tip passing. The MECHANISM — `MODE=ff`
+  fast-forwards, `currency` fails on a behind pin — is proved by the `git-submodules`
+  verb's own tests in `opencharly/plugin-task`, which owns the verb. The old six-arm
+  bound proof and its scratch-fixture script are deleted with the bound they proved.
+  The cross-repo cutover is tracked as opencharly/opencharly#1347.
 
 *Detail:* the umbrella `AGENTS.md` Part II #3 (pins are gitlinks; producer-first; a pin's
 state is `cur`/`behind`/`blocked-by`/`not-on-the-served-line`).
