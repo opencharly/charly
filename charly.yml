@@ -3963,6 +3963,27 @@ pin-current:
           param: [MODE=currency]
         context: [runtime]
 
+# pin-current-proof — the control's own proof that it CAN fail, on scratch git
+# repos, using the wiring EXTRACTED from the two entities above (so the proof
+# cannot drift from the control it proves).
+#
+# TWO ARMS, and no bound: the 168 h bound is deleted, so a pin recorded at an
+# ANCESTOR of its branch's served tip must go RED (the strict verdict this change
+# ships), and the SAME fixture with the gitlink recorded at the tip must pass.
+# `scripts/check-pin-current.sh` also asserts the extracted wrapper still carries
+# `MODE=currency` and no `STALE_AFTER`, so a regression to the bound fails the
+# proof before either arm runs.
+pin-current-proof:
+  task:
+    description: The control's own proof — pin-current FAILS on a behind pin and PASSES at the tip, on the wiring EXTRACTED from this manifest
+    dir: .
+    plan:
+      - check: the control fails on a behind pin and passes at the tip
+        command: "bash scripts/check-pin-current.sh"
+        stdout:
+          - contains: PIN-CURRENT-PROOF-OK
+        context: [runtime]
+
 # pin-verb-scope — the control over this repo's OWN pin-advance claim.
 #
 # The advance half's own description used to call the advance a non-mutating
@@ -4130,6 +4151,9 @@ check-task:
           # And the SCOPE control's own proof must be DECLARED too
           # (opencharly/charly#1079).
           - contains: Prove the pin-verb-scope control can fail
+          # The pin-currency control's own proof must be DECLARED, and its two arms
+          # must RUN here: a behind pin must go red and the tip must pass.
+          - contains: pin-current FAILS on a behind pin and PASSES at the tip
         context:
           - runtime
         command:
@@ -4146,6 +4170,12 @@ check-task:
         task:
           task: pins
           param: [MODE=status]
+        context:
+          - runtime
+      - check: the pin-currency CONTROL's own proof runs end to end through verb:task — a pin recorded behind its branch's served tip must FAIL and the same pin at the tip must pass
+        id: task-pin-current-proof-runs
+        task:
+          task: pin-current-proof
         context:
           - runtime
       - check: the pin-verb-scope CONTROL itself runs green on the tree the bed just realized — every claim-maker surface in it states its scope, no tracked file calls the advance a non-mutating kind, and the shared rule's grammar and exempt-mode list live in the rule file's own header

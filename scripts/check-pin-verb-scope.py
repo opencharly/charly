@@ -196,6 +196,10 @@ NON_CLAIM_MENTIONS = {
     ".github/workflows/pin-currency.yml": "the CI gate names the remedy (`charly task ff`) "
     "while explaining why a behind pin fails; its job is to RUN `pin-current`, not to "
     "tell an operator what the advance does",
+    "scripts/check-pin-current.sh": "the pin-currency control's own proof: it ASSERTS the "
+    "remedy the verb prints (`charly task ff`) as one of its red-arm needles, and says "
+    "nothing to an operator about what the advance does — its arms are judged by the "
+    "`pin-current-proof` task, not by this control",
 }
 
 # The files exempt from the coverage arm, with the reason.

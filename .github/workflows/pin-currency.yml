@@ -28,6 +28,10 @@ on:
       - 'box/**'
       - 'charly/go.mod'
       - '.github/workflows/pin-currency.yml'
+      # The control's OWN proof lives in this script, so a change to it is a change
+      # to the control's gate and must re-run it. Without it in the trigger, the
+      # proof could be weakened in a PR that never runs it.
+      - 'scripts/check-pin-current.sh'
   workflow_dispatch:
 
 permissions:
@@ -55,6 +59,9 @@ jobs:
       # different plugin-task pin than the one this tree declares.
       - name: Build the worktree-local binary (R9)
         run: ./scripts/bootstrap-charly.sh
+
+      - name: The control's own proof — a behind pin must go red, the tip must pass
+        run: ./bin/charly task pin-current-proof
 
       - name: The control — every box/* pin at the tip of the branch its intent names (a behind pin FAILS)
         run: ./bin/charly task pin-current
