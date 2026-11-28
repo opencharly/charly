@@ -203,6 +203,8 @@ github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142 h1:0WIDu4JhHj
 github.com/opencharly/plugin-file/candy/plugin-file v0.2026272.142/go.mod h1:rDRPywq16JlcG1R3bAI0JspWH4L4eCpkl6fWFlWCGSY=
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026331.847 h1:zG4lf9CxZygbv56INuWdtm5SbGi3PaXApHZGW5Et464=
 github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026331.847/go.mod h1:W0eAY+IQy1Q1eoGg/y2xtCnoKj/10vUaubR3aKUZZEs=
+github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026332.4 h1:lERDYw9UqsAq5z5pyr/Vs/FVQ9BXFvolIMxFsdS9gqI=
+github.com/opencharly/plugin-fleet/candy/plugin-fleet v0.2026332.4/go.mod h1:W0eAY+IQy1Q1eoGg/y2xtCnoKj/10vUaubR3aKUZZEs=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959 h1:JS8EX0lGEq9GVpwIGV8ZxGzPLzLq+zyhr6CIDl2c3lw=
 github.com/opencharly/plugin-gpu/candy/plugin-gpu v0.2026272.959/go.mod h1:UEARhUMGngvey1RFumqMwia2WUspmlKlXORZGId+8Kc=
 github.com/opencharly/plugin-harness-kind/candy/plugin-harness-kind v0.2026325.1012 h1:T/TaJOa/omEe/jfr1e2duxuivikdxGBxl75jd09+0z0=
@@ -235,6 +237,8 @@ github.com/opencharly/plugin-package/candy/plugin-package v0.2026272.339 h1:Qq7K
 github.com/opencharly/plugin-package/candy/plugin-package v0.2026272.339/go.mod h1:8r85Ma7mwLsfZBee7Qo8pgZ5ZRz59hkZQWqeKiBcD8A=
 github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026274.652 h1:wAmn6Un9QhvRfYYqPZYU7z1S5ucrc33Pc6Xfc/jnWDg=
 github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026274.652/go.mod h1:1LnV0CHywsHpYMPBa5Tswav2PCI1c2NmpBgDBOj3SGY=
+github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026332.49 h1:qiKc7S0akyN7CAnowE8+eP6gCHdqBiracm+/P4XA4X8=
+github.com/opencharly/plugin-pod/candy/plugin-pod v0.2026332.49/go.mod h1:IrtNYTSC5eolxrgVMa+HRDalGDe56VEPz0V4NmhIkkc=
 github.com/opencharly/plugin-port/candy/plugin-port v0.2026272.414 h1:W++tspAaHg83oYtu4On2M7dT8KPxcg/AxeArhbH5ius=
 github.com/opencharly/plugin-port/candy/plugin-port v0.2026272.414/go.mod h1:YQ6T7HZv0kY5yfleXGZz125nhboLx7rjgqK6rBUIB/I=
 github.com/opencharly/plugin-preempt/candy/plugin-preempt v0.2026274.646 h1:u4azj3SGbyNqRPO/qjBB2/y8a4IsDLtIHq/RXRpZOV4=
