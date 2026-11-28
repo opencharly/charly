@@ -2676,7 +2676,7 @@ check-commands-local:
               command:
                 command: "rm -rf /tmp/charly-p15-boxbed && ${CHARLY_BIN} box new project /tmp/charly-p15-boxbed && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed candy add-rpm my-candy curl && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box new box my-box --base quay.io/fedora/fedora:43 --candy my-candy && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box validate && ${CHARLY_BIN} -C /tmp/charly-p15-boxbed box generate my-box && test -f /tmp/charly-p15-boxbed/.build/my-box/Containerfile"
                 in_container: false
-            - check: charly box reconcile --remote --dry-run exercises the cached, disk-persisted gitClient().LatestTag path (candy/plugin-box#22, charly#736) on THIS project — the retired raw per-process git ls-remote reintroduced the 90-94 concurrent fanout the cache exists to avoid, and the churn-STABLE way to catch that regression is to require the SECOND --remote run to be served from the persisted cache (no cold "fetching git metadata" burst) and to agree with the first. The step still PRINTS a pin-drift report (the "would rewrite N pin(s)" shape) when upstream has moved; that is upstream's property, refreshed by `charly task sync`, and asserting its ABSENCE made this gate go red the moment any upstream repo published a tag (opencharly/charly#650's class — a gate keyed on a moving external state is a false-red generator). The two invocations run under an ISOLATED cache directory (XDG_CACHE_HOME), because the shared ref cache is mutable by any other charly process on the host — that was this step's last false-red generator, and with an isolated cache the second run is cache-served by construction rather than by luck
+            - check: charly box reconcile --remote --dry-run exercises the cached, disk-persisted gitClient().LatestTag path (candy/plugin-box#22, charly#736) on THIS project — the retired raw per-process git ls-remote reintroduced the 90-94 concurrent fanout the cache exists to avoid, and the churn-STABLE way to catch that regression is to require the SECOND --remote run to be served from the persisted cache (no cold "fetching git metadata" burst) and to agree with the first. The step still PRINTS a pin-drift report (the "would rewrite N pin(s)" shape) when upstream has moved; that is upstream's property, refreshed by `charly task ff`, and asserting its ABSENCE made this gate go red the moment any upstream repo published a tag (opencharly/charly#650's class — a gate keyed on a moving external state is a false-red generator). The two invocations run under an ISOLATED cache directory (XDG_CACHE_HOME), because the shared ref cache is mutable by any other charly process on the host — that was this step's last false-red generator, and with an isolated cache the second run is cache-served by construction rather than by luck
               id: box-reconcile-remote-cached
               exit_status: 0
               # MEASURED 2026-11-18 on this host: the two isolated-cache reconciles this step
@@ -3893,169 +3893,104 @@ push:
 # `distro-*` consumer pins could not be advanced by any command in either repo
 # (opencharly/charly#936, #942). This task is that missing owner.
 #
-# The six `box/*` are LEAVES: each declares `branch = main` in `.gitmodules`
+# The `box/*` are LEAVES: each declares `branch = main` in `.gitmodules`
 # (landed as d72c0063), so its intent is `upstream:main`, judged against the REMOTE.
 # There is deliberately no `pin_map` here — this repo declares no derived edge of
-# its own, so every `box/*` rolls to its own default-branch HEAD.
+# its own, so every `box/*` rolls to the tip of its own declared branch.
 #
-# `MODE=currency` is the question that decides whether this repo is current ("is
-# every pin at the ref its intent names" — its Message IS the answer). `verify`
-# cannot answer it: that mode asserts each checkout matches the gitlink the index
-# records, which is a consistency claim, and it passes on a tree that is behind.
+# `MODE=ff` is the ADVANCE and the only writing mode: it fast-forwards EVERY pin
+# this repo declares to the tip of the branch its intent names, and it does not
+# commit. `MODE=currency` is the question the control asks ("is every pin at the
+# tip of the branch its intent names" — its Message IS the answer, and a behind pin
+# FAILS). `verify` cannot answer it: that mode asserts each checkout matches the
+# gitlink the index records, which is a consistency claim, and it passes on a tree
+# that is behind.
 # =============================================================================
 pins:
   task:
-    description: The pin operation over this repo's own box/* gitlinks (mode via param) — MODE=bump advances EVERY pin this repo declares and does not commit, MODE=currency asks whether every pin is at the ref its intent names, and its Message IS the answer
+    description: The pin operation over this repo's own box/* gitlinks (mode via param) — MODE=ff fast-forwards EVERY pin this repo declares and does not commit, MODE=currency asks whether every pin is at the tip of the branch its intent names (a behind pin FAILS), and its Message IS the answer
     dir: .
     params:
       MODE:
-        description: status|bump|verify|currency (the git-submodules mode) — bump advances EVERY pin this repo declares and does not commit
+        description: status|ff|verify|currency (the git-submodules mode) — ff fast-forwards EVERY pin this repo declares and does not commit
         default: verify
-      STALE_AFTER:
-        description: the OWNER's bound on its OWN bookkeeping — how long this repo may leave a pin un-advanced before it is NEGLECTED rather than merely behind (empty = no bound; only MODE=currency reads it)
-        default: ""
     plan:
       - run: run git-submodules in the selected mode
         git-submodules:
           mode: "${MODE}"
-          stale_after: "${STALE_AFTER}"
         context: [runtime]
 
-# sync — the named entry point for the advance half: a thin wrapper that SELECTS
+# ff — the named entry point for the advance half: a thin wrapper that SELECTS
 # the mode of the ONE definition above, so the pin operation exists exactly once.
 #
-# WHAT IT DOES, in the words a reader needs BEFORE running it: it advances EVERY
-# pin this repo declares — this repo's own six `box/*` gitlinks, which are all the
+# WHAT IT DOES, in the words a reader needs BEFORE running it: it fast-forwards
+# EVERY pin this repo declares — this repo's own `box/*` gitlinks, which are all the
 # pins it has (there is no `pin_map`, so there is no edge) — to the tip the remote
 # serves for the ref each path's own `.gitmodules` entry names, NEVER a PR branch.
 # It is not a report: a path that HAS a checkout is ROLLED in that checkout and
 # every advance is STAGED in this repo's index, while a path with NO checkout is
 # advanced in the index alone. It does not commit and it does not open a PR, and it
-# FAILS LOUD for every path it could not advance — a sync over a tree it could not
+# FAILS LOUD for every path it could not advance — an ff over a tree it could not
 # fully advance must never report success.
-sync:
+ff:
   task:
-    description: Advance EVERY pin this repo declares — this repo's own box/* gitlinks — to the tip the remote serves for the ref each path's own .gitmodules entry names, never a PR branch; it rolls the checkouts that exist and stages their gitlinks, and it does not commit and does not open a PR
+    description: Fast-forward EVERY pin this repo declares — this repo's own box/* gitlinks — to the tip the remote serves for the ref each path's own .gitmodules entry names, never a PR branch; it rolls the checkouts that exist and stages their gitlinks, and it does not commit and does not open a PR
     dir: .
     plan:
-      - run: advance EVERY pin this repo declares to the ref its intent names
+      - run: fast-forward EVERY pin this repo declares to the ref its intent names
         task:
           task: pins
-          param: [MODE=bump]
+          param: [MODE=ff]
         context: [runtime]
 
 # pin-current — the named entry point for the CONTROL half: the thin wrapper that
-# SELECTS the currency mode AND this repo's own bound of the ONE definition above.
+# SELECTS the currency mode of the ONE definition above.
 #
-# WHY THE BOUND, and why this does not treat "a twin is behind" as a failure:
-# measured over this repo's own history, a twin is behind the ref its own
-# `.gitmodules` declares for most of the time — over the 32 days from 2026-09-22 to
-# 2026-10-23, each of the six was behind on 17 to 27 of them, and on 28 of the 32
-# (88%) at least one was behind. A busy upstream is behind between every wave, so a
-# gate on the DISTANCE would be red roughly three days out of four. That is the
-# permanently-red gate the org's own pin rule forbids: it trains every reader to
-# ignore it, and then it catches nothing.
-#
-# What separates churn from neglect is the AGE of this repo's OWN last advance of that
-# path: the distance is churn, the age is neglect.
-#
-# THE CRITERION, in the producer's own words, because "not current" is a SET of
-# classes and "behind" is only the first of them. The control fires on NEGLECT: a
-# `box/*` pin that is NOT CURRENT — `behind`, `not-on-the-served-line` (what a
-# squash-merged upstream produces: its served ref does not descend from the recorded
-# pin, so the recorded pin is not on the served line at all), or `differs` (no
-# checkout to judge it) — AND that this repo has not advanced for longer than this
-# repo's own bound. The org merges by squash in several repos, so the second class
-# is ordinary here, not exotic, and a criterion that named only the first would
-# understate the control exactly where it matters.
-#
-# The measurement below CLASSIFIES every pair, with the same ancestry test the
-# control uses, and prints the tally by class: over the 32-day window all 145
-# not-current pairs are the `behind` class, so in THIS repo's history the two
-# readings coincide — shown, not assumed.
-#
-# THE BOUND IS PLACED BY MEASUREMENT, over this repo's own advance history — the
-# gaps between the commits that recorded each twin's gitlink:
-#   - the longest gap that stayed WITHIN a 7-day bound, i.e. ordinary operation, was
-#     6.4 d (box/cachyos, 2026-07-09 -> 2026-07-16);
-#   - 25 gaps ran PAST it, from 8.0 d (the whole set, 2026-07-08 -> 2026-07-16) to
-#     25.1 d (box/debian and box/ubuntu, 2026-08-29 -> 2026-09-23) — genuine lapses.
-# The bound has to sit ABOVE the healthy maximum — during such a gap the pin is
-# behind and the age grows, so a bound at or below it would fire on ordinary
-# operation — and BELOW the shortest lapse, or it catches nothing. 168h (7 d) is the
-# ONLY whole-day bound strictly between 6.4 d and 8.0 d: 0.6 d above the healthy
-# maximum, 1.0 d below the shortest lapse.
-#
-# The bound is THIS repo's own number. The producer's knob is opt-in and carries no
-# default (unset => no bound at all), so 168 h is a choice this repo made, on this
-# repo's own evidence, and it has to be re-derived when the cadence changes.
-#
-# MEASURED, over the 9 days from 2026-10-15 (the day the leaves' intent landed) to
-# 2026-10-23: this control was red on 6 of them, and on EVERY one of those 6 the
-# twins had genuinely not been advanced — the ages were 7.5 d to 14.7 d, every one
-# of them inside a real lapse: 8.1 d (box/cachyos), 10.2 d (box/arch, box/debian,
-# box/fedora, box/ubuntu) or 15.3 d (box/omarchy). It was green on the 3 days when
-# this repo had advanced within its own cadence. There was no red day on a healthy
-# tree — which is the property the org's pin rule demands of a gate, and the reason
-# the criterion is the age and not the distance.
-#
-# The derivation is a script, not a paragraph: `scripts/measure-pin-cadence.py`
-# reproduces these numbers from this repo's own history and the twins' real remotes,
-# `--since`/`--until` name the window by its dates, and `--bound-hours` re-derives
-# them for any other bound. A chosen number that cannot be re-derived is a guess
-# wearing a measurement's clothes.
-#
-# The measurement's own classifier is proved, by `--self-test`, on a scratch twin
-# with the shapes the control has to tell apart: the proxy "the pin is not the tip,
-# so it is behind" calls a squash-advanced pin `behind`, because the two commits
-# differ, and a tally from a classifier that cannot tell the classes apart is a
-# tally of nothing.
+# WHAT IT ASKS: whether every `box/*` pin is at the tip of the branch its own
+# `.gitmodules` entry declares. A pin that is BEHIND FAILS. There is no neglect
+# bound and no age — the old 168 h bound and its cadence measurement are DELETED,
+# so a pin behind its branch fails whether it has been behind for a minute or a
+# month — and no tag is consulted: currency is a branch question, and a tag marks
+# a merge, not the served tip a gitlink records.
 pin-current:
   task:
-    description: Ask whether every box/* pin is at the ref its intent names, bounded by this repo's own neglect bound (fails only on a pin that is NOT CURRENT — behind, advanced past the served ref by a squash-merge, or unclassifiable — AND un-advanced past the bound)
+    description: Ask whether every box/* pin is at the tip of the branch its intent names — a behind pin FAILS; `charly task ff` is the remedy
     dir: .
     plan:
-      - run: ask whether every box/* pin is current, within this repo's own bound on neglect
+      - run: ask whether every box/* pin is at the tip of the branch its intent names
         task:
           task: pins
-          param: [MODE=currency, STALE_AFTER=168h]
+          param: [MODE=currency]
         context: [runtime]
 
-# pin-currency-proof — the control's own proof that it CAN fail, on a scratch
-# fixture, using the wiring EXTRACTED from the two entities above (so the proof
+# pin-current-proof — the control's own proof that it CAN fail, on scratch git
+# repos, using the wiring EXTRACTED from the two entities above (so the proof
 # cannot drift from the control it proves).
 #
-# A gate that cannot fail is not a gate: if the bound never bites, the control is a
-# green light that proves nothing, and it teaches every reader that the pin surface
-# is watched. SIX arms, in three pairs, over THREE twin shapes: a `behind` twin (the
-# served ref descends from the recorded pin), a SQUASH-shaped one (it does not) —
-# the `not-on-the-served-line` class the org's own squash merges produce — and one
-# that is NOT MATERIALIZED, where the pin is not current because there is no
-# checkout to judge it (`differs`). Within each pair the arms differ ONLY in the
-# date of the commit that recorded the pin — the same pin, the same distance from
-# the served ref, the same bound — so the verdict flips with the AGE and with
-# nothing else. That is what makes the criterion NEGLECT (the owner's own neglect)
-# rather than DISTANCE (churn). Covering all three classes is what makes the
-# criterion's own claim true: "not current" is a set, and a proof that exercised
-# one class of it would leave the rest unproven.
-pin-currency-proof:
+# TWO ARMS, and no bound: the 168 h bound is deleted, so a pin recorded at an
+# ANCESTOR of its branch's served tip must go RED (the strict verdict this change
+# ships), and the SAME fixture with the gitlink recorded at the tip must pass.
+# `scripts/check-pin-current.sh` also asserts the extracted wrapper still carries
+# `MODE=currency` and no `STALE_AFTER`, so a regression to the bound fails the
+# proof before either arm runs.
+pin-current-proof:
   task:
-    description: Prove the pin-currency control can fail — a pin that is NOT CURRENT (behind its served ref, advanced past it by a squash-merge, or with no checkout to judge it) AND un-advanced past the bound must be reported STALE and fail, while the same pin advanced recently must pass
+    description: The control's own proof — pin-current FAILS on a behind pin and PASSES at the tip, on the wiring EXTRACTED from this manifest
     dir: .
     plan:
-      - check: the control bites on a neglected pin and stands down on a churned one
-        command: "bash scripts/check-pin-currency.sh"
+      - check: the control fails on a behind pin and passes at the tip
+        command: "bash scripts/check-pin-current.sh"
         stdout:
-          - contains: PIN-CURRENCY-PROOF-OK
+          - contains: PIN-CURRENT-PROOF-OK
         context: [runtime]
 
 # pin-verb-scope — the control over this repo's OWN pin-advance claim.
 #
-# The `sync` task's own description used to call the advance a non-mutating
+# The advance half's own description used to call the advance a non-mutating
 # kind: it said the advance changed nothing, and that it did not commit. The
-# first half was FALSE — the verb advances EVERY pin this repo declares, rolls
-# the checkouts that exist and stages their gitlinks (opencharly/charly#1079) —
-# and an operator who read that line would have run a wave they believed was a
+# first half was FALSE — the verb fast-forwards EVERY pin this repo declares,
+# rolls the checkouts that exist and stages their gitlinks (opencharly/charly#1079)
+# — and an operator who read that line would have run a wave they believed was a
 # report.
 #
 # A claim that is wrong once is a claim that is wrong until something checks
@@ -4066,7 +4001,7 @@ pin-currency-proof:
 # rulebook and its own gates".
 #
 # Arms over this repo's own tracked tree:
-#   SCOPE         every claim-maker surface states that the advance touches
+#   SCOPE         every claim-maker surface states that the verb fast-forwards
 #                 EVERY pin this repo declares (the CLAIM, not the keyword:
 #                 "every" alone also matches a question about currency);
 #   NO RETIRED    no tracked file calls the advance a non-mutating kind;
@@ -4081,7 +4016,7 @@ pin-currency-proof:
 # finding rather than a silent pass.
 pin-verb-scope:
   task:
-    description: Check this repo's own pin-advance claim — every claim-maker surface must state that the advance touches EVERY pin this repo declares, no tracked file may call the advance a non-mutating kind, and the shared rule's grammar and exempt-mode list must live in the rule file's own header, with every reader it names still reading it
+    description: Check this repo's own pin-advance claim — every claim-maker surface must state that the verb fast-forwards EVERY pin this repo declares, no tracked file may call the advance a non-mutating kind, and the shared rule's grammar and exempt-mode list must live in the rule file's own header, with every reader it names still reading it
     dir: .
     plan:
       - check: every pin-advance claim in this repo states its scope, no tracked file calls the advance a non-mutating kind, and the shared rule has one home
@@ -4206,19 +4141,19 @@ check-task:
           # The pin surface this change adds must be DECLARED and loadable: each
           # string below can only be printed by the task entity that carries it, so
           # the bed goes RED if the surface is missing (opencharly/charly#936).
-          - contains: MODE=currency asks whether every pin is at the ref its intent names
+          - contains: MODE=currency asks whether every pin is at the tip of the branch its intent names
           # The advance half's own description must state its SCOPE and its TARGET:
-          # the verb advances EVERY pin this repo declares, to the tip the remote
+          # the verb fast-forwards EVERY pin this repo declares, to the tip the remote
           # serves for the ref each path's own .gitmodules entry names
           # (opencharly/charly#1079).
-          - contains: Advance EVERY pin this repo declares
+          - contains: Fast-forward EVERY pin this repo declares
           - contains: to the tip the remote serves for the ref each path's own .gitmodules entry names
-          # The control's own proof must be DECLARED too: only the task that carries
-          # this description can print it, so the bed goes RED if the surface is
-          # missing (opencharly/charly#1048).
-          - contains: Prove the pin-currency control can fail
-          # And so must the SCOPE control's own proof (opencharly/charly#1079).
+          # And the SCOPE control's own proof must be DECLARED too
+          # (opencharly/charly#1079).
           - contains: Prove the pin-verb-scope control can fail
+          # The pin-currency control's own proof must be DECLARED, and its two arms
+          # must RUN here: a behind pin must go red and the tip must pass.
+          - contains: pin-current FAILS on a behind pin and PASSES at the tip
         context:
           - runtime
         command:
@@ -4237,10 +4172,10 @@ check-task:
           param: [MODE=status]
         context:
           - runtime
-      - check: the pin-currency CONTROL's own proof runs end to end through verb:task — a neglected pin must be reported STALE and fail, the same pin advanced recently must pass
-        id: task-pin-currency-proof-runs
+      - check: the pin-currency CONTROL's own proof runs end to end through verb:task — a pin recorded behind its branch's served tip must FAIL and the same pin at the tip must pass
+        id: task-pin-current-proof-runs
         task:
-          task: pin-currency-proof
+          task: pin-current-proof
         context:
           - runtime
       - check: the pin-verb-scope CONTROL itself runs green on the tree the bed just realized — every claim-maker surface in it states its scope, no tracked file calls the advance a non-mutating kind, and the shared rule's grammar and exempt-mode list live in the rule file's own header

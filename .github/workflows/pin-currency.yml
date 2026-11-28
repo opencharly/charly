@@ -1,32 +1,23 @@
-# The pin-currency control — the gate that stops the #1035/#1048 recurrence.
+# The pin-currency control — the gate that stops a BEHIND pin reaching main.
 #
 # WHAT IT ASKS. `charly task pin-current` asks whether every `box/*` gitlink is at the
-# ref this repo's own `.gitmodules` declares for it — and FAILS only on NEGLECT: a pin
-# that is NOT CURRENT and that this repo has not advanced for longer than its own
-# bound (168 h). "Not current" is a SET of classes — `behind`, `not-on-the-served-line`
-# (what a squash-merged upstream produces) and `differs` (no checkout to judge) — and
-# "not current" alone is CHURN: measured over this repo's own history, each twin is
-# behind on most of the days measured (17 to 27 of the 32 days from 2026-09-22 to
-# 2026-10-23; on 28 of those 32 at least one twin was behind, and the measurement
-# classifies all 145 not-current pairs in that window as `behind`), so a gate on the
-# distance would be red roughly three days out of four — the permanently-red gate the
-# org's own pin rule forbids. The bound is on the age of this repo's own last advance
-# of that path, and it was placed by measurement: the longest gap that stayed within
-# a 7-day bound was 6.4 d, 25 gaps ran past it (8.0 d to 25.1 d), and 168 h (7 d) is
-# the only whole-day bound strictly between those two.
+# tip of the branch its own `.gitmodules` entry declares, and a pin that is BEHIND
+# FAILS. There is no neglect bound and no age: the old 168 h bound was deleted, so the
+# strict failure replaces the argued one. It consults no tag — currency is a branch
+# question, and a tag marks a merge, not the served tip a gitlink should record. The
+# remedy is `charly task ff`.
 #
-# WHY IT RUNS TWICE. The pull_request trigger gives the owner the answer while the
-# change is still open; the daily schedule is what catches an upstream merge that
-# happened with no PR at all — the #1035/#1048 recurrence is exactly a merge that
-# nobody was looking for.
+# WHY THERE IS NO SCHEDULE. The umbrella's strict pin gate is the org-wide detector of
+# a drift that happened with no PR at all, and a daily red job here would be a second
+# detector of something no change in this repo caused — exactly what teaches readers to
+# ignore this one. The pull_request trigger answers the owner while the change is still
+# open, which is what this workflow is for.
 #
-# WHY fetch-depth: 0 IS LOAD-BEARING. The staleness age is read from this repo's OWN
-# history — `git log -1 --format=%ct -- <path>` — and a SHALLOW checkout (the
-# checkout action's default is depth 1) cannot see the last commit that touched a path
-# the tip commit did not touch. The read would come back empty, the verb would report
-# the path as never advanced here, and the control would name a pin STALE on a tree
-# that is perfectly healthy: a false red that teaches everyone to ignore the gate. The
-# full history is what makes the age measurable.
+# WHY fetch-depth: 0 IS LOAD-BEARING. The currency read asks `git merge-base
+# --is-ancestor` whether the recorded pin is an ancestor of the branch's served tip,
+# and that question needs the two commits' common history. The checkout action's
+# default depth is 1, which cannot answer it: the read would report the pin as
+# unjudgeable on a healthy tree — a false red that teaches everyone to ignore the gate.
 name: pin-currency
 
 on:
@@ -37,15 +28,10 @@ on:
       - 'box/**'
       - 'charly/go.mod'
       - '.github/workflows/pin-currency.yml'
-      # The control's OWN proof lives in these two scripts, so a change to either of
-      # them is a change to the control's gate and must re-run it. Without them in
-      # the trigger, the proof could be weakened in a PR that never runs it.
-      - 'scripts/check-pin-currency.sh'
-      - 'scripts/measure-pin-cadence.py'
-  schedule:
-    # 05:17 UTC daily — off the hour and off the half hour, so this does not pile onto
-    # the same minute as every other scheduled job in the org.
-    - cron: '17 5 * * *'
+      # The control's OWN proof lives in this script, so a change to it is a change
+      # to the control's gate and must re-run it. Without it in the trigger, the
+      # proof could be weakened in a PR that never runs it.
+      - 'scripts/check-pin-current.sh'
   workflow_dispatch:
 
 permissions:
@@ -58,9 +44,9 @@ jobs:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
-          # The full history, for the reason in the header: the age of this repo's own
-          # last advance of each box/* path is read out of it, and a depth-1 clone
-          # cannot answer that question for a path the tip commit did not touch.
+          # The full history, for the reason in the header: the currency read asks an
+          # ancestry question (`git merge-base --is-ancestor`) between the recorded pin
+          # and the branch's served tip, and a depth-1 clone cannot answer it.
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
@@ -74,11 +60,8 @@ jobs:
       - name: Build the worktree-local binary (R9)
         run: ./scripts/bootstrap-charly.sh
 
-      - name: The control's own proof — that it can fail (a neglected pin must go red)
-        run: ./bin/charly task pin-currency-proof
+      - name: The control's own proof — a behind pin must go red, the tip must pass
+        run: ./bin/charly task pin-current-proof
 
-      - name: The measurement's own proof — that the classifier tells the classes apart
-        run: python3 -I scripts/measure-pin-cadence.py --self-test
-
-      - name: The control — every box/* pin current, within this repo's own bound on neglect
+      - name: The control — every box/* pin at the tip of the branch its intent names (a behind pin FAILS)
         run: ./bin/charly task pin-current

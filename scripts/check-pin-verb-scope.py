@@ -11,7 +11,7 @@ WHAT IT ASKS, over this repo's own tracked tree:
   B. NO RETIRED CLAIM — no tracked file calls the pin ADVANCE a non-mutating
      kind (a preview, a dry run, a read-only report). The claim is FALSE: the
      advance rolls the checkouts that exist and stages their gitlinks
-     (opencharly/charly#1079). The wording that was here described the `sync`
+     (opencharly/charly#1079). The wording that was here described the advance
      task as "preview only; does not commit" — half true: it does not commit,
      and it is not a preview.
   C. COVERAGE — every tracked file that NAMES the pin-advance verb is classified
@@ -28,7 +28,7 @@ WHAT IT ASKS, over this repo's own tracked tree:
      about the file's syntax without anything saying so.
 
 And a surface that MOVED is a finding too, not a silent pass. Every surface is
-located by a STRUCTURAL anchor — a chain of keys (the `sync:` task, the `MODE:`
+located by a STRUCTURAL anchor — a chain of keys (the `ff:` task, the `MODE:`
 parameter) and the LINE KIND inside them, never the claim's own wording — so the
 control's own mutation cannot make a surface vanish instead of failing, and a
 surface that moves is a finding rather than a silent pass. A gate that cannot see
@@ -38,7 +38,7 @@ WHY IT LIVES HERE, in this repo and not in the umbrella: the umbrella's own gate
 for the same rule (opencharly/opencharly's scripts/check-pin-verb-scope.mjs)
 states, in its own header, that it speaks for the UMBRELLA's prose only — "a
 submodule is a repo of its own, with its own rulebook and its own gates". This
-repo declares its own box/* pins and its own `sync` task, so it owns the claim
+repo declares its own box/* pins and its own `ff` task, so it owns the claim
 about them; the umbrella records only the gitlink. The umbrella's #501 leg fixed
 the same claim in the umbrella's tree and filed this repo's twin as
 opencharly/charly#1079.
@@ -107,13 +107,15 @@ SCOPE_RE = re.compile(
 # The RETIRED claim: the advance is a non-mutating kind. The shape is the
 # umbrella's own class (opencharly/opencharly's scripts/check-retired-claims.mjs),
 # scoped to this repo's tree: a non-mutating word and the advance word within
-# 80 characters of each other, in either order.
+# 80 characters of each other, in either order. The advance's current name is
+# `fast-forward`; `bump` and `advance` stay in the alternation because a retired
+# claim may still word it that way.
 RETIRED_CLAIM_RE = re.compile(
     r"(?:\(\s*(?:preview|dry[ -]?run|read[ -]?only)\b"
     r"|\b(?:is|are|as|its)\s+(?:an?\s+)?(?:preview|dry[ -]?run|read[ -]?only)\b)"
-    r"[^\n]{0,80}?\b(?:bump(?:s|ed|ing)?|advanc(?:e|es|ed|ing))\b"
+    r"[^\n]{0,80}?\b(?:bump(?:s|ed|ing)?|advanc(?:e|es|ed|ing)|fast[ -]?forward(?:s|ed|ing)?)\b"
     r"|"
-    r"\b(?:bump(?:s|ed|ing)?|advanc(?:e|es|ed|ing))\b[^\n]{0,80}?"
+    r"\b(?:bump(?:s|ed|ing)?|advanc(?:e|es|ed|ing)|fast[ -]?forward(?:s|ed|ing)?)\b[^\n]{0,80}?"
     r"(?:\(\s*(?:preview|dry[ -]?run|read[ -]?only)\b"
     r"|\b(?:is|are|as|its)\s+(?:an?\s+)?(?:preview|dry[ -]?run|read[ -]?only)\b)",
     re.I,
@@ -121,7 +123,7 @@ RETIRED_CLAIM_RE = re.compile(
 
 # The verb's own spellings — a file that NAMES it is a file the coverage arm
 # classifies.
-VERB_RE = re.compile(r"charly task sync|charly task pins|MODE=bump", re.I)
+VERB_RE = re.compile(r"charly task ff|charly task pins|MODE=ff", re.I)
 
 # The claim-maker surfaces: the places whose job is to tell an operator what
 # the pin-advance verb does, so the operator can decide whether to run it. Each
@@ -137,24 +139,24 @@ VERB_RE = re.compile(r"charly task sync|charly task pins|MODE=bump", re.I)
 # surface out of the gate's sight.
 SURFACES = [
     {
-        "id": "charly.yml — the sync task's header comment",
+        "id": "charly.yml — the ff task's header comment",
         "rel": "charly.yml",
         "kind": "comment",
-        "chain": [re.compile(r"^# sync — the named entry point for the advance half")],
+        "chain": [re.compile(r"^# ff — the named entry point for the advance half")],
         "within": None,
     },
     {
-        "id": "charly.yml — the sync task's description",
+        "id": "charly.yml — the ff task's description",
         "rel": "charly.yml",
         "kind": "line",
-        "chain": [re.compile(r"^sync:$")],
+        "chain": [re.compile(r"^ff:$")],
         "within": re.compile(r"^\s{4}description:"),
     },
     {
-        "id": "charly.yml — the sync task's step name",
+        "id": "charly.yml — the ff task's step name",
         "rel": "charly.yml",
         "kind": "line",
-        "chain": [re.compile(r"^sync:$")],
+        "chain": [re.compile(r"^ff:$")],
         "within": re.compile(r"^\s+- run:"),
     },
     {
@@ -175,14 +177,14 @@ SURFACES = [
         "id": "AGENTS.md — the sanctioned-advance bullet",
         "rel": "AGENTS.md",
         "kind": "block",
-        "chain": [re.compile(r"^- \*\*The only sanctioned advance is `charly task sync`\*\*")],
+        "chain": [re.compile(r"^- \*\*The only sanctioned advance is `charly task ff`\*\*")],
         "within": None,
     },
     {
         "id": "AGENTS.md — the MODE parameter bullet",
         "rel": "AGENTS.md",
         "kind": "block",
-        "chain": [re.compile(r"^- \*\*The bound is a parameter, not a constant in the rule\.\*\*")],
+        "chain": [re.compile(r"^- \*\*The verb's MODE is a closed set, and only one mode writes\.\*\*")],
         "within": None,
     },
 ]
@@ -190,7 +192,15 @@ SURFACES = [
 # The files that NAME the pin-advance verb without PRESENTING it. The reason is
 # committed here, because "this file is not a claim-maker" is a judgement, and a
 # judgement with no stated reason is a judgement nobody can check.
-NON_CLAIM_MENTIONS = {}
+NON_CLAIM_MENTIONS = {
+    ".github/workflows/pin-currency.yml": "the CI gate names the remedy (`charly task ff`) "
+    "while explaining why a behind pin fails; its job is to RUN `pin-current`, not to "
+    "tell an operator what the advance does",
+    "scripts/check-pin-current.sh": "the pin-currency control's own proof: it ASSERTS the "
+    "remedy the verb prints (`charly task ff`) as one of its red-arm needles, and says "
+    "nothing to an operator about what the advance does — its arms are judged by the "
+    "`pin-current-proof` task, not by this control",
+}
 
 # The files exempt from the coverage arm, with the reason.
 EXEMPT_FILES = {
@@ -718,8 +728,8 @@ def self_test(root):
 
     # A: a surface that states the scope can be turned into one that does not.
     mutated = text.replace(
-        "Advance EVERY pin this repo declares — this repo's own box/* gitlinks —",
-        "Advance this repo's own box/* gitlinks —",
+        "Fast-forward EVERY pin this repo declares — this repo's own box/* gitlinks —",
+        "Fast-forward this repo's own box/* gitlinks —",
         1,
     )
     got = findings(root, {"charly.yml": mutated})
@@ -733,7 +743,7 @@ def self_test(root):
     moved = "\n".join(
         line
         for line in text.split("\n")
-        if not line.lstrip().startswith("description: Advance EVERY pin this repo declares")
+        if not line.lstrip().startswith("description: Fast-forward EVERY pin this repo declares")
     )
     got = findings(root, {"charly.yml": moved})
     check(
@@ -744,8 +754,8 @@ def self_test(root):
 
     # And the anchor is STRUCTURAL: the same surface, reworded, is still seen.
     reworded = text.replace(
-        "description: Advance EVERY pin this repo declares — this repo's own box/* gitlinks —",
-        "description: Advance EVERY pin this repo declares — this repo's own box/* links —",
+        "description: Fast-forward EVERY pin this repo declares — this repo's own box/* gitlinks —",
+        "description: Fast-forward EVERY pin this repo declares — this repo's own box/* links —",
         1,
     )
     got = findings(root, {"charly.yml": reworded})
@@ -758,11 +768,11 @@ def self_test(root):
 
     # B: the wording this issue is ABOUT — the retired claim as it was shipped.
     original = text.replace(
-        "description: Advance EVERY pin this repo declares — this repo's own box/* gitlinks — "
+        "description: Fast-forward EVERY pin this repo declares — this repo's own box/* gitlinks — "
         "to the tip the remote serves for the ref each path's own .gitmodules entry names, "
         "never a PR branch; it rolls the checkouts that exist and stages their gitlinks, and "
         "it does not commit and does not open a PR",
-        "description: Advance this repo's own box/* gitlinks to each distro's default-branch "
+        "description: Fast-forward this repo's own box/* gitlinks to each distro's default-branch "
         "HEAD (preview only; does not commit)",
         1,
     )
@@ -783,7 +793,7 @@ def self_test(root):
     )
 
     # C: a file that NAMES the verb and is not classified is a finding.
-    got = findings(root, {"README.md": "run `charly task sync` before you push\n"})
+    got = findings(root, {"README.md": "run `charly task ff` before you push\n"})
     check(
         "the COVERAGE arm bites — a file that names the verb and is unclassified is a finding",
         any(k == "C" for k, _, _, m in got),
