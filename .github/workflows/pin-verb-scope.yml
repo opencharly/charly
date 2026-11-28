@@ -3,9 +3,9 @@
 #
 # WHAT IT ASKS. `scripts/check-pin-verb-scope.py` reads this repo's own tracked
 # tree and asks these things:
-#   SCOPE      every claim-maker surface — the `sync` task's description and step
+#   SCOPE      every claim-maker surface — the `ff` task's description and step
 #              name, the `pins` task's description and its MODE parameter, and the
-#              AGENTS.md bullets — states that the advance touches EVERY pin
+#              AGENTS.md bullets — states that the verb fast-forwards EVERY pin
 #              this repo declares;
 #   RETIRED    no tracked file calls the advance a non-mutating kind (a preview, a
 #              dry run, a read-only report). It is not one: the verb advances every

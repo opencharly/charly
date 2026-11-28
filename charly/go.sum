@@ -227,6 +227,8 @@ github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026272.230 h1:6/
 github.com/opencharly/plugin-matching/candy/plugin-matching v0.2026272.230/go.mod h1:gIaY1ftm091L5fh6O6W4dJEt0Am48NRd3Gmp8Bnc6rU=
 github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026295.1526 h1:dFGi0+bxba80ng6ixmUJvW7TF/IMw12cPaZzOvW1kvU=
 github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026295.1526/go.mod h1:eJpRJc+2vXpQZOjkugefoZX8kxeyV7yPsMJyV3bogtw=
+github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026332.323 h1:oSPp6lwjBHy5751cLfb5Z2WBwqk8iuIWBOT1kMn4Ra0=
+github.com/opencharly/plugin-migrate/candy/plugin-migrate v0.2026332.323/go.mod h1:7G6D6libM65eehb79kLuW5OCUVulv6l+dbHlMtEcqCY=
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338 h1:UemA8nqjIeJkz/dftKRERpFjPsHP6GmWmhWiAaYWTR4=
 github.com/opencharly/plugin-mount/candy/plugin-mount v0.2026272.338/go.mod h1:UZPYGJffJW8DR/v/eThFSpXYNLPyv+Bdze+9JyNer0c=
 github.com/opencharly/plugin-oci/candy/plugin-oci v0.2026280.2122 h1:CJsP72bzAxkihLEOyL3xrSJnzVcbLwck4xqVXze91sI=
@@ -263,6 +265,8 @@ github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.1555 h1
 github.com/opencharly/plugin-substrate/candy/plugin-substrate v0.2026331.1555/go.mod h1:BdDA3+l9NQi0xMS8wqOi5BbmD1gTCU2uIvKQ0zJdTXI=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347 h1:V53hvW7MDUEAP2CCOT1OP9Y+x2OiUmBlP97DOUE3+RY=
 github.com/opencharly/plugin-task/candy/plugin-task v0.2026316.2347/go.mod h1:BPbZsO1SrO6TLIseVrVG+jC9R1zrnLWxvd9qgmNZIic=
+github.com/opencharly/plugin-task/candy/plugin-task v0.2026332.323 h1:tlV62tAegsjB9NJYxX+rRGjYYhgWpGroOK5X8hXxung=
+github.com/opencharly/plugin-task/candy/plugin-task v0.2026332.323/go.mod h1:BPbZsO1SrO6TLIseVrVG+jC9R1zrnLWxvd9qgmNZIic=
 github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422 h1:Gp6VfQpixzrAZKeL8i7rs7YCLtSqJJSZzoIHo7eDivU=
 github.com/opencharly/plugin-tmux/candy/plugin-tmux v0.2026272.422/go.mod h1:+D1uLIWXqrWv+UCVf8MvtXw3c/QlPXzmyheVJ04elHg=
 github.com/opencharly/plugin-tunnel/candy/plugin-tunnel v0.2026272.423 h1:jjDEUkXV6YXcaxfLWLTWWWZlUrEpmHzRAZNxUJhjqmk=
