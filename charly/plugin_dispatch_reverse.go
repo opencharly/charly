@@ -157,7 +157,7 @@ func (s *executorReverseServer) invokeProvider(ctx context.Context, req *pb.Invo
 	if _, ok := ctx.Deadline(); !ok {
 		activity = newProviderActivity(prov)
 		var cancel context.CancelFunc
-		ctx, cancel = idleBoundedContext(ctx, pluginInvokeNoProgressFor(class), activity)
+		ctx, cancel = idleBoundedContext(ctx, pluginInvokeNoProgressFor(class, req.GetOp()), activity)
 		defer cancel()
 	}
 	op := &Operation{Reserved: word, Op: req.GetOp(), Params: req.GetParamsJson(), Env: req.GetEnvJson()}
