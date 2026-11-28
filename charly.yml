@@ -549,18 +549,9 @@ kimi:
 #                                     a k3s VM cluster + a target:kubernetes workload
 #                                     member (check-k8s-deploy-app) applied via the
 #                                     out-of-process plugin's kubectl apply -k
-#   check-pod                  (pod) — combined: kind:image build + kind:layer
-#                                     composition order + kind:pod runtime
-#                                     (nc :18794 + supervisord) + every
-#                                     deploy-target rendering path
-#   check-local                (local) — kind:local layer apply via ShellExecutor
-#   check-jupyter-pod          (pod) — jupyter-mcp regression coverage
-#   check-openclaw-pod         (pod) — the OpenClaw family's gateway bed. The family is
-#                                     imported under the `openclaw` namespace (see import:),
-#                                     so it runs qualified: openclaw.check-openclaw-pod
 #
 # Zero-operator-side-effect: pod beds → rootless podman; check-k3s-vm → libvirt
-# qcow2; check-local → a disposable scratch dir. No test writes to ~/.local/bin,
+# qcow2. No test writes to ~/.local/bin,
 # ~/.config/charly, /etc, /usr, or any operator-side directory.
 # =============================================================================
 # check-k3s-vm — disposable libvirt VM running k3s-server. Kubeconfig is
@@ -1852,7 +1843,7 @@ default:
                 already ships (`candy/`, `box/<name>/charly.yml`, plus the
                 pod/vm/kubernetes/check kinds inline in `charly.yml`). Your session has the project's plugin skills
                 loaded (`/charly-check:check`, `/charly-core:deploy`, `/charly-image:image`, `/charly-image:layer`,
-                `/charly-build:build`, plus per-pod plugins (`/charly-jupyter:*`, `/charly-coder:*`, etc.) and foundation plugins (`/charly-distros:*`, `/charly-infrastructure:*`, `/charly-tools:*`), …). All of these
+                `/charly-build:build`, plus per-pod plugins (`/charly-ollama:*`, `/charly-coder:*`, etc.) and foundation plugins (`/charly-distros:*`, `/charly-infrastructure:*`, `/charly-tools:*`), …). All of these
                 are available to be used if you decide to do so — they may
                 be useful for most of the steps. The plan specifies
                 what each pod must do; how you satisfy each specification
@@ -2026,158 +2017,6 @@ default:
                 - check: the client pod successfully writes the nonce-protected key into the data store
                   stdout: {contains: [OK]}
                   command: "redis-cli -h charly-redis SET bench:${EVAL_NONCE_KEY} ${EVAL_NONCE_VALUE}"
-    mcp:
-        pod:
-            agent_provisioned: true
-            plan:
-                - include: box:fedora.jupyter
-                - run: remove any prior probe notebook
-                  exit_status: 0
-                  command:
-                    command: "rm -f /workspace/mcp-A.ipynb"
-                    in_container: true
-                - check: notebook_create writes the file but does not open a CRDT room
-                  mcp:
-                    method: call
-                    tool: notebook_create
-                    input: '{"path":"mcp-A.ipynb"}'
-                  timeout: 30s
-                - check: room_list does NOT contain mcp-A.ipynb
-                  mcp:
-                    method: call
-                    tool: room_list
-                    input: '{}'
-                  stdout: {not_contains: "mcp-A.ipynb"}
-                  timeout: 30s
-                - run: clean state
-                  exit_status: 0
-                  command:
-                    command: "rm -f /workspace/mcp-B.ipynb"
-                    in_container: true
-                - run: create
-                  mcp:
-                    method: call
-                    tool: notebook_create
-                    input: '{"path":"mcp-B.ipynb"}'
-                  timeout: 30s
-                - check: cell_insert without prior open auto-creates the room
-                  mcp:
-                    method: call
-                    tool: cell_insert
-                    input: '{"path":"mcp-B.ipynb","index":0,"source":"x","cell_type":"markdown"}'
-                  timeout: 60s
-                - check: room_list now contains mcp-B.ipynb
-                  mcp:
-                    method: call
-                    tool: room_list
-                    input: '{}'
-                  stdout: {contains: "mcp-B.ipynb"}
-                  timeout: 30s
-                - run: clean state
-                  exit_status: 0
-                  command:
-                    command: "rm -f /workspace/mcp-D.ipynb"
-                    in_container: true
-                - run: create
-                  mcp:
-                    method: call
-                    tool: notebook_create
-                    input: '{"path":"mcp-D.ipynb"}'
-                  timeout: 30s
-                - run: MCP-side cell_insert auto-creates the room
-                  mcp:
-                    method: call
-                    tool: cell_insert
-                    input: '{"path":"mcp-D.ipynb","index":0,"source":"hello","cell_type":"markdown"}'
-                  timeout: 60s
-                - check: transient UI-style WebSocket connect (in-container python)
-                  exit_status: 0
-                  command:
-                    command: |-
-                        python3 -c '
-                        import asyncio
-                        async def main():
-                            try:
-                                import websockets
-                            except ImportError:
-                                print("websockets not installed; skipping ws probe"); return
-                            try:
-                                ws = await asyncio.wait_for(
-                                    websockets.connect("ws://127.0.0.1:8888/api/yjs/json:notebook:mcp-D.ipynb"),
-                                    5,
-                                )
-                                await asyncio.sleep(1)
-                                await ws.close()
-                                print("ws-probe-ok")
-                            except Exception as e:
-                                print(f"ws-probe-noop: {e}")
-                        asyncio.run(main())
-                        '
-                    in_container: true
-                - check: room_list still shows EXACTLY one entry for the path
-                  mcp:
-                    method: call
-                    tool: room_list
-                    input: '{}'
-                  stdout:
-                    - matches: 'mcp-D\.ipynb'
-                  timeout: 30s
-                - run: clean state
-                  exit_status: 0
-                  command:
-                    command: "rm -f /workspace/mcp-E.ipynb"
-                    in_container: true
-                - run: create
-                  mcp:
-                    method: call
-                    tool: notebook_create
-                    input: '{"path":"mcp-E.ipynb"}'
-                  timeout: 30s
-                - run: MCP cell_insert auto-creates the room
-                  mcp:
-                    method: call
-                    tool: cell_insert
-                    input: '{"path":"mcp-E.ipynb","index":0,"source":"x","cell_type":"markdown"}'
-                  timeout: 60s
-                - run: snapshot the pod log mark
-                  exit_status: 0
-                  command:
-                    command: "date +%s > /tmp/mcp-E.markstamp"
-                    in_container: true
-                - check: transient UI-style WebSocket connect to provoke _clean_room
-                  exit_status: 0
-                  command:
-                    command: |-
-                        python3 -c '
-                        import asyncio
-                        async def main():
-                            try:
-                                import websockets
-                            except ImportError:
-                                return
-                            try:
-                                ws = await asyncio.wait_for(
-                                    websockets.connect("ws://127.0.0.1:8888/api/yjs/json:notebook:mcp-E.ipynb"),
-                                    5,
-                                )
-                                await asyncio.sleep(0.5)
-                                await ws.close()
-                            except Exception:
-                                pass
-                        asyncio.run(main())
-                        '
-                    in_container: true
-                - check: let upstream _clean_room settle
-                  exit_status: 0
-                  command:
-                    command: "sleep 2"
-                    in_container: true
-                - check: no 'Task exception was never retrieved' or 'is not in list' since the mark
-                  exit_status: 0
-                  command:
-                    command: |-
-                        MARK=$(cat /tmp/mcp-E.markstamp); LOG=$(journalctl -t supervisord --since "@$MARK" 2>/dev/null || cat /tmp/jupyter*.log 2>/dev/null || true); echo "$LOG" | grep -E 'Task exception was never retrieved|is not in list' && exit 1 || exit 0
-                    in_container: true
     k8s-cluster:
         pod:
             agent_provisioned: true
@@ -2398,7 +2237,7 @@ scaffolding-selftest:
                 already ships (`candy/`, `box/<name>/charly.yml`, plus the
                 pod/vm/kubernetes/check kinds inline in `charly.yml`). Your session has the project's plugin skills
                 loaded (`/charly-check:check`, `/charly-core:deploy`, `/charly-image:image`, `/charly-image:layer`,
-                `/charly-build:build`, plus per-pod plugins (`/charly-jupyter:*`, `/charly-coder:*`, etc.) and foundation plugins (`/charly-distros:*`, `/charly-infrastructure:*`, `/charly-tools:*`), …). All of these
+                `/charly-build:build`, plus per-pod plugins (`/charly-ollama:*`, `/charly-coder:*`, etc.) and foundation plugins (`/charly-distros:*`, `/charly-infrastructure:*`, `/charly-tools:*`), …). All of these
                 are available to be used if you decide to do so — they may
                 be useful for most of the steps. The plan specifies
                 what each pod must do; how you satisfy each specification

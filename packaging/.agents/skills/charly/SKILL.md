@@ -89,7 +89,7 @@ my-image:
 ## Used In Boxes
 
 - The `charly` candy is the full toolchain (charly binary + virtualization + gocryptfs + socat); composed into githubrunner, charly-fedora, charly-arch
-- Now directly added to all boxes with supervisord (openclaw, jupyter, ollama, sway-browser-vnc, selkies-desktop, immich, etc.)
+- Now directly added to all boxes with supervisord (openclaw, ollama, sway-browser-vnc, selkies-desktop, immich, etc.)
 
 ## Related Candies
 
