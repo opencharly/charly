@@ -51,7 +51,13 @@ jobs:
           GOTMPDIR: /tmp/charly-ci
         run: |
           mkdir -p /tmp/charly-ci
-          go test ./charly/...
+          # THE BUDGET IS MEASURED, NOT A MAGIC NUMBER (opencharly/charly#1318): the same
+          # suite costs ~204s on a fast host and 606s+ on a CI runner — roughly 3x — so the
+          # default 10m0s alarm kills whichever test is in flight and reports it as the
+          # culprit. 20m (1200s) is ~2x the slowest measured CI run (606s) and ~5.9x the
+          # local one (204s), so 606s < 1200s and a genuine hang still fails the job, by
+          # name, well inside the GitHub job limit.
+          go test -timeout 20m ./charly/...
 
       # The in-repo modules BESIDE charly/ — the `tools/*` sweep. They are separate
       # modules resolved with GOWORK=off (they are not workspace members), so
