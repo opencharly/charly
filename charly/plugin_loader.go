@@ -1317,7 +1317,7 @@ func deployNodePluginContext(cfg *spec.Config, dir, name string) (addCandy []spe
 // the never-connected provider. Returns false when any segment is absent.
 func resolveDeployNodeByPath(tree map[string]spec.DeployNode, name string) (*spec.DeployNode, bool) {
 	name, _ = spec.SplitVmAddress(name)
-	// EXACT full-key match FIRST: a NAMESPACE-QUALIFIED deploy (`openclaw.check-openclaw-pod`)
+	// EXACT full-key match FIRST: a NAMESPACE-QUALIFIED deploy (`<namespace>.<deploy>`)
 	// contains dots that are namespace separators, not member-path separators, so the dotted
 	// split below would look up a root named `charly` and miss the real entry — the deploy's
 	// substrate/verb plugin words would then never load and its provider never connected
